@@ -1,8 +1,17 @@
 # Validation record
 
-Plugin version: **1.1.0** (cold compaction feature branch, review round 3). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
+Plugin version: **1.1.0** (cold compaction feature branch, review round 4). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
+
+## Batch review round 4 (code review APPROVED; Desktop install finding fixed)
+
+The independent R4 review of `eac0f12` **approved** the storage-domain migration (the reviewer re-ran 82/82 green and verified the storageDomain interface, the `put` durability boundary, parent-id ownership, the real json medium, required peers, and the unload ordering). The isolated Desktop batch acceptance then refused to install the candidate: `generation peer validation failed: zod resolves outside the generation and installation closure`.
+
+- **Root cause (verified in the machine's real installer)** — `dsh-desktop-market-installer/generations/installer.mjs` validates every non-optional peer against `HOST_SINGLETON_PATTERNS = [react, react-dom, @deepseek-ai/*]`; a peer outside those patterns is never installed into the plugin's closure, and isolated staging does not backfill it, so zod resolved by accident from the app.asar ancestor path and fell outside the trusted closure. The official `@deepseek-ai/dsh-storage-domain` itself ships zod `4.4.3` as a regular dependency for exactly this reason.
+- **Fix** — `zod` moves from peerDependencies to `dependencies`, pinned `"4.4.3"` (the version the storage-domain package and the local module tree already carry); all remaining peers match the `@deepseek-ai/*` singleton pattern. No installer change, no optional marking, no hand-written profile/generation directories.
+- **Regression** — a packaging-contract unit test pins the installer's rule first-hand: every non-optional peer must be a host singleton; every foreign (non-`@deepseek-ai`) runtime import must be an exactly pinned regular dependency; no runtime import may be undeclared. Red on the `eac0f12` manifest (`peer "zod" is not a host singleton …`), green after the move.
+- **Checks** — unit suite **45/45** (44 + the new guard); the full 82 were deliberately not re-run for a pure manifest change (index.js untouched this round). `npm pack --dry-run` confirms the tarball manifest carries `dependencies: { "zod": "4.4.3" }` with only `@deepseek-ai/*` peers, and zod resolves at 4.4.3 in the module tree.
 
 ## Batch review round 3 (batch R3 fix: receipts moved to the plugin's storage domain)
 
@@ -20,7 +29,7 @@ Root fix: every finished batch now writes its receipt into the plugin's own vers
 - a missing `storageDomain` facility or a failed put is stated in the batch text (`NOT persisted: …`) — never claimed as durable;
 - record shape is enforced by the domain schema at open time; foreign payloads cannot enter.
 
-Batch ids are now `br-<12 hex>` (UUID digits only). `@deepseek-ai/dsh-session` is removed from peerDependencies (no longer imported); `@deepseek-ai/dsh-storage-domain` and `zod` are added.
+Batch ids are now `br-<12 hex>` (UUID digits only). `@deepseek-ai/dsh-session` is removed from peerDependencies (no longer imported); `@deepseek-ai/dsh-storage-domain` is added, and `zod` — initially added as a peer here — moved to a pinned regular dependency in round 4 after the Desktop installer rejected it.
 
 Regressions (rewritten for the domain route; real compositions and the real command entry): receipts persist per parent in the domain medium (the test reads the json file directly, asserts both batch ids, explicit parent ids, and **zero** `plugin:` records in the session log), survive a plugin-only reload, and survive a **full host-context restart** (every service disposed, composition rebooted over the same root, the caller resumed by id — `report <batch-id>` and the unclean-listing suffix both return the pre-restart receipt). The R2 regressions (cross-parent isolation, no cross-parent overwrite, cancel keeps the full receipt, resolved-snapshot cancel) run unchanged against the domain store. Unit-level: the harness stubs the facility — a memory round trip (report grammar, unknown-id refusal, cross-session scoping), a `put` failure reported as `NOT persisted` with nothing listed, and a composition without the facility still completing the batch while naming the missing capability. Suite: **82/82, two consecutive green runs** (unit 44, integration 1, cold 37). Desktop batch acceptance remains **not run**.
 

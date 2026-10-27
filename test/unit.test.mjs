@@ -908,3 +908,41 @@ test("batch: registers the --all hint and the batch tool", async () => {
 	assert.notEqual(batchTool, undefined);
 	assert.deepEqual(batchTool.parameters, { type: "object", properties: {} });
 });
+
+test("packaging: every non-optional peer is a host singleton and every foreign runtime import is a pinned dependency", async () => {
+	// The Desktop generation installer (dsh-desktop-market-installer
+	// generations/installer.mjs) validates each non-optional peer against
+	// HOST_SINGLETON_PATTERNS = [react, react-dom, @deepseek-ai/*] and
+	// requires every other dependency to resolve inside the generation or
+	// installation closure. A peer outside those patterns (zod was, in
+	// eac0f12) is never installed into the plugin closure and is rejected:
+	// "generation peer validation failed: … resolves outside the generation
+	// and installation closure". The contract this test pins:
+	// (1) non-optional peers must be host singletons the host itself supplies;
+	// (2) any runtime bare import that is NOT a host singleton must be a
+	// regular dependency the installer installs into the plugin's own
+	// closure, pinned to the verified version;
+	// (3) no runtime import is undeclared.
+	const { readFileSync } = await import("node:fs");
+	const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+	const source = readFileSync(new URL("../index.js", import.meta.url), "utf8");
+	const isHostSingleton = (id) => id === "react" || id === "react-dom" || id.startsWith("@deepseek-ai/");
+	const peers = manifest.peerDependencies ?? {};
+	for (const [id, range] of Object.entries(peers)) {
+		if (manifest.peerDependenciesMeta?.[id]?.optional === true) continue;
+		assert.ok(isHostSingleton(id), `peer "${id}" is not a host singleton (react, react-dom, @deepseek-ai/*); the Desktop generation installer rejects it — declare it as a dependency instead`);
+		assert.notEqual(range, undefined);
+	}
+	const declared = new Map(Object.entries({ ...manifest.dependencies, ...peers }));
+	const specifiers = [...source.matchAll(/(?:^|\n)import\s+(?:[\s\S]*?from\s+)?["']([^"']+)["']/g)].map((match) => match[1]);
+	assert.ok(specifiers.length > 0, "import scan found the plugin's imports");
+	for (const specifier of specifiers) {
+		if (specifier.startsWith("node:") || specifier.startsWith(".") || specifier.startsWith("/")) continue;
+		const id = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
+		assert.ok(declared.has(id), `runtime import "${id}" is undeclared in package.json`);
+		if (!isHostSingleton(id)) {
+			assert.equal(manifest.dependencies?.[id], "4.4.3", `foreign runtime import "${id}" must be an exact-pinned dependency in the plugin closure`);
+		}
+	}
+	assert.equal(manifest.dependencies?.zod, "4.4.3", "zod stays a pinned regular dependency (the version @deepseek-ai/dsh-storage-domain itself ships)");
+});
