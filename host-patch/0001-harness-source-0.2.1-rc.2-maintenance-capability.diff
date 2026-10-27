@@ -1,0 +1,411 @@
+diff --git a/packages/core/agent-loop/src/agent.ts b/packages/core/agent-loop/src/agent.ts
+index adf2e33ddc..cce7f36a39 100644
+--- a/packages/core/agent-loop/src/agent.ts
++++ b/packages/core/agent-loop/src/agent.ts
+@@ -118,6 +118,24 @@ export class ReactLoopAgent implements Agent {
+   private readonly systemPrompt: SystemPromptProjection
+   /** Identities fully frozen by this loop; weak references do not retain replaced history. */
+   private readonly frozenMessages = new WeakSet<Message>()
++  /**
++   * Settlement admission cutoff, shared by EVERY public input surface.
++   * Synchronously checked at the single enqueue chokepoint (`send`), so the
++   * closer (the subagent manager's close, or a handle teardown) and input
++   * acceptance share one atomic boundary: before the cutoff input is accepted
++   * and must be processed or durably preserved; after it, input is rejected
++   * before acceptance. This closes the check-then-dispose window.
++   */
++  private inputClosed = false
++  /** Set by `cancel(cause, { keepInbox: true })`: an aborted turn restores its claimed-but-uncommitted batch. */
++  private abortKeptInbox = false
++  /**
++   * Messages claimed by the running turn but not yet committed to the log as
++   * user/message events. Registered synchronously AT the claim (inside
++   * preStep, before any await), so an abort during assembly, the pre-step
++   * waterfall, or the step itself still knows exactly what to restore.
++   */
++  private claimedForRestore: UserMessage[] = []
+ 
+   constructor(
+     private loopCtx: Context,
+@@ -152,6 +170,12 @@ export class ReactLoopAgent implements Agent {
+   }
+ 
+   send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {
++    // The admission cutoff: every public input (followup/steer/inject, and
++    // therefore every manager delivery) funnels through here, BEFORE the
++    // durable enqueue, so a closed input surface never accepts work.
++    if (this.inputClosed) {
++      throw new Error(`agent "${this.id}" is no longer accepting input (settlement cutoff); the message was not accepted`)
++    }
+     // Waking input cannot join an aborted activity, so it starts the next turn.
+     // Captured before the insertion so a reentrant cancel from a splice observer cannot reclassify it.
+     const wakingAfterAbort = wakeup && this.phase.kind !== 'idle' && this.phase.abort.signal.aborted
+@@ -160,6 +184,16 @@ export class ReactLoopAgent implements Agent {
+     if (wakeup) this.wakeDriver(wakingAfterAbort)
+   }
+ 
++  /**
++   * Close this agent's public input surface synchronously. Callers that own a
++   * close transaction (the subagent manager setting `activation.closing`, or
++   * a handle teardown) call this in the same synchronous section, making the
++   * cutoff atomic with their own closing state.
++   */
++  closeInput(): void {
++    this.inputClosed = true
++  }
++
+   followup(input: UserMessage): void {
+     this.send(input, 'next-turn', true)
+   }
+@@ -173,6 +207,9 @@ export class ReactLoopAgent implements Agent {
+   }
+ 
+   cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
++    // Whether an aborted running turn must restore its claimed-but-uncommitted
++    // batch to the inbox (read by the turn's abort handler).
++    this.abortKeptInbox = options.keepInbox === true
+     if (!options.keepInbox) {
+       this.inbox.clear()
+       if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
+@@ -269,6 +306,9 @@ export class ReactLoopAgent implements Agent {
+     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
+     const signal = this.phase.abort.signal
+     const claimed = this.inbox.claim(target, position.turn)
++    for (const message of claimed) {
++      if (message.source.kind !== 'runtime-context') this.claimedForRestore.push(message)
++    }
+     const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
+     signal.throwIfAborted()
+     const decision = await this.dispatch.waterfall(
+@@ -311,6 +351,16 @@ export class ReactLoopAgent implements Agent {
+     phase.turn = turn
+     let turnEnds: TurnEndReason | null = null
+     let target: InboxTarget = 'next-turn'
++    // Claimed-but-uncommitted restore bookkeeping: every claimed (non
++    // runtime-context) message of this turn, and which of them already
++    // reached the model-visible history as a user/message event. An abort
++    // under `keepInbox` restores the difference to the inbox instead of
++    // dropping claimed work that never reached the model.
++    this.claimedForRestore = []
++    const committedIds = new Set<UserMessage['id']>()
++    const stopCommitted = this.ctx.on('session/event', (session, event) => {
++      if (session === this.session && event.type === 'user/message') committedIds.add(event.data.id)
++    })
+     try {
+       while (true) {
+         signal.throwIfAborted()
+@@ -370,6 +420,10 @@ export class ReactLoopAgent implements Agent {
+       const cause = abortedCancelCause(signal)
+       if (cause !== undefined) {
+         turnEnds = { kind: 'aborted', reason: cause }
++        if (this.abortKeptInbox) {
++          const restore = this.claimedForRestore.filter((message) => !committedIds.has(message.id))
++          for (const message of restore.slice().reverse()) this.inbox.prepend('next-turn', message)
++        }
+         throw error
+       }
+       // Every failure is structured: an `LlmError` keeps its facts, anything
+@@ -382,6 +436,8 @@ export class ReactLoopAgent implements Agent {
+       }
+       this.throwError(error)
+     } finally {
++      this.claimedForRestore = []
++      stopCommitted()
+       try {
+         // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
+         this.session.append('turn/end', { turn, reason: turnEnds! })
+diff --git a/packages/core/agent-loop/src/index.ts b/packages/core/agent-loop/src/index.ts
+index ca4532af8c..2f83d20387 100644
+--- a/packages/core/agent-loop/src/index.ts
++++ b/packages/core/agent-loop/src/index.ts
+@@ -536,12 +536,15 @@ export class AgentLoop extends Service implements AgentFactory {
+     let detachSession: (() => void) | undefined
+     let detachAgent: (() => void) | undefined
+     let disposing: Promise<void> | undefined
++    // The teardown transaction is memoized: the first caller's keepInbox
++    // decision wins for every racing owner, matching the single close
++    // transaction semantics of the manager's activation closing.
+     let publication: ReturnType<typeof Promise.withResolvers<void>> | undefined
+     const machineReady = Promise.withResolvers<void>()
+     // Reverse teardown, memoized so every racing owner awaits one quiescence:
+     // stop the machine, unwind the scope, drain and close the session's write
+     // path, leave the registries, release bookkeeping.
+-    const teardown = (): Promise<void> => (disposing ??= (async () => {
++    const teardown = (keepInbox = false): Promise<void> => (disposing ??= (async () => {
+       abort.abort(new Error(this.ownership.isActive()
+         ? `agent "${id}" lifecycle disposed`
+         : 'agent loop is not active'))
+@@ -561,7 +564,12 @@ export class AgentLoop extends Service implements AgentFactory {
+         if (machine === undefined) await machineReady.promise
+         /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
+         if (machine !== undefined) {
+-          machine.cancel({ kind: 'disposed' })
++          // Close the public input surface synchronously with the teardown
++          // decision, then cancel. keepInbox preserves accepted input: parked
++          // messages stay durable and an aborted turn restores its claimed
++          // batch instead of silently dropping it.
++          machine.closeInput()
++          machine.cancel({ kind: 'disposed' }, keepInbox ? { keepInbox: true } : {})
+           await machine.whenIdle()
+         }
+       } catch (error: unknown) {
+@@ -591,9 +599,14 @@ export class AgentLoop extends Service implements AgentFactory {
+     })())
+     let unfollowScope: (() => Promise<void> | void) | undefined
+     let unfollowOwner: () => Promise<void> | void
+-    const dispose = async (): Promise<void> => {
++    /**
++     * Release this agent. `keepInbox: true` preserves accepted input: parked
++     * inbox messages stay durable for a later continuation and an aborted
++     * running turn restores its claimed-but-uncommitted batch.
++     */
++    const dispose = async (options: { keepInbox?: boolean } = {}): Promise<void> => {
+       try {
+-        await teardown()
++        await teardown(options.keepInbox === true)
+       } finally {
+         await Promise.all([unfollowOwner(), unfollowScope?.()])
+       }
+diff --git a/packages/core/agent/src/index.ts b/packages/core/agent/src/index.ts
+index dd8d09e6b7..17b3c7500d 100644
+--- a/packages/core/agent/src/index.ts
++++ b/packages/core/agent/src/index.ts
+@@ -159,7 +159,14 @@ export interface ResumeAgentOptions {
+  */
+ export interface AgentHandle {
+   agent: Agent
+-  dispose(): Promise<void>
++  /**
++   * Release this agent. `keepInbox: true` preserves accepted input: parked
++   * inbox messages stay durable for a later continuation, and an aborted
++   * running turn restores its claimed-but-uncommitted batch instead of
++   * dropping it. The teardown closes the public input surface first, so
++   * input racing the release is rejected before acceptance either way.
++   */
++  dispose(options?: { keepInbox?: boolean }): Promise<void>
+ }
+ 
+ /**
+diff --git a/packages/core/agent/src/runtime-types.ts b/packages/core/agent/src/runtime-types.ts
+index 0fa89afc05..5e3cd9f36d 100644
+--- a/packages/core/agent/src/runtime-types.ts
++++ b/packages/core/agent/src/runtime-types.ts
+@@ -182,6 +182,16 @@ declare module './types.ts' {
+    */
+     cancel(cause: AgentCancelCause, options?: CancelOptions): void
+ 
++    /**
++   * Close this agent's public input surface synchronously. Every public input
++   * (`followup`/`steer`/`inject`, and therefore every manager delivery)
++   * checks the cutoff before its durable enqueue; a closed input rejects
++   * new work before acceptance instead of accepting and later cancelling it.
++   * Callers that own a close transaction set this in the same synchronous
++   * section as their own closing state.
++   */
++    closeInput(): void
++
+     /**
+    * Resolve after the current whole-agent activity reaches quiescence. This
+    * follows replacement work started before the observed driver retires,
+diff --git a/packages/subagent/subagent/src/index.ts b/packages/subagent/subagent/src/index.ts
+index 119cc26a6a..a11cfdde46 100644
+--- a/packages/subagent/subagent/src/index.ts
++++ b/packages/subagent/subagent/src/index.ts
+@@ -293,6 +293,28 @@ export class SubagentRuntime extends TypertRemoteService {
+     return this.manager?.waitForChildren(parent) ?? false
+   }
+ 
++  /**
++   * Run one maintenance job on a persisted continuable child through the
++   * manager's activation lifecycle (resident restore, settlement held back
++   * for the job, ordinary settlement afterwards). See
++   * `SubagentManager.runMaintenance` for the lifecycle contract.
++   * @param parent - exact live direct parent authorizing the maintenance.
++   * @param childId - durable continuable child session id.
++   * @param options - caller cancellation and the maintenance job.
++   * @returns the job's own result.
++   */
++  async runMaintenance<T>(
++    parent: Agent,
++    childId: SessionId,
++    options: { signal?: AbortSignal, job: (agent: Agent, signal: AbortSignal) => Promise<T> },
++  ): Promise<T> {
++    const manager = this.requireManager()
++    if (this.ctx.get('agents')?.get(parent.id) !== parent) {
++      throw new SubagentError('subagent maintenance requires the exact live parent agent', 'UNAUTHORIZED')
++    }
++    return manager.runMaintenance(parent, childId, options)
++  }
++
+   /**
+    * Steer one model-authored message to the sender's direct parent or direct
+    * continuable child. A running target admits it at the nearest step boundary;
+diff --git a/packages/subagent/subagent/src/manager.ts b/packages/subagent/subagent/src/manager.ts
+index b89732c29e..6eb18863d7 100644
+--- a/packages/subagent/subagent/src/manager.ts
++++ b/packages/subagent/subagent/src/manager.ts
+@@ -771,9 +771,17 @@ export class SubagentManager {
+     return this.close(activation, () => this.finishDisposal(activation, true))
+   }
+ 
+-  /** Close admission synchronously and share one release, including startup rollback. */
++  /**
++   * Close admission synchronously and share one release, including startup rollback.
++   * The activation's closing flag and the agent's loop-level input cutoff are
++   * set in the same synchronous section: `deliver` and the Agent's public
++   * input surface (`followup`/`steer`/`inject`) therefore share ONE admission
++   * boundary, and input racing the close is rejected before acceptance
++   * instead of being accepted and then cancelled by the teardown.
++   */
+   private close(activation: Activation, release: () => Promise<void>): Promise<void> {
+     if (activation.closing !== undefined) return activation.closing
++    if (activation.kind === 'local') activation.handle.agent.closeInput()
+     const completion = Promise.withResolvers<void>()
+     activation.closing = completion.promise
+     void release().then(completion.resolve, completion.reject)
+@@ -1113,7 +1121,10 @@ export class SubagentManager {
+         result = await activation.run.result
+       } else {
+         if (stop) {
+-          activation.handle.agent.cancel({ kind: 'parent' })
++          // Draining stops the turn but preserves accepted input: parked
++          // messages stay durable and the aborted turn restores its claimed
++          // batch, so a later continuation of the same id still sees them.
++          activation.handle.agent.cancel({ kind: 'parent' }, { keepInbox: true })
+           const idle = activation.handle.agent.whenIdle()
+           const children = [...activation.ownedChildren]
+             .map(child => this.resident.get(child))
+@@ -1151,7 +1162,10 @@ export class SubagentManager {
+       ))
+     }
+     try {
+-      if (activation.kind === 'local') await activation.handle.dispose()
++      // The lossless stop policy carries through the whole release: the
++      // close's synchronous cutoff already rejects later input, so anything
++      // still parked here was accepted before it and must survive.
++      if (activation.kind === 'local') await activation.handle.dispose({ keepInbox: true })
+       else await (externalDisposal ?? activation.run.dispose())
+     } catch (error: unknown) {
+       failures.push(new SubagentError(
+@@ -1332,14 +1346,26 @@ export class SubagentManager {
+     content: ContentBlock[],
+     options: ChildDeliveryOptions,
+   ): Promise<MessageId> {
++    const activation = await this.resumeActivation(parent, childId, options.signal, 'parent')
++    return await this.submitMaterialized(activation, content, options, parent)
++  }
++
++  /**
++   * Restore one persisted continuable child as a resident activation WITHOUT
++   * submitting any task: the same observation, authorization, descriptor, and
++   * composition reconstruction `coldResume` uses, stopping before delivery.
++   * The caller owns what happens next; the activation is not yet announced,
++   * so the settlement watcher (and therefore any release) cannot start.
++   */
++  private async resumeActivation(parent: Agent, childId: SessionId, signal: AbortSignal, delivery: 'parent' | 'caller'): Promise<Activation> {
+     const query = this.requireSessionQuery()
+     let observation: SessionObservation
+     try {
+       observation = await query.observeSession(childId, {
+-        signal: options.signal,
++        signal,
+       })
+     } catch (error: unknown) {
+-      options.signal.throwIfAborted()
++      signal.throwIfAborted()
+       throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
+     }
+     using source = observation
+@@ -1353,14 +1379,13 @@ export class SubagentManager {
+         'NOT_RESUMABLE',
+       )
+     }
+-    let activation: Activation
+     try {
+       const independentlySelected = hasIndependentPresetSelection(ownEvents)
+       const agentPreset = independentlySelected ? source.projections?.values.agentPreset : undefined
+       if (independentlySelected && typeof agentPreset !== 'string') {
+         throw new SubagentError(`subagent "${childId}" has no agent preset projection for restoration`, 'NOT_RESUMABLE')
+       }
+-      activation = await this.materialize({
++      return await this.materialize({
+         kind: 'local',
+         childId,
+         provider: descriptor.provider,
+@@ -1373,14 +1398,73 @@ export class SubagentManager {
+             : {},
+         },
+         composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },
+-        signal: options.signal,
++        delivery,
++        signal,
+       })
+     } catch (error: unknown) {
+-      options.signal.throwIfAborted()
++      signal.throwIfAborted()
+       if (error instanceof SubagentError) throw error
+       throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
+     }
+-    return await this.submitMaterialized(activation, content, options, parent)
++  }
++
++  /**
++   * Run one maintenance job on a persisted continuable child, owned by this
++   * manager's activation lifecycle end to end. The child is restored exactly
++   * like a continuation (same authorization and composition), becomes
++   * resident — so every normal route (sendMessage, addressed prompts) reaches
++   * it through `deliver` instead of a writer collision — and the job runs
++   * while the settlement watcher is held back, so nothing reclaims the child
++   * mid-job. The job itself enters the loop's maintenance phase; this method
++   * must not wrap it in another maintenance call.
++   *
++   * After the job settles (success, failure, or cancellation), the activation
++   * is announced and the ordinary settlement takes over: accepted input is
++   * processed or preserved (the watcher refuses to settle while the inbox is
++   * non-empty), the closing cutoff rejects later input before acceptance, and
++   * `finishDisposal` releases the writer. Normal continuation of the same id
++   * works throughout, including the close (the delivery loop waits out a
++   * closing activation and retries).
++   *
++   * @param parent - exact live direct parent authorizing the maintenance.
++   * @param childId - durable continuable child session id.
++   * @param options - caller cancellation and the maintenance job.
++   * @returns the job's own result.
++   */
++  async runMaintenance<T>(
++    parent: Agent,
++    childId: SessionId,
++    options: { signal?: AbortSignal, job: (agent: Agent, signal: AbortSignal) => Promise<T> },
++  ): Promise<T> {
++    this.assertAdmitting(parent)
++    // An omitted signal is legal: normalize one so the restore and the job
++    // share a single always-present cancellation source.
++    const signal = options.signal ?? new AbortController().signal
++    const releaseHold = this.holdOwnership(parent, childId)
++    try {
++      return await this.locks.run(childId, async () => {
++        if (this.resident.has(childId)) {
++          throw new SubagentError(`subagent "${childId}" is already resident; wait for its current activity to settle`, 'DUPLICATE_CHILD')
++        }
++        const activation = await this.resumeActivation(parent, childId, signal, 'caller')
++        if (activation.kind !== 'local') {
++          throw new SubagentError(`subagent "${childId}" restored through an unsupported backend for maintenance`, 'NOT_RESUMABLE')
++        }
++        try {
++          return await options.job(activation.handle.agent, signal)
++        } finally {
++          // Hand the activation to the ordinary settlement lifecycle. Pending
++          // input keeps it resident and reachable by normal routes; an empty
++          // inbox settles and releases the writer under the closing cutoff.
++          this.announce(activation)
++        }
++      })
++    } catch (error: unknown) {
++      signal.throwIfAborted()
++      throw error
++    } finally {
++      releaseHold()
++    }
+   }
+ 
+   /** Admit a materialized child, commit its creation fact, and release it on failure. */

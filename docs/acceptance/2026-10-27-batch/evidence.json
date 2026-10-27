@@ -1,0 +1,219 @@
+{
+  "status": "passed_on_isolated_patched_desktop",
+  "pluginCandidateSha": "804c9d997cf27ff3711d073af4a893a8481dcdeb",
+  "parentSessionId": "session-89b278a8-6341-4079-bf4f-f9858e50d348",
+  "hostBaseline": "687f282e8625c6b8d11ff58211a90524be2e4317",
+  "patchedModules": {
+    "dsh-agent-loop": "e462e972d7ad1e2cb9f4ceda94bd681df2d2562f0cf0dea5c647db56faf9cf21",
+    "dsh-subagent": "1985966774cb9073b6a00057e8ff49b30dfc92e3690e14dfe25ae8eac780ee28"
+  },
+  "manualCommand": {
+    "runSeq": 89,
+    "doneSeq": 90,
+    "commandId": "cmd-3f8ced1f-2",
+    "kind": "success",
+    "batchId": "br-24b4ed045cf5"
+  },
+  "modelTool": {
+    "callSeq": 134,
+    "resultSeq": 135,
+    "name": "compact_all_subagents",
+    "isError": false,
+    "batchId": "br-9fd32335cb6c"
+  },
+  "children": [
+    {
+      "id": "5997c44e-6bfe-4c98-9052-6c2b0714732e",
+      "label": "alpha",
+      "manualCompaction": {
+        "startSeq": 37,
+        "summarySeq": 39,
+        "endSeq": 41,
+        "startTime": 1793108881946,
+        "endTime": 1793108889841,
+        "sourceCommandId": "cmd-3f8ced1f-2",
+        "replacedItems": 8,
+        "replacedHistoryEstimatedTokens": 10078,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "toolCompaction": {
+        "startSeq": 56,
+        "summarySeq": 58,
+        "endSeq": 60,
+        "startTime": 1793108998027,
+        "endTime": 1793109005382,
+        "sourceCommandId": null,
+        "replacedItems": 5,
+        "replacedHistoryEstimatedTokens": 3871,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "continuation": {
+        "eventSeq": 52,
+        "turn": 3,
+        "anchors": [
+          "BATCH-ALPHA",
+          "127",
+          "Phase Alpha"
+        ],
+        "anchorsRetained": true,
+        "toolCalls": 0,
+        "answersSuppliedInFollowup": false
+      },
+      "inputUsage": {
+        "beforeEventSeq": 33,
+        "afterEventSeq": 52,
+        "before": {
+          "inputTokens": 215,
+          "cacheReadTokens": 21888,
+          "cacheWriteTokens": 0,
+          "outputTokens": 822,
+          "totalTokens": 22925
+        },
+        "after": {
+          "inputTokens": 4888,
+          "cacheReadTokens": 11776,
+          "cacheWriteTokens": 0,
+          "outputTokens": 895,
+          "totalTokens": 17559
+        },
+        "totalBefore": 22103,
+        "totalAfter": 16664,
+        "difference": 5439,
+        "decreasePercent": 24.61
+      },
+      "fixtureSha256": "2ecdc062ad6999708ac0a07b7aac82d491d1f217d0af9ee450b2370fa6cc3600",
+      "fixtureBaselineChecked": true
+    },
+    {
+      "id": "2c5dd81b-99ac-496b-94c0-aa9450809c19",
+      "label": "beta",
+      "manualCompaction": {
+        "startSeq": 37,
+        "summarySeq": 39,
+        "endSeq": 41,
+        "startTime": 1793108889867,
+        "endTime": 1793108898071,
+        "sourceCommandId": "cmd-3f8ced1f-2",
+        "replacedItems": 8,
+        "replacedHistoryEstimatedTokens": 10063,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "toolCompaction": {
+        "startSeq": 56,
+        "summarySeq": 58,
+        "endSeq": 60,
+        "startTime": 1793109005417,
+        "endTime": 1793109011622,
+        "sourceCommandId": null,
+        "replacedItems": 5,
+        "replacedHistoryEstimatedTokens": 3588,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "continuation": {
+        "eventSeq": 52,
+        "turn": 3,
+        "anchors": [
+          "ORBIT-BETA",
+          "913",
+          "Phase Delta"
+        ],
+        "anchorsRetained": true,
+        "toolCalls": 0,
+        "answersSuppliedInFollowup": false
+      },
+      "inputUsage": {
+        "beforeEventSeq": 33,
+        "afterEventSeq": 52,
+        "before": {
+          "inputTokens": 136,
+          "cacheReadTokens": 21888,
+          "cacheWriteTokens": 0,
+          "outputTokens": 822,
+          "totalTokens": 22846
+        },
+        "after": {
+          "inputTokens": 4696,
+          "cacheReadTokens": 11776,
+          "cacheWriteTokens": 0,
+          "outputTokens": 779,
+          "totalTokens": 17251
+        },
+        "totalBefore": 22024,
+        "totalAfter": 16472,
+        "difference": 5552,
+        "decreasePercent": 25.21
+      },
+      "fixtureSha256": "bcea631f84e548c597b4e45a559c10501285111e0ed62e704c8e815e352d461a",
+      "fixtureBaselineChecked": true
+    }
+  ],
+  "receiptStorage": {
+    "domain": "subagent_compactor_batch_receipts",
+    "physicalFileSha256": "ff391018010b8a285471366539237c181cf534cb605fcc71df3a30a93ed943cd",
+    "manual": {
+      "batchId": "br-24b4ed045cf5",
+      "parentSessionId": "session-89b278a8-6341-4079-bf4f-f9858e50d348",
+      "outcome": "completed",
+      "total": 2,
+      "counts": {
+        "compacted": 2,
+        "nothing-to-compact": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "not-started": 0
+      },
+      "finishedAt": "2026-10-27T13:48:18.081Z"
+    },
+    "tool": {
+      "batchId": "br-9fd32335cb6c",
+      "parentSessionId": "session-89b278a8-6341-4079-bf4f-f9858e50d348",
+      "outcome": "completed",
+      "total": 2,
+      "counts": {
+        "compacted": 2,
+        "nothing-to-compact": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "not-started": 0
+      },
+      "finishedAt": "2026-10-27T13:50:11.629Z"
+    },
+    "postRestartQueries": [
+      {
+        "batchId": "br-24b4ed045cf5",
+        "runSeq": 143,
+        "doneSeq": 144
+      },
+      {
+        "batchId": "br-9fd32335cb6c",
+        "runSeq": 145,
+        "doneSeq": 146
+      }
+    ],
+    "sessionPluginRecords": 0
+  },
+  "installedGenerationId": "local+dsh-subagent-compactor+1.1.0+14cfd1f0f714",
+  "installedPluginSha256": "209f47fc1950b09099ae70dd3ce1b04edd600fb8d7bcfe58f126d7c2337ebddf",
+  "originalInstalledArchiveUnchanged": true,
+  "coldPreconditionSnapshotSha256": "b65e5d578ba7fe9344dd2662a4ee02928bbec2bb5edd4390cbcf38236f5f9283",
+  "restart": {
+    "oldPid": 12333,
+    "newPid": 14995,
+    "oldProcessExitedAtVerification": true,
+    "newProcessRunningAtVerification": true,
+    "restartAfterParentSeq": 141,
+    "sourceSha256": "2ab2f21b3e739fdfb017b5f9e74113cd3896f1ec385492824d1251cad889de43"
+  },
+  "boundaries": [
+    "Stock Desktop lacks the candidate runMaintenance host API.",
+    "Only the independent patched Desktop copy was used; original app is unchanged.",
+    "Request input differences include summary and continuation input; not pure compression savings.",
+    "Complete host monorepo source build was not performed.",
+    "This synthetic read-only fixture checks this journey, not general summary quality.",
+    "Post-restart boundary is supplied by the UI driver; the verifier checks later persisted command results."
+  ]
+}

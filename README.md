@@ -2,11 +2,21 @@
 
 [简体中文](README.zh-CN.md)
 
-Manually compact a live direct subagent's history from its parent session in DSH Desktop. The plugin uses the child's existing compaction engine and provides a chat command and a model tool.
+**Status: unreleased 1.1.0 candidate.** The cold-compaction feature below is code-review approved but **not released**: it requires the candidate host maintenance capability (`ctx.subagents.runMaintenance`, see [host-patch/](host-patch/README.md)). On a stock DSH 0.2.1-rc.2 runtime the plugin refuses cold compaction explicitly (`host-capability-missing`); only live-window compaction works there. The currently released version is **1.0.1** (live-window only).
 
-**Version:** `1.0.1` · **Package:** `@local/dsh-subagent-compactor` · **Tested with:** DSH Desktop `0.12.1` / Harness `0.2.1-rc.2`.
+Manually compact a direct subagent's history from its parent session in DSH Desktop — while the child is live, **or after it finished** by its session id. The plugin reuses the child's own compaction engine and provides a chat command and a model tool.
+
+**Candidate version:** `1.1.0` (unreleased) · **Package:** `@local/dsh-subagent-compactor` · **Validated against:** DSH Desktop `0.12.1` / Harness `0.2.1-rc.2` (live window: released runtime; cold and batch paths: independent patched Desktop copy).
+
+[Real Desktop batch acceptance](docs/acceptance/2026-10-27-batch/acceptance.md): both settled children compacted through the command and model tool, continued on the same IDs with remembered facts, and retained both receipts through a full app restart. This verifies the candidate host patch, not stock Desktop support.
+
+## What changed in 1.1.0
+
+A finished continuable child can be compacted by its session id on the candidate patched host, without starting another task or racing the live window. The plugin calls `ctx.subagents.runMaintenance`; the manager restores the child's composition, runs the compaction job, and owns settlement and writer release. The plugin holds no restored handle. See [TECHNICAL.md](TECHNICAL.md) for the authorization, pending-input, and concurrency rules.
 
 ## Install in DSH Desktop
+
+### Released version (1.0.1, live-window compaction)
 
 1. Open **Plugins → Add plugin** (中文界面：**插件 → 添加插件**).
 2. Paste this Git source into the package name or address field:
@@ -22,15 +32,9 @@ If this package is already installed from a local directory, uninstall that sour
 
 Desktop's plugin manager handles installation and the bundle patch. Keep the host-provided peer modules; no manual profile edits or npm publication are required. `private: true` prevents npm publication and permits this Git installation path.
 
-You can also clone the repository and select its root directory in **Add plugin**:
+### 1.1.0 candidate (NOT installable as a released tag)
 
-```sh
-git clone https://github.com/08mamba24/dsh-subagent-compactor.git
-cd dsh-subagent-compactor
-git checkout v1.0.1
-```
-
-For an immutable install target, replace `v1.0.1` in the Git source with the full 40-character commit from this repository.
+The 1.1.0 candidate has **no tag and no release**: it exists as the `feature/cold-session-compaction` branch plus the candidate host patch. Do not install it into a real Desktop expecting cold compaction — the stock runtime lacks the required capability, and the plugin will refuse cold compaction explicitly. To evaluate the candidate, use the isolated verification tree described in [host-patch/README.md](host-patch/README.md). For an immutable reference, cite the exact 40-character commit of the branch head instead of a tag.
 
 ## Use it
 
@@ -40,34 +44,57 @@ Use the command in the parent session that created the subagent:
 /subagent-compact
 ```
 
-This lists the parent's persisted direct-child catalog. Copy a full child session ID, then invoke:
+This lists the parent's persisted direct-child catalog (and, when the parent's latest batch did not complete cleanly, that batch's durable receipt — see below). Each line ends with `— live` (a loaded agent) or `— persisted (not loaded)` (a record whose agent is not loaded; a listing is an observation, not a reservation). Copy a full child session ID, then invoke:
 
 ```text
 /subagent-compact <subagent-session-id>
 ```
 
-**The child must still be live when the request starts.** Invoke while it is running; the default `waitForIdle: true` waits for its turn to finish before compacting. A catalog entry can outlive its running agent, so listing an ID does not prove it is currently compactable. A settled child returns `not-resident`; this plugin does not resume it.
+Two lawful situations:
 
-The parent model can call the same operation through:
+- **Child still live** — invoke while it is running; the default `waitForIdle: true` waits for its turn to finish before compacting.
+- **Child finished** (a continuable child that settled and was reclaimed) — invoke by id at any later time. The plugin restores the child, compacts once, and releases it; no new task is sent. The same id stays continuable afterwards.
+
+### Batch: compact every direct child at once
+
+```text
+/subagent-compact --all
+```
+
+Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. The batch outcome is `completed` only when every child compacted or had nothing to compact, `all-failed` when nothing succeeded, `partial-failure` in between, and `batch-cancelled` when it was cancelled — including a cancellation that lands while the catalog read is still resolving; every non-clean outcome makes the command report an error, never success. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result; a catalog that already resolved when the cancellation lands keeps its known target list (every target reported `not-started`), while a read that never resolved reports the snapshot as unknown. Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
+
+Every finished batch persists one **receipt** — a schema-validated record in the plugin's own versioned **storage domain** (`subagent_compactor_batch_receipts`, opened through the composition's `storageDomain` facility). Receipts carry their owning parent's session id explicitly, and that id is the authorization: another parent can neither read nor overwrite them, and a forked history never masquerades as receipts this session created. A write is durable the moment the backend confirms it (one record per batch, never overwritten), so receipts survive plugin reloads and host restarts. The host's abort semantics drop a cancelled command's own result — that is exactly why the receipt must be durable. The bare `/subagent-compact` listing appends the caller's latest **unclean** receipt (clean runs were already delivered as their own result), and any receipt — clean or not — comes back by id:
+
+```text
+/subagent-compact report <batch-id>
+```
+
+A failed receipt write is stated in the returned text (`NOT persisted: …`), never claimed as durable. Record shape is enforced by the domain's zod schema at open time — foreign payloads cannot enter the domain at all.
+
+The parent model can call the same operations through:
 
 ```text
 compact_subagent({ "session_id": "<subagent-session-id>" })
+compact_all_subagents({})   // the batch above, with structured counts
 ```
 
-You can ask the parent: “While this direct child is still running, call `compact_subagent` for its session ID. Report the tool result.” A tool call remains subject to the host's permissions.
+You can ask the parent: “Call `compact_subagent` for child session X and report the tool result.” A tool call remains subject to the host's permissions. The batch tool's counts — `total`, `compacted`, `nothing_to_compact`, `failed`, `cancelled`, `not_started` — are structured values from the batch result, never numbers parsed back out of the report text (error lines may contain arbitrary digits).
 
 ## Confirm the result
 
 The command must execute as a command card, rather than appear as an ordinary model message. A successful result identifies the child session, summary sequence, and replaced history items. The tool returns `outcome`, `target_session_id`, `summary_seq`, `replaced_items`, and `replaced_tokens`.
 
-`replaced_tokens` estimates the old history that was replaced. It does **not** measure net savings after adding the summary. To measure savings, compare the child's context estimate or total request input before and after compaction. The summary uses an additional model request.
+`replaced_tokens` estimates the old history that was replaced. It does **not** measure net savings after adding the summary. To measure savings, compare the child's context estimate or total request input before and after compaction. The summary uses one additional model request on the child's own route.
+
+Refusals are explicit outcomes, never silent: `unknown-session` (no live or persisted session), `not-authorized` (foreign parent / grandchild / self), `unsupported-target` (one-shot, external, missing or unsupported descriptor), `pending-input` (persisted unfinished input — continue the child instead), `busy-target` (a concurrent compaction or another live writer; retry), `restore-failed`, `query-unavailable`, plus the engine's six manual-compaction codes (`busy`, `cancelled`, `changed`, `summary`, `commit`, `persistence`).
 
 ## Requirements and limits
 
-- The composition must provide `commands`, `tools`, `agents`, and `subagents`, plus a compaction engine for the target child. Normal subagent-capable Desktop presets provide these services.
-- Only the exact runtime parent can compact its live direct child. Other parents, the caller itself, and grandchildren are rejected.
-- Preset compositions resolve the child's engine through `agentPresets.serviceFor`; compositions without that registry use the Host engine.
-- This release provides listing and manual compaction. Child deletion, handoff, cold-session compaction, and automatic triggers are outside its scope.
+- The composition must provide `commands`, `tools`, `agents`, and `subagents`, plus a compaction engine for the target child. Normal subagent-capable Desktop presets provide these services. Cold compaction additionally needs `sessionQuery` and session persistence (present in the same compositions). Batch receipts live in the plugin's own storage domain (`@deepseek-ai/dsh-storage-domain`, a required peer; the domain is schema-validated and never model-visible) opened through the composition's `storageDomain` facility; when the facility is absent, or a write fails, the batch text says the receipt was `NOT persisted` instead of claiming durability.
+- Only the exact runtime parent can compact its direct child. Other parents, the caller itself, and grandchildren are rejected — for live targets through runtime ownership, for finished targets through the child's persisted header lineage and its durable descriptor.
+- Preset compositions resolve the child's engine through `agentPresets.serviceFor` (no Host-plane fallback); compositions without that registry use the Host engine.
+- Cold compaction uses the host's manager-owned maintenance capability (`ctx.subagents.runMaintenance`). On a stock 0.2.1-rc.2 runtime the plugin refuses cold compaction explicitly (`host-capability-missing`); the isolated candidate host patch in [host-patch/](host-patch/README.md) provides the capability, under which accepted input is never lost, normal routes keep working throughout, and unloading the plugin preserves parked input. Live-window compaction works everywhere.
+- This release provides listing and manual compaction. Child deletion, handoff, and automatic triggers are outside its scope.
 - Compatibility was verified on the versions above. Later Harness versions require verification.
 
 See [technical details](TECHNICAL.md) and the [validation record](docs/VALIDATION.md).
@@ -79,10 +106,10 @@ Tests need a module tree from Harness `0.2.1-rc.2`, including its runtime packag
 ```sh
 DSH_MODULES="/absolute/path/to/dsh/node_modules"
 ln -s "$DSH_MODULES" node_modules
-node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs
+node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
 ```
 
-The integration test uses isolated temporary storage and a local fake model endpoint. It makes no external model calls and deletes its test storage afterward.
+The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. The last complete run on the isolated patched tree was 82/82 (unit 44, integration 1, cold 37); the subsequent packaging-only change passed 45/45 unit tests, with no runtime code change. For stock capability-missing diagnostics, point `node_modules` at the stock tree and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs`. Host setup: [host-patch/README.md](host-patch/README.md). Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Source and license
 
