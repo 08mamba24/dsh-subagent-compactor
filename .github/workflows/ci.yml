@@ -1,0 +1,77 @@
+# CI for @local/dsh-subagent-compactor — no CD, no tags, no npm publish.
+#
+# Two lanes against the SAME stock 0.2.1-rc.2 npm tree (npm ci, lockfile-pinned):
+#   stock   — the suites that must pass on an unmodified host runtime
+#             (46 unit + live-integration tests) plus the GAP_DIAG lane that
+#             proves the maintenance capability is absent and cold compaction
+#             is refused explicitly (3 diagnostics).
+#   patched — the same-version tree with the two reviewed host lib diffs
+#             (host-patch/0002 + 0003) applied to isolated copies of
+#             @deepseek-ai/dsh-agent-loop and @deepseek-ai/dsh-subagent; every
+#             other package is a symlink into the untouched stock tree. The
+#             full suites (83 tests) must pass there.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stock:
+    name: stock runtime — 46 tests + 3 gap diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install the stock npm tree from the lockfile
+        run: npm ci
+      - name: Stock suites (unit + live integration)
+        run: npm run test:stock
+      - name: Gap diagnostics on the stock runtime (GAP_DIAG=1)
+        run: npm run test:gap-diag
+
+  patched:
+    name: patched runtime — 83 tests after host-patch 0002+0003
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+          cache: npm
+      - name: Install the stock npm tree from the lockfile
+        run: npm ci
+      - name: Build the isolated host-patched tree (copy the two patched packages, symlink the rest)
+        run: |
+          mv node_modules stock-node-modules
+          STOCK="$PWD/stock-node-modules"
+          mkdir -p host-patched/node_modules/@deepseek-ai
+          for entry in "$STOCK"/*; do
+            name="$(basename "$entry")"
+            case "$name" in .*|@deepseek-ai) continue ;; esac
+            ln -s "$entry" "host-patched/node_modules/$name"
+          done
+          for entry in "$STOCK"/@deepseek-ai/*; do
+            name="$(basename "$entry")"
+            case "$name" in
+              dsh-agent-loop|dsh-subagent) cp -R "$entry" "host-patched/node_modules/@deepseek-ai/$name" ;;
+              *) ln -s "$entry" "host-patched/node_modules/@deepseek-ai/$name" ;;
+            esac
+          done
+          ln -s "$PWD/host-patched/node_modules" node_modules
+      - name: Apply host lib patches 0002 + 0003 to the two copies
+        run: |
+          patch host-patched/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js < host-patch/0002-agent-loop-lib.equivalent.diff
+          patch host-patched/node_modules/@deepseek-ai/dsh-subagent/lib/index.js < host-patch/0003-dsh-subagent-lib.equivalent.diff
+      - name: Full suites on the patched tree
+        run: npm run test:patched
