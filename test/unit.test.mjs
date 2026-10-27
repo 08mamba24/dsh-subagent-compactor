@@ -5,7 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Session } from "@deepseek-ai/dsh-session";
 import { apply, inject, name as pluginName, Config } from "../index.js";
 
 class ManualError extends Error {
@@ -735,11 +734,25 @@ test("command declares input so Desktop's UI claims parameterized invocations", 
 // ---------------------------------------------------------------------------
 // Batch unit tests: runner decision table on stub contexts.
 
-function makeBatchHarness({ children, agentsById = new Map(), enginesById = new Map(), maintenanceById = new Map(), callerSession = true } = {}) {
-	// A real detached Session so batch receipts exercise the actual
-	// appendPluginRecord/pluginRecordOf round trip; callerSession:false covers
-	// compositions whose caller cannot record receipts.
-	const caller = { id: "parent-1", ...(callerSession ? { session: Session.create("parent-1") } : {}) };
+function makeBatchHarness({ children, agentsById = new Map(), enginesById = new Map(), maintenanceById = new Map(), storage = "memory" } = {}) {
+	// A minimal storageDomain facility stub shaped like the real one
+	// (open → domain → table.get/entries/put). storage: "memory" (normal
+	// round trip), "missing" (no service), "put-fails" (backend write
+	// failure).
+	const records = new Map();
+	const facility = {
+		open: async () => ({
+			table: () => ({
+				get: (key) => records.get(key),
+				entries: () => records.entries()[Symbol.iterator](),
+				put: storage === "put-fails"
+					? async () => { throw new Error("backend write failed (disk full)"); }
+					: async (key, value) => { records.set(key, value); }
+			}),
+			close: async () => {}
+		})
+	};
+	const caller = { id: "parent-1" };
 	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
 	const maintenanceCalls = [];
 	const liveAgents = agentsById;
@@ -757,6 +770,7 @@ function makeBatchHarness({ children, agentsById = new Map(), enginesById = new 
 			}
 		},
 		get(serviceName) {
+			if (serviceName === "storageDomain") return storage === "missing" ? undefined : facility;
 			if (serviceName === "compaction") return {
 				compactNow: async (agent, signal) => {
 					const engine = enginesById.get(agent.id);
@@ -764,25 +778,13 @@ function makeBatchHarness({ children, agentsById = new Map(), enginesById = new 
 					return engine(agent, signal);
 				}
 			};
-			if (serviceName === "sessions") return { flush: async () => {} };
-			if (serviceName === "sessionQuery") return { observeSession: async (id) => {
-				if (id === caller.id) {
-					return {
-						header: { id, parentSession: caller.id },
-						inheritedEventCount: 0,
-						events: Object.freeze([...(caller.session?.log ?? [])]),
-						projections: { values: {} },
-						[Symbol.dispose]() {}
-					};
-				}
-				return {
-					header: { id, parentSession: caller.id },
-					inheritedEventCount: 0,
-					events: Object.freeze([{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "continuable", provider: "spawn", label: "w" } }]),
-					projections: { values: { inbox: { "next-turn": [], "next-step": [] } } },
-					[Symbol.dispose]() {}
-				};
-			} };
+			if (serviceName === "sessionQuery") return { observeSession: async (id) => ({
+				header: { id, parentSession: caller.id },
+				inheritedEventCount: 0,
+				events: Object.freeze([{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "continuable", provider: "spawn", label: "w" } }]),
+				projections: { values: { inbox: { "next-turn": [], "next-step": [] } } },
+				[Symbol.dispose]() {}
+			}) };
 			return undefined;
 		},
 		commands: { register(d) { registrations.commands.push(d); return () => {}; } },
@@ -869,15 +871,24 @@ test("batch: report entry — usage, unknown id, and cross-session scoping", asy
 	assert.match(unknown.text, /No batch receipt/);
 });
 
-test("batch: when the caller cannot record receipts, the text says so instead of claiming persistence", async () => {
+test("batch: a backend write failure is exposed, never claimed as persisted", async () => {
 	const engines = new Map([["a", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]]);
-	const harness = makeBatchHarness({ children: async () => [{ id: "a" }], enginesById: engines, callerSession: false });
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }], enginesById: engines, storage: "put-fails" });
 	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
 	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(result.outcome, "completed");
-	assert.match(result.text, /batch receipt br-[0-9a-f]+ NOT persisted: /, "persistence failure is exposed, never claimed");
+	assert.match(result.text, /batch receipt br-[0-9a-f]+ NOT persisted: .*write failed/, "a failed put is reported, never claimed as durable");
 	const listing = await harness.registrations.commands[0].handler(invocation(harness, ""));
 	assert.ok(!/Last unclean batch report/.test(listing.text), "nothing durable exists to list");
+});
+
+test("batch: a composition without the storageDomain service reports it explicitly", async () => {
+	const engines = new Map([["a", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]]);
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }], enginesById: engines, storage: "missing" });
+	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "completed", "the batch itself still runs without the receipt store");
+	assert.match(result.text, /NOT persisted: .*storageDomain/, "the missing capability is named");
 });
 
 test("batch: registers the --all hint and the batch tool", async () => {

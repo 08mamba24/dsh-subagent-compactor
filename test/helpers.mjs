@@ -77,6 +77,9 @@ export function createFakeMessagesServer() {
 export async function bootComposition(baseURL, storageRoot, { extra = [], pluginConfig = { waitForIdle: true }, withoutHostCompaction = false } = {}) {
 	const moduleNames = [
 		"@deepseek-ai/cordis-plugin-timer",
+		"@deepseek-ai/dsh-storage",
+		"@deepseek-ai/dsh-storage-json",
+		"@deepseek-ai/dsh-storage-domain",
 		"@deepseek-ai/dsh-llm",
 		"@deepseek-ai/dsh-llm-deepseek-api-key",
 		"@deepseek-ai/dsh-system-prompt",
@@ -100,6 +103,12 @@ export async function bootComposition(baseURL, storageRoot, { extra = [], plugin
 	for (const moduleName of moduleNames) modules[moduleName] = await import(moduleName);
 	const rows = [
 		["@deepseek-ai/cordis-plugin-timer", {}],
+		/* The real storage trio Desktop ships (storage + json backend +
+		 * domain facility) over its own isolated root, so batch receipts
+		 * exercise the actual durability path. */
+		["@deepseek-ai/dsh-storage", {}],
+		["@deepseek-ai/dsh-storage-json", { root: join(storageRoot, "storages") }],
+		["@deepseek-ai/dsh-storage-domain", { backend: "json", routes: {} }],
 		["@deepseek-ai/dsh-llm", {}],
 		["@deepseek-ai/dsh-llm-deepseek-api-key", { baseURL, defaultContextWindow: 200000 }],
 		["@deepseek-ai/dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are the integration test worker." }],

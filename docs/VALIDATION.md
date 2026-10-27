@@ -1,10 +1,32 @@
 # Validation record
 
-Plugin version: **1.1.0** (cold compaction feature branch, review round 2). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
+Plugin version: **1.1.0** (cold compaction feature branch, review round 3). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
 
+## Batch review round 3 (batch R3 fix: receipts moved to the plugin's storage domain)
+
+Independent review of `24a0273` confirmed 80/80 and the R2 behavior fixes, but rejected the receipt storage route itself with two findings, both now fixed on `feature/batch-session-compaction`:
+
+- **P2-1 the storage route was off-limits** — R2 stored receipts as plugin records through `@deepseek-ai/dsh-session`'s `appendPluginRecord`, and the R2 record had argued a third-party exemption from the repo-internal `verify-plugin-record-callers` gate. The reviewer re-read the first-hand sources: the official plugin-development guidance explicitly forbids third-party plugins calling `appendPluginRecord`, so the exemption claim is retracted here and the entire route is gone from the plugin.
+- **P2-2 durability was claimed ahead of the medium** — under the old route the receipt was appended to an in-memory session object and a `sessions.flush` was awaited before claiming persistence; the reviewer rejected the indirection as a claim the plugin could not itself guarantee.
+
+Root fix: every finished batch now writes its receipt into the plugin's own versioned **storage domain** (`subagent_compactor_batch_receipts`, `@deepseek-ai/dsh-storage-domain` — a required peer, declared in `defineDomain` with a zod record schema), opened through the composition's public `storageDomain` facility. Scoping and durability are domain properties, not plugin bookkeeping:
+
+- the record carries its owning `parentSessionId` explicitly and is keyed `<parentSessionId>:<batchId>`; readback filters on that id, so another parent is unreachable and a forked history cannot masquerade;
+- `table.put` resolving **is** the durability boundary (the json medium is on disk at that point) — no second flush to trust;
+- one record per batch, never overwritten (a colliding batch id is regenerated), so later runs never erase an unread receipt;
+- the domain opens lazily, survives plugin reload and a **full host-context restart**, and is closed by the plugin's unload disposer only after in-flight batches have settled;
+- a missing `storageDomain` facility or a failed put is stated in the batch text (`NOT persisted: …`) — never claimed as durable;
+- record shape is enforced by the domain schema at open time; foreign payloads cannot enter.
+
+Batch ids are now `br-<12 hex>` (UUID digits only). `@deepseek-ai/dsh-session` is removed from peerDependencies (no longer imported); `@deepseek-ai/dsh-storage-domain` and `zod` are added.
+
+Regressions (rewritten for the domain route; real compositions and the real command entry): receipts persist per parent in the domain medium (the test reads the json file directly, asserts both batch ids, explicit parent ids, and **zero** `plugin:` records in the session log), survive a plugin-only reload, and survive a **full host-context restart** (every service disposed, composition rebooted over the same root, the caller resumed by id — `report <batch-id>` and the unclean-listing suffix both return the pre-restart receipt). The R2 regressions (cross-parent isolation, no cross-parent overwrite, cancel keeps the full receipt, resolved-snapshot cancel) run unchanged against the domain store. Unit-level: the harness stubs the facility — a memory round trip (report grammar, unknown-id refusal, cross-session scoping), a `put` failure reported as `NOT persisted` with nothing listed, and a composition without the facility still completing the batch while naming the missing capability. Suite: **82/82, two consecutive green runs** (unit 44, integration 1, cold 37). Desktop batch acceptance remains **not run**.
+
 ## Batch review round 2 (batch R2 fixes: durable per-parent receipts, snapshot-keeping cancel)
+
+> Correction (round 3): the `appendPluginRecord` route this section describes was rejected by the R3 review — third-party plugins may not call it, and the exemption argument below is retracted. See the round-3 section for the replacement storage domain.
 
 Independent review of the batch R1 fix (`4864bfc`) confirmed 74/74 and the four R1 findings closed, but found one P1 and two P2s; all three are fixed on `feature/batch-session-compaction`, each first reproduced with the reviewer's own proof scripts (all three re-run by the author before fixing) and then covered by red-first regressions:
 

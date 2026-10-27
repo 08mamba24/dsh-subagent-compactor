@@ -27,10 +27,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { pluginRecordOf } from "@deepseek-ai/dsh-session";
-import { withComposition, waitFor, readEvents, settleChild, startChild, PROVIDER, MODEL, CHILD_MODEL } from "./helpers.mjs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { bootComposition, createFakeMessagesServer, withComposition, waitFor, readEvents, settleChild, startChild, PROVIDER, MODEL, CHILD_MODEL } from "./helpers.mjs";
 
-const BATCH_RECORD_TYPE = "plugin:local/dsh-subagent-compactor/batch-report";
+/** The plugin's versioned storage domain for batch receipts (defineDomain name). */
+const RECEIPTS_DOMAIN_FILE = "subagent_compactor_batch_receipts.json";
 
 const signal = () => new AbortController().signal;
 
@@ -1454,7 +1457,7 @@ test("batch: receipts are scoped to their own parent — no leak, no cross-paren
 });
 
 test("batch: receipts persist per parent, survive reload, and are never overwritten by later runs", async () => {
-	await withComposition(async (ctx, fake) => {
+	await withComposition(async (ctx, fake, storageRoot) => {
 		const parent = await makeParent(ctx, "batch-persist-parent");
 		await settleTwoTurnChild(ctx, parent, fake);
 		await settleTwoTurnChild(ctx, parent, fake);
@@ -1480,19 +1483,61 @@ test("batch: receipts persist per parent, survive reload, and are never overwrit
 		const cleanReceipt = await ctx.commands.execute(parent, `/subagent-compact report ${cleanId}`, [], signal());
 		assert.equal(cleanReceipt.result.kind, "success", cleanReceipt.result.text);
 		assert.match(cleanReceipt.result.text, /\(completed\)/);
-		// The receipts are durable plugin records in the parent's own log.
-		const durable = await ctx.sessionQuery.readSession(parent.id);
-		const records = durable.events.map((event) => pluginRecordOf(event)).filter((record) => record?.type === BATCH_RECORD_TYPE);
-		assert.equal(records.length, 2, "both receipts persisted in the parent session log");
-		assert.deepEqual(records.map((record) => record.data.batchId).sort(), [failedId, cleanId].sort());
-		// A plugin-only reload keeps them readable: nothing in the plugin is
-		// the source of truth.
+		// The receipts live in the plugin's own storage domain: durable
+		// records with explicit parent identity, and nothing is written into
+		// the parent's session log (the appendPluginRecord route is gone).
+		const medium = JSON.parse(readFileSync(join(storageRoot, "storages", RECEIPTS_DOMAIN_FILE), "utf8"));
+		const stored = Object.values(medium.tables.receipts);
+		assert.equal(stored.length, 2, "both receipts persisted in the plugin's storage domain");
+		assert.deepEqual(stored.map((receipt) => receipt.batchId).sort(), [failedId, cleanId].sort());
+		assert.ok(stored.every((receipt) => receipt.parentSessionId === parent.id), "every receipt carries its owning parent session id");
+		for (const event of await readEvents(ctx, parent.id)) {
+			assert.ok(!String(event.type).startsWith("plugin:"), "no session-log plugin records are written");
+		}
+		// A plugin-only reload keeps them readable (the domain closes and
+		// reopens; nothing in the plugin is the source of truth).
 		await ctx.compactorFiber.dispose();
 		ctx.compactorFiber = await ctx.plugin(await import("../index.js"), { waitForIdle: true });
 		const afterReload = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
 		assert.match(afterReload.result.text, /Last unclean batch report \(batch br-/);
 		assert.equal(failedId, /br-[0-9a-f]+/.exec(afterReload.result.text)?.[0]);
 	});
+});
+
+test("batch: receipts survive a full host-context restart in the storage domain", async () => {
+	const fake = createFakeMessagesServer();
+	const root = mkdtempSync(join(tmpdir(), "subagent-compactor-restart-"));
+	try {
+		const baseURL = await fake.start();
+		let ctx = await bootComposition(baseURL, root);
+		const parent = await makeParent(ctx, "batch-restart-parent");
+		const child = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize-fail";
+		const failed = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.match(failed.result.text, /\(all-failed\)/);
+		const batchId = /br-[0-9a-f]+/.exec(failed.result.text)?.[0];
+		assert.notEqual(batchId, undefined);
+		for (const event of await readEvents(ctx, parent.id)) {
+			assert.ok(!String(event.type).startsWith("plugin:"), "the session log carries no plugin records");
+		}
+		// Full teardown: every service — storage included — is disposed.
+		await ctx.fiber.dispose();
+		ctx = await bootComposition(baseURL, root);
+		// The persisted session already exists, so the caller comes back by
+		// resume — same session id, fresh live object: the receipt follows
+		// the parent id, not any in-memory or per-boot state.
+		const resumed = (await ctx.agents.resume({ resumeSessionId: "batch-restart-parent", agentOptions: { provider: PROVIDER, model: MODEL } })).agent;
+		const report = await ctx.commands.execute(resumed, `/subagent-compact report ${batchId}`, [], signal());
+		assert.equal(report.result.kind, "success", report.result.text);
+		assert.match(report.result.text, /\(all-failed\)/);
+		assert.match(report.result.text, new RegExp(child));
+		const listing = await ctx.commands.execute(resumed, "/subagent-compact", [], signal());
+		assert.match(listing.result.text, /Last unclean batch report \(batch br-/);
+		await ctx.fiber.dispose();
+	} finally {
+		await fake.close();
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 test("batch: cancel after the first child compacted keeps the full receipt — kept, cancelled, not started", async () => {
