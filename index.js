@@ -438,16 +438,33 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
  * single compaction of the same target reports busy. Every item reports its
  * own outcome and reason; one item's failure never hides the rest. A batch
  * signal abort stops UNSTARTED items (reported as not-started) and preserves
- * every finished result; a cancelled batch never reports success. Each
- * compaction still costs one summary request on the child's own route.
+ * every finished result; a cancelled batch never reports success, and neither
+ * does a batch whose items failed: the batch outcome is `completed` only when
+ * every item compacted or had nothing to compact, `all-failed` when nothing
+ * succeeded, `partial-failure` in between, and `batch-cancelled` when the
+ * signal aborted — including an abort that lands while the catalog read is
+ * still resolving. Each compaction still costs one summary request on the
+ * child's own route. The finished entry is recorded on `reportStore` (when
+ * given): a cancelled command's own result is dropped by the host's abort
+ * semantics, so the finished report must stay retrievable elsewhere.
  */
-async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCommandId) {
+async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCommandId, reportStore) {
+	const finish = (entry) => {
+		if (reportStore !== undefined) reportStore.last = { finishedAt: new Date().toISOString(), ...entry };
+		return entry;
+	};
 	let entries;
 	try {
 		entries = await ctx.subagents.listChildren(caller.id, signal);
 	} catch (error) {
-		if (signal.aborted) return { outcome: "batch-cancelled", text: "Batch compaction cancelled before the catalog was read.", counts: emptyBatchCounts() };
-		return { outcome: "listing-failed", text: `Batch catalog unavailable: ${error instanceof Error ? error.message : String(error)}`, counts: emptyBatchCounts() };
+		if (signal.aborted) return finish({ outcome: "batch-cancelled", text: "Batch compaction cancelled while the catalog was being read.", total: 0, counts: emptyBatchCounts() });
+		return finish({ outcome: "listing-failed", text: `Batch catalog unavailable: ${error instanceof Error ? error.message : String(error)}`, total: 0, counts: emptyBatchCounts() });
+	}
+	/* The catalog read may resolve past an abort (a host read can complete
+	 * beyond its last abort checkpoint): an aborted batch must never resolve
+	 * as an empty-catalog success — or as anything but cancelled. */
+	if (signal.aborted) {
+		return finish({ outcome: "batch-cancelled", text: "Batch compaction cancelled before any child began.", total: 0, counts: emptyBatchCounts() });
 	}
 	const seen = new Set();
 	const items = [];
@@ -457,7 +474,7 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 		items.push(entry);
 	}
 	if (items.length === 0) {
-		return { outcome: "empty-catalog", text: "(no direct subagents on record for this session; nothing to compact)", counts: emptyBatchCounts() };
+		return finish({ outcome: "empty-catalog", text: "(no direct subagents on record for this session; nothing to compact)", total: 0, counts: emptyBatchCounts() });
 	}
 	const counts = { compacted: 0, "nothing-to-compact": 0, failed: 0, cancelled: 0, "not-started": 0 };
 	const lines = [];
@@ -473,32 +490,28 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 		} catch (error) {
 			result = { outcome: "error", text: `unexpected error: ${error instanceof Error ? error.message : String(error)}` };
 		}
-		switch (result.outcome) {
-			case "compacted":
-			case "release-failed":
-				counts.compacted += 1;
-				break;
-			case "nothing-to-compact":
-				counts["nothing-to-compact"] += 1;
-				break;
-			case "cancelled":
-				counts.cancelled += 1;
-				break;
-			default:
-				counts.failed += 1;
-				break;
-		}
-		if (result.outcome === "compacted" || result.outcome === "release-failed") {
-			lines.push(`${item.id}: ${result.outcome} — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`);
+		/* release-failed is a refused restore, not a clean compaction. */
+		if (result.outcome === "compacted") counts.compacted += 1;
+		else if (result.outcome === "nothing-to-compact") counts["nothing-to-compact"] += 1;
+		else if (result.outcome === "cancelled") counts.cancelled += 1;
+		else counts.failed += 1;
+		if (result.outcome === "compacted") {
+			lines.push(`${item.id}: compacted — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`);
 		} else if (result.outcome === "usage") {
 			lines.push(`${item.id}: skipped (usage)`);
 		} else {
 			lines.push(`${item.id}: ${result.outcome} — ${result.text}`);
 		}
 	}
-	const summary = `Summary — total ${items.length}: compacted ${counts.compacted}, nothing-to-compact ${counts["nothing-to-compact"]}, failed ${counts.failed}, cancelled ${counts.cancelled}, not-started: ${counts["not-started"]}.`;
+	const clean = counts.compacted + counts["nothing-to-compact"];
+	let outcome;
+	if (signal.aborted) outcome = "batch-cancelled";
+	else if (counts.failed === 0 && counts.cancelled === 0 && counts["not-started"] === 0) outcome = "completed";
+	else if (clean === 0) outcome = "all-failed";
+	else outcome = "partial-failure";
+	const summary = `Summary (${outcome}) — total ${items.length}: compacted ${counts.compacted}, nothing-to-compact ${counts["nothing-to-compact"]}, failed ${counts.failed}, cancelled ${counts.cancelled}, not-started: ${counts["not-started"]}.`;
 	const text = ["Batch compaction of the caller's direct-subagent snapshot:", ...lines, summary].join("\n");
-	return { outcome: signal.aborted ? "batch-cancelled" : "completed", text, counts };
+	return finish({ outcome, text, total: items.length, counts });
 }
 
 function emptyBatchCounts() {
@@ -516,7 +529,21 @@ async function listDirectChildren(ctx, caller, signal) {
 	return { kind: "success", text: ["Direct subagents of this session (observed at listing time; a listing is not a reservation):", ...lines].join("\n") };
 }
 
-/** Batch outcomes the command reports as success rather than error. */
+/**
+ * Render the last finished batch report for the bare listing. Only batches
+ * that did not complete cleanly are shown: a cancelled command's own result
+ * is dropped by the host's abort semantics, so its finished report must stay
+ * retrievable, while completed batches already carried their report to the
+ * user as the command or tool result. The store lives with the plugin — a
+ * restart forgets it, but each child's session log keeps the durable
+ * compaction/summary events.
+ */
+function renderLastBatchReport(entry) {
+	if (entry === undefined || entry.outcome === "completed" || entry.outcome === "empty-catalog") return undefined;
+	return `Last batch report (finished ${entry.finishedAt}; outcome ${entry.outcome}):\n${entry.text}`;
+}
+
+/** Batch outcomes the command reports as success rather than error: anything with a failed, cancelled, or not-started child is an error. */
 function batchCommandKind(outcome) {
 	return outcome === "completed" || outcome === "empty-catalog" ? "success" : "error";
 }
@@ -526,7 +553,7 @@ function commandKind(outcome) {
 	return outcome === "compacted" || outcome === "nothing-to-compact" ? "success" : "error";
 }
 
-function commandHandler(ctx, locks, config, active) {
+function commandHandler(ctx, locks, config, active, reportStore) {
 	return (invocation) => {
 		const controller = new AbortController();
 		/* One fused signal for every branch, so the plugin's own unload abort
@@ -536,17 +563,20 @@ function commandHandler(ctx, locks, config, active) {
 		const operation = (async () => {
 			const raw = invocation.rawInput.trim();
 			if (raw.length === 0) {
+				let listing;
 				try {
-					return await listDirectChildren(ctx, invocation.agent, signal);
+					listing = await listDirectChildren(ctx, invocation.agent, signal);
 				} catch (error) {
 					if (signal.aborted) return { kind: "error", text: "Listing cancelled." };
 					return { kind: "error", text: `Listing unavailable: ${error instanceof Error ? error.message : String(error)}` };
 				}
+				const report = renderLastBatchReport(reportStore?.last);
+				return report === undefined ? listing : { kind: listing.kind, text: `${listing.text}\n\n${report}` };
 			}
 			const parts = raw.split(/\s+/);
 			if (parts[0] === "--all") {
 				if (parts.length > 1) return { kind: "error", text: `${USAGE} (--all takes no other arguments)` };
-				const batch = await compactAllSubagents(ctx, locks, config, invocation.agent, signal, invocation.commandId);
+				const batch = await compactAllSubagents(ctx, locks, config, invocation.agent, signal, invocation.commandId, reportStore);
 				return { kind: batchCommandKind(batch.outcome), text: batch.text };
 			}
 			if (parts.length > 1) return { kind: "error", text: USAGE };
@@ -608,10 +638,10 @@ function subagentCompactTool(ctx, locks, config, active) {
 	});
 }
 
-function compactAllSubagentsTool(ctx, locks, config, active) {
+function compactAllSubagentsTool(ctx, locks, config, active, reportStore) {
 	return defineTool({
 		name: "compact_all_subagents",
-		description: "Compact the older history of ALL of your direct subagents in one run — every child in the current catalog snapshot (live children, and continuable children that already finished), serialized one at a time. Reports per-child outcomes and full counts. Each compacted child costs one summary request on its own model route. Cancellation stops children that have not started yet; finished results are kept.",
+		description: "Compact the older history of ALL of your direct subagents in one run — every child in the current catalog snapshot (live children, and continuable children that already finished), serialized one at a time. Reports per-child outcomes and full structured counts; outcome is completed only when every child compacted or had nothing to compact, all-failed / partial-failure / batch-cancelled otherwise. Each compacted child costs one summary request on its own model route. Cancellation stops children that have not started yet; finished results are kept.",
 		parameters: {},
 		output: {
 			schema: {
@@ -634,30 +664,24 @@ function compactAllSubagentsTool(ctx, locks, config, active) {
 			const caller = exec.agent;
 			if (caller === undefined) throw new Error("compact_all_subagents: no calling agent on this execution");
 			const controller = new AbortController();
-			const operation = compactAllSubagents(ctx, locks, config, caller, operationSignal(exec.signal, controller.signal), undefined);
+			const operation = compactAllSubagents(ctx, locks, config, caller, operationSignal(exec.signal, controller.signal), undefined, reportStore);
 			active.begin(operation, controller);
 			const result = await operation;
-			const counts = result.counts ?? emptyBatchCounts();
+			/* Structured counts straight from the batch result: the total is
+			 * the catalog size, never a number parsed back out of the report
+			 * text (error lines may contain arbitrary digits). */
 			return {
 				text: result.text,
 				outcome: result.outcome,
-				...counts["not-started"] + counts.compacted + counts["nothing-to-compact"] + counts.failed + counts.cancelled > 0 || result.outcome !== "empty-catalog" ? {
-					total: totalCount(result.text),
-					compacted: counts.compacted,
-					nothing_to_compact: counts["nothing-to-compact"],
-					failed: counts.failed,
-					cancelled: counts.cancelled,
-					not_started: counts["not-started"]
-				} : { total: 0 }
+				total: result.total,
+				compacted: result.counts.compacted,
+				nothing_to_compact: result.counts["nothing-to-compact"],
+				failed: result.counts.failed,
+				cancelled: result.counts.cancelled,
+				not_started: result.counts["not-started"]
 			};
 		}
 	});
-}
-
-/** Parse the batch total back out of the summary line for the tool output. */
-function totalCount(text) {
-	const match = /total (\d+):/.exec(text ?? "");
-	return match === null ? 0 : Number(match[1]);
 }
 
 /**
@@ -671,6 +695,10 @@ function apply(ctx, config = {}) {
 	const resolved = Config(config);
 	const active = new ActiveOperations();
 	const locks = new TargetLocks();
+	/* Last finished batch report: the command service drops a command's own
+	 * result when the caller aborts, so a cancelled batch's per-item report
+	 * survives here and stays retrievable through the bare listing. */
+	const batchReports = { last: undefined };
 	ctx.effect(function* () {
 		yield async () => {
 			active.abortAll();
@@ -698,10 +726,10 @@ function apply(ctx, config = {}) {
 			input: {
 				hint: "[--all | <subagent-session-id>]"
 			},
-			handler: commandHandler(ctx, locks, resolved, active)
+			handler: commandHandler(ctx, locks, resolved, active, batchReports)
 		});
 		const unregisterTool = ctx.tools.register(subagentCompactTool(ctx, locks, resolved, active));
-		const unregisterBatchTool = ctx.tools.register(compactAllSubagentsTool(ctx, locks, resolved, active));
+		const unregisterBatchTool = ctx.tools.register(compactAllSubagentsTool(ctx, locks, resolved, active, batchReports));
 		yield () => {
 			unregisterBatchTool();
 			unregisterTool();

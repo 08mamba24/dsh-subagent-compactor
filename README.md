@@ -59,7 +59,7 @@ Two lawful situations:
 /subagent-compact --all
 ```
 
-Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result; a cancelled batch never reports success. Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
+Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. The batch outcome is `completed` only when every child compacted or had nothing to compact, `all-failed` when nothing succeeded, `partial-failure` in between, and `batch-cancelled` when it was cancelled — including a cancellation that lands while the catalog read is still resolving; every non-clean outcome makes the command report an error, never success. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result. Because the host's abort semantics drop a cancelled command's own result, the finished per-child report is kept on the plugin: the bare `/subagent-compact` listing appends the last batch report whenever the last batch did not complete cleanly (the store lives with the plugin — a restart forgets it; each child's own session log is the durable record). Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
 
 The parent model can call the same operations through:
 
@@ -68,7 +68,7 @@ compact_subagent({ "session_id": "<subagent-session-id>" })
 compact_all_subagents({})   // the batch above, with structured counts
 ```
 
-You can ask the parent: “Call `compact_subagent` for child session X and report the tool result.” A tool call remains subject to the host's permissions.
+You can ask the parent: “Call `compact_subagent` for child session X and report the tool result.” A tool call remains subject to the host's permissions. The batch tool's counts — `total`, `compacted`, `nothing_to_compact`, `failed`, `cancelled`, `not_started` — are structured values from the batch result, never numbers parsed back out of the report text (error lines may contain arbitrary digits).
 
 ## Confirm the result
 
@@ -99,7 +99,7 @@ ln -s "$DSH_MODULES" node_modules
 node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
 ```
 
-The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. `test/cold.integration.test.mjs` is the 1.1.0 candidate's contract suite: on the isolated patched tree (see [host-patch/README.md](host-patch/README.md)) all suites pass (59/59); on a stock tree point `node_modules` at it and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` for the capability-missing diagnostics. Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
+The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. `test/cold.integration.test.mjs` is the 1.1.0 candidate's contract suite: on the isolated patched tree (see [host-patch/README.md](host-patch/README.md)) all suites pass (74/74 — unit 41, integration 1, cold 32); on a stock tree point `node_modules` at it and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` for the capability-missing diagnostics. Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Source and license
 

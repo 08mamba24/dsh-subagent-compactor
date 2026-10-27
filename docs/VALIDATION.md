@@ -4,6 +4,17 @@ Plugin version: **1.1.0** (cold compaction feature branch, review round 2). Test
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
 
+## Batch review round 1 (batch R1 fixes: honest batch outcomes)
+
+Independent review of the batch entry (`ef0b87b`, `--all` / `compact_all_subagents`) confirmed 69/69 tests but found four result-reporting defects; all four are fixed on `feature/batch-session-compaction`, each with a red-first regression that failed on `ef0b87b` and passes after the fix:
+
+- **Success on failure** — the batch outcome was only ever `completed`/`batch-cancelled`, so an all- or partly-failing catalog still reported command success (and the mixed-catalog regression enshrined it). Outcome is now classified: `completed` (every child compacted or nothing-to-compact), `all-failed` (nothing clean), `partial-failure`, `batch-cancelled`; `release-failed` items count as failed, not compacted; every non-clean outcome maps to a command error.
+- **Text-parsed tool total** — the tool parsed the first `total <digits>:` out of the report text, which an error line can precede (regression crafts a catalog id whose unknown-session error contains `total 999:`; the old tool reported 999). The tool now returns the structured `total` and counts straight from the batch result; `totalCount` is deleted.
+- **Cancel during the catalog read** — a catalog read that resolves past the caller's abort fell through to the `empty-catalog` success. The batch now re-checks the signal after the read resolves and reports `batch-cancelled` (regression patches `ctx.subagents.listChildren` to resolve signal-blind after the abort).
+- **Lost cancelled-run report** — the host's abort semantics drop a cancelled command's own result, so the finished per-item report reached nobody while finished compactions persisted. The finished entry is now recorded on a plugin-level store and the bare `/subagent-compact` listing appends the last batch report whenever the last batch did not complete cleanly (regression drives a mid-run abort and retrieves the report through the listing; unit-level twin included).
+
+Batch suite now **74/74, two consecutive green runs** (unit 41, integration 1, cold 32; the 8 red-first regressions above are part of it). Desktop batch acceptance remains **not run**.
+
 ## Review round 5 (R4 fixes: claim-boundary restore, end-to-end lossless stop, closed public types)
 
 Review round 4 confirmed the direction but found two P1s and three P2s in `c858631`; all are fixed on this branch, each reviewer proof first reproduced red and then re-verified green on the fixed tree:

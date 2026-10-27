@@ -1177,7 +1177,9 @@ test("batch: mixed catalog — per-item outcomes, later items continue, stats ad
 
 		fake.state.mode = "summarize";
 		const execution = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
-		assert.equal(execution.result.kind, "success", execution.result.text);
+		// Review R1: a batch with failed children reports ERROR, never success.
+		assert.equal(execution.result.kind, "error", "a batch with refused children must not report success");
+		assert.match(execution.result.text, /\(partial-failure\)/);
 		// Catalog order: good, emptyChild, oneShot, pending, plus the capture probe.
 		assert.match(execution.result.text, /total \d+/);
 		assert.match(execution.result.text, new RegExp(good));
@@ -1243,13 +1245,20 @@ test("batch: abort mid-run stops unstarted items and keeps finished results", as
 			assert.match(execution.text, /not-started: 2/);
 			assert.match(execution.text, new RegExp(ids[0]));
 		} else {
-			// The operation promise continues in the background after the
-			// command rejected; wait for the batch text via the session logs —
-			// first child compacted or cancelled, later ones never started.
-			await waitFor(async () => {
-				const logs = await Promise.all(ids.slice(1).map((id) => readEvents(ctx, id)));
-				return logs.every((log) => !log.some((event) => event.type === "compaction/summary"));
+			// The command result was lost to the host's abort semantics, but the
+			// finished report must stay retrievable: the bare listing surfaces
+			// the last batch report once the background operation settles.
+			const listingText = await waitFor(async () => {
+				const listing = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
+				const text = listing.result?.text ?? "";
+				return /Last batch report/.test(text) ? text : undefined;
 			}, 8000);
+			assert.match(listingText, /not-started: 2/);
+			assert.match(listingText, new RegExp(ids[0]));
+			for (const id of ids.slice(1)) {
+				const log = await readEvents(ctx, id);
+				assert.equal(log.filter((event) => event.type === "compaction/summary").length, 0, `${id} was never started`);
+			}
 		}
 	});
 });
@@ -1300,6 +1309,74 @@ test("batch: empty catalog is explicit; --all rejects extra arguments", async ()
 		const mixed = await ctx.commands.execute(parent, "/subagent-compact --all extra", [], signal());
 		assert.equal(mixed.result.kind, "error");
 		assert.match(mixed.result.text, /Usage/);
+	});
+});
+
+// Review R1 findings: a batch that fails everywhere (or in part) must never
+// resolve as success, the tool counts must be structured (not parsed back out
+// of display text), and a cancellation that lands while the catalog read is
+// still resolving must not turn into an empty-catalog success.
+
+test("batch: an all-failing catalog is an error on both routes, never success", async () => {
+	await withComposition(async (ctx) => {
+		const parent = await makeParent(ctx, "batch-allfail-parent");
+		const oneShot = await craftSession(ctx, parent, [
+			{ type: "subagent/descriptor", data: { version: 3, mode: "one-shot", provider: "spawn", label: "once" } }
+		]);
+		registerCatalogChild(ctx, parent, oneShot, "one-shot");
+		const tool = ctx.tools.get("compact_all_subagents");
+		const result = await tool.execute({}, { agent: parent, signal: new AbortController().signal });
+		assert.equal(result.outcome, "all-failed", result.text);
+		assert.equal(result.failed, 1);
+		assert.equal(result.total, 1);
+		const execution = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.equal(execution.result.kind, "error", "an all-failing command batch must not report success");
+		assert.match(execution.result.text, /\(all-failed\)/);
+	});
+});
+
+test("batch: the tool total is the catalog size, immune to numbers inside error text", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-total-parent");
+		const good = await settleTwoTurnChild(ctx, parent, fake);
+		/* A crafted catalog id whose unknown-session error line contains
+		 * "total 999:" BEFORE the Summary line: the old tool parsed the first
+		 * "total <digits>:" back out of the report text and reported 999. */
+		registerCatalogChild(ctx, parent, "crafted total 999: phantom", "continuable");
+		fake.state.mode = "summarize";
+		const tool = ctx.tools.get("compact_all_subagents");
+		const result = await tool.execute({}, { agent: parent, signal: new AbortController().signal });
+		assert.equal(result.total, 2, "total is the structured catalog size, not text-parsed");
+		assert.equal(result.outcome, "partial-failure", result.text);
+		assert.equal(result.compacted, 1);
+		assert.equal(result.failed, 1);
+		void good;
+	});
+});
+
+test("batch: cancelling while the catalog read resolves is batch-cancelled, never empty-catalog success", async () => {
+	await withComposition(async (ctx) => {
+		const parent = await makeParent(ctx, "batch-cancel-read-parent");
+		/* A catalog read that resolves AFTER the caller aborted — a host read
+		 * may complete past its last abort checkpoint. The batch must not turn
+		 * that resolution into success. */
+		const service = ctx.subagents;
+		const original = service.listChildren;
+		service.listChildren = async (parentId, _signal) => {
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			return original.call(service, parentId, undefined);
+		};
+		try {
+			const controller = new AbortController();
+			const tool = ctx.tools.get("compact_all_subagents");
+			const run = tool.execute({}, { agent: parent, signal: controller.signal });
+			setTimeout(() => controller.abort(new Error("user cancelled")), 20);
+			const result = await run;
+			assert.equal(result.outcome, "batch-cancelled", result.text);
+			assert.equal(result.total, 0);
+		} finally {
+			service.listChildren = original;
+		}
 	});
 });
 

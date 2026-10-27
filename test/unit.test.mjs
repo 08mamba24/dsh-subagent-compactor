@@ -790,10 +790,43 @@ test("batch: a child-level cancelled outcome continues the batch when the batch 
 	const harness = makeBatchHarness({ children: async () => [{ id: "a" }, { id: "b" }], enginesById: engines });
 	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
 	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
-	assert.equal(result.outcome, "completed");
+	/* Review R1: a child-level cancelled outcome is not a clean batch
+	 * success — the batch ran to the end, but one child did not compact. */
+	assert.equal(result.outcome, "partial-failure");
 	assert.equal(result.cancelled, 1, "the child's own cancelled outcome is recorded");
 	assert.equal(result.compacted, 1, "and the batch CONTINUES to the next child");
 	assert.equal(harness.maintenanceCalls.length, 2);
+});
+
+test("batch: an all-failing catalog classifies as all-failed", async () => {
+	const engines = new Map([
+		["a", async () => { const e = new Error("busy a"); e.name = "ManualCompactionError"; e.code = "busy"; throw e; }],
+		["b", async () => { const e = new Error("busy b"); e.name = "ManualCompactionError"; e.code = "busy"; throw e; }]
+	]);
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }, { id: "b" }], enginesById: engines });
+	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "all-failed", result.text);
+	assert.equal(result.failed, 2);
+	assert.equal(result.total, 2);
+});
+
+test("batch: a not-clean batch report stays retrievable through the bare listing", async () => {
+	const engines = new Map([
+		["a", async () => { const e = new Error("child cancelled"); e.name = "ManualCompactionError"; e.code = "cancelled"; throw e; }],
+		["b", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]
+	]);
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }, { id: "b" }], enginesById: engines });
+	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "partial-failure");
+	/* A cancelled command's own result is dropped by the host's abort
+	 * semantics; the finished report must survive on the plugin and stay
+	 * retrievable through the bare /subagent-compact listing. */
+	const listing = await harness.registrations.commands[0].handler(invocation(harness, ""));
+	assert.match(listing.text, /Last batch report/);
+	assert.match(listing.text, /partial-failure/);
+	assert.match(listing.text, /cancelled 1/);
 });
 
 test("batch: registers the --all hint and the batch tool", async () => {
