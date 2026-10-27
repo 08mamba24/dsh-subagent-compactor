@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-subagent-compactor",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Manual history compaction for a caller's live direct subagents via the composed compaction engine.",
+  "description": "Manual history compaction for a caller's direct subagents — live, or continuable children restored by id after they finished — via the composed compaction engine.",
   "exports": {
     ".": "./index.js",
     "./locale/*.json": "./locale/*.json",
@@ -19,6 +19,7 @@
   ],
   "peerDependencies": {
     "@deepseek-ai/dsh-commands": "*",
+    "@deepseek-ai/dsh-subagent": "*",
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/schemastery": "*"
   },

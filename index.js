@@ -1,22 +1,28 @@
 /**
  * @local/dsh-subagent-compactor — manual history compaction for one of the
- * caller's live direct subagents, reusing the composition's compaction engine.
+ * caller's direct subagents, reusing the composition's compaction engine.
  *
  * Surfaces:
  * - `/subagent-compact` — no arguments: list the caller session's durable
- *   direct-subagent catalog; with one session id: compact that live child.
+ *   direct-subagent catalog; with one session id: compact that child.
  * - `compact_subagent` tool — same operation from inside a model turn.
  *
- * Both surfaces authorize through runtime ownership (`agents.isOwnedBy`),
- * never persisted lineage, and resolve the engine on exactly one of two
- * lawful planes (preset `serviceFor`, or Host `compaction` when the
- * composition has no preset registry); there is no cross-realm fallback.
+ * A target that is still live is authorized through runtime ownership
+ * (`agents.isOwnedBy`). A target that already finished is restored from
+ * persistence through the public `agents.resume` + the child's own durable
+ * `subagent/descriptor` (the same reconstruction the subagent manager uses
+ * for continuation), compacted in a maintenance window, and released — no
+ * new task is submitted and no live window is raced. The engine is resolved
+ * on exactly one of two lawful planes (preset `serviceFor`, or Host
+ * `compaction` when the composition has no preset registry); there is no
+ * cross-realm fallback.
  *
  * @module @local/dsh-subagent-compactor
  */
 import z from "@deepseek-ai/schemastery";
 import { CommandDefinitionId } from "@deepseek-ai/dsh-commands/brand";
 import { defineTool } from "@deepseek-ai/dsh-tools";
+import { applyChildComposition, foldSubagentDescriptor } from "@deepseek-ai/dsh-subagent";
 
 const name = "subagent-compactor";
 const inject = ["commands", "tools", "agents", "subagents"];
@@ -55,6 +61,14 @@ function manualFailureText(code, diagnostic) {
 /** Match by name+code: cross-package instanceof is unreliable when the host loads two module generations. */
 function isManualCompactionError(error) {
 	return error instanceof Error && error.name === "ManualCompactionError" && typeof error.code === "string";
+}
+
+/** Walk an error chain for a peer-package class name (cross-package instanceof is unreliable). */
+function chainHasName(error, errorName) {
+	for (let cause = error; cause instanceof Error; cause = cause.cause) {
+		if (cause.name === errorName) return true;
+	}
+	return false;
 }
 
 /**
@@ -137,44 +151,44 @@ class ActiveOperations {
 	}
 }
 
+/**
+ * Per-target serialization of compaction requests: one operation per session
+ * id at a time. This serializes the plugin's own operations only; it does not
+ * fence the host's message admission (competing deliveries fail cleanly at
+ * the persistence writer the cold path holds, before acceptance).
+ */
+class TargetLocks {
+	held = new Map();
+	tryAcquire(sessionId) {
+		if (this.held.has(sessionId)) return false;
+		this.held.set(sessionId, true);
+		return true;
+	}
+	release(sessionId) {
+		this.held.delete(sessionId);
+	}
+}
+
 /** Caller cancellation stays authoritative; unload adds its own abort source. */
 function operationSignal(callerSignal, ownSignal) {
 	return callerSignal === undefined ? ownSignal : AbortSignal.any([callerSignal, ownSignal]);
 }
 
 /**
- * Compact one of the caller's live direct subagents through the resolved
- * engine. Expected failures return an outcome object; only unexpected
- * non-manual errors propagate.
- * @param ctx - plugin context carrying `agents`.
- * @param config - resolved plugin configuration.
- * @param caller - the exact live Agent authorizing the operation.
- * @param {string} targetId - the candidate child's shared agent/session id.
+ * Run the engine compaction against one agent the caller already owns,
+ * mapping the six-code ManualCompactionError contract and signal-first
+ * cancellation to outcome objects. Unexpected non-manual errors propagate.
+ * @param ctx - plugin context.
+ * @param agent - owned target child agent.
+ * @param {string} sessionId - target session id for messages.
  * @param signal - cancellation scoped to this request.
  * @param sourceCommandId - initiating command identity, when command-invoked.
  * @returns outcome with `text`, plus compact stats when `outcome === "compacted"`.
  */
-async function compactSubagent(ctx, config, caller, targetId, signal, sourceCommandId) {
-	if (typeof targetId !== "string" || targetId.trim().length === 0) {
-		return { outcome: "usage", text: USAGE };
-	}
-	const sessionId = targetId.trim();
-	const agent = ctx.agents.get(sessionId);
-	if (agent === undefined) {
-		return { outcome: "not-resident", text: `No live agent with session id "${sessionId}". Only still-live (resident) subagents can be compacted; a child whose settlement already reclaimed it is out of reach.` };
-	}
-	if (!ctx.agents.isOwnedBy(sessionId, caller)) {
-		return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
-	}
+async function runEngineCompaction(ctx, agent, sessionId, signal, sourceCommandId) {
 	const resolvedEngine = resolveCompactionEngine(ctx, agent);
 	if (!resolvedEngine.ok) return { outcome: "engine-missing", text: resolvedEngine.reason };
 	try {
-		if (config.waitForIdle) await raceAbort(agent.whenIdle(), signal);
-		/* Identity re-check after the wait: a same-id replacement agent is a
-		 * different object, and the old session handle must not be compacted. */
-		if (ctx.agents.get(sessionId) !== agent) {
-			return { outcome: "not-resident", text: `Subagent "${sessionId}" was disposed while waiting for it to become idle.` };
-		}
 		const result = await resolvedEngine.engine.compactNow(agent, signal, sourceCommandId);
 		if (result === null) return { outcome: "nothing-to-compact", text: `No compactable history yet in subagent "${sessionId}".` };
 		return {
@@ -201,12 +215,245 @@ async function compactSubagent(ctx, config, caller, targetId, signal, sourceComm
 	}
 }
 
+/**
+ * Compact one of the caller's LIVE direct subagents: wait for idle (when
+ * configured), re-check the registry identity after the wait, and run the
+ * engine. The identity re-check matters: a same-id replacement agent is a
+ * different object, and the old session handle must not be compacted.
+ * @param ctx - plugin context carrying `agents`.
+ * @param config - resolved plugin configuration.
+ * @param caller - the exact live Agent authorizing the operation.
+ * @param agent - the live target agent.
+ * @param {string} sessionId - target session id.
+ * @param signal - cancellation scoped to this request.
+ * @param sourceCommandId - initiating command identity, when command-invoked.
+ * @returns outcome object.
+ */
+async function compactLiveAgent(ctx, config, caller, agent, sessionId, signal, sourceCommandId) {
+	void caller;
+	try {
+		if (config.waitForIdle) await raceAbort(agent.whenIdle(), signal);
+		/* Identity re-check after the wait: a same-id replacement agent is a
+		 * different object, and the old session handle must not be compacted. */
+		if (ctx.agents.get(sessionId) !== agent) {
+			return { outcome: "not-resident", text: `Subagent "${sessionId}" was disposed while waiting for it to become idle.` };
+		}
+		return await runEngineCompaction(ctx, agent, sessionId, signal, sourceCommandId);
+	} catch (error) {
+		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+		throw error;
+	}
+}
+
+/** Creation-time preset selection precedes the child's own descriptor; mirrors the manager's rule. */
+function hasIndependentPresetSelection(ownEvents) {
+	for (const event of ownEvents) {
+		if (event.type === "subagent/descriptor") return false;
+		if (event.type === "agent-preset/selected") return true;
+	}
+	return false;
+}
+
+/**
+ * Compact one of the caller's FINISHED continuable children by id: observe
+ * the persisted session, authorize the direct-parent lineage from the
+ * authoritative child header and durable descriptor, refuse when durable
+ * pending input exists, then restore the child through the public
+ * `agents.resume` with the composition the manager would restore
+ * (`applyChildComposition`: independent preset or inherited, persona, tool
+ * filter; the descriptor's own route with its optional semantics), compact
+ * in the maintenance window, and release the writer this operation created.
+ * No ordinary task is ever submitted.
+ * @param ctx - plugin context.
+ * @param config - resolved plugin configuration (used only when the target
+ *   races back live during resolution).
+ * @param caller - the exact live Agent authorizing the operation.
+ * @param {string} sessionId - the candidate child's shared agent/session id.
+ * @param signal - cancellation scoped to this request.
+ * @param sourceCommandId - initiating command identity, when command-invoked.
+ * @returns outcome object.
+ */
+async function compactPersistedSubagent(ctx, config, caller, sessionId, signal, sourceCommandId) {
+	const query = ctx.get("sessionQuery");
+	if (query === undefined) {
+		return { outcome: "query-unavailable", text: `Subagent "${sessionId}" is not live, and this composition has no sessionQuery service to load persisted sessions; compaction was refused.` };
+	}
+	let observation;
+	try {
+		observation = await query.observeSession(sessionId, { signal });
+	} catch (error) {
+		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+		if (chainHasName(error, "SessionQueryError") && /not found/i.test(error.message)) {
+			return { outcome: "unknown-session", text: `No live agent or persisted session with id "${sessionId}".` };
+		}
+		return { outcome: "query-unavailable", text: `Session "${sessionId}" could not be observed: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	let header;
+	let ownEvents;
+	let projectionValues;
+	try {
+		if (ctx.agents.get(caller.id) !== caller) {
+			return { outcome: "not-authorized", text: `The calling agent is no longer live; compaction of "${sessionId}" was refused.` };
+		}
+		/* The target raced back live (e.g. a concurrent continuation resumed
+		 * it): the ordinary live path applies, with its own authorization. */
+		const liveNow = ctx.agents.get(sessionId);
+		if (liveNow !== undefined) {
+			if (!ctx.agents.isOwnedBy(sessionId, caller)) {
+				return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
+			}
+			return await compactLiveAgent(ctx, config, caller, liveNow, sessionId, signal, sourceCommandId);
+		}
+		header = observation.header;
+		ownEvents = [...observation.events.slice(observation.inheritedEventCount)];
+		projectionValues = observation.projections?.values;
+	} finally {
+		observation[Symbol.dispose]();
+	}
+	if (header.parentSession !== caller.id) {
+		return { outcome: "not-authorized", text: `Session "${sessionId}" belongs to another parent session; only its direct runtime parent may compact it.` };
+	}
+	let descriptor;
+	try {
+		descriptor = foldSubagentDescriptor(ownEvents);
+	} catch (error) {
+		return { outcome: "unsupported-target", text: `Session "${sessionId}" has a malformed persisted subagent descriptor: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	if (descriptor === undefined) {
+		return { outcome: "unsupported-target", text: `Session "${sessionId}" has no supported subagent descriptor; it cannot be restored for in-place compaction.` };
+	}
+	if (descriptor.mode !== "continuable") {
+		return { outcome: "unsupported-target", text: `Session "${sessionId}" records subagent mode "${descriptor.mode}"; only continuable children can be compacted in place.` };
+	}
+	/* Independent preset selections must restore their exact preset; the
+	 * current identity comes from the session's agentPreset projection. */
+	const composition = { agentPreset: undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter };
+	if (hasIndependentPresetSelection(ownEvents)) {
+		const selected = projectionValues?.agentPreset;
+		if (typeof selected !== "string") {
+			return { outcome: "restore-failed", text: `Session "${sessionId}" selected an agent preset, but its current identity is unavailable for restoration; compaction was refused.` };
+		}
+		composition.agentPreset = selected;
+	}
+	/* Durable pending input must be checked BEFORE materializing anything:
+	 * releasing a restored handle durably cancels parked inbox input, so a
+	 * busy refusal here is what preserves that work for a normal continuation. */
+	const inbox = projectionValues?.inbox;
+	if (inbox === undefined) {
+		return { outcome: "restore-failed", text: `Pending input for "${sessionId}" cannot be verified in this composition (no inbox projection); compaction was refused.` };
+	}
+	const pendingCount = (inbox["next-turn"]?.length ?? 0) + (inbox["next-step"]?.length ?? 0);
+	if (pendingCount > 0) {
+		return { outcome: "pending-input", text: `Session "${sessionId}" still holds ${pendingCount} persisted pending message(s). Continue it normally (send it another message) so that work is processed first; this refusal leaves the pending work untouched.` };
+	}
+	const agentOptions = {
+		...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
+		...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
+		...descriptor.agentReasoningEffort !== undefined ? { reasoningEffort: descriptor.agentReasoningEffort } : {}
+	};
+	let restored;
+	try {
+		restored = await ctx.agents.resume({
+			resumeSessionId: sessionId,
+			parentAgent: caller,
+			agentOptions,
+			signal,
+			setup: async (childCtx) => {
+				/* The setup wrapper returns void: applyChildComposition's preset
+				 * mount receipt must not become a setup commit object. */
+				await applyChildComposition(childCtx, caller, composition);
+			}
+		});
+	} catch (error) {
+		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+		if (chainHasName(error, "SessionAlreadyOwnedError")) {
+			return { outcome: "busy-target", text: `Session "${sessionId}" is concurrently owned by another live writer (a resume or continuation is in flight); retry shortly.` };
+		}
+		return { outcome: "restore-failed", text: `Session "${sessionId}" could not be restored for compaction: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	let outcome;
+	try {
+		if (restored.agent.inbox?.hasPending === true) {
+			/* Unreachable barring a host invariant violation (the pre-check saw
+			 * the same store): refuse rather than compact over parked work. */
+			outcome = { outcome: "pending-input", text: `Session "${sessionId}" revealed pending input after restoration; compaction was refused. Releasing the restored handle cancels that parked input — continue the child and report this outcome if work goes missing.` };
+		} else {
+			outcome = await runEngineCompaction(ctx, restored.agent, sessionId, signal, sourceCommandId);
+		}
+	} catch (error) {
+		if (signal !== undefined && signal.aborted) {
+			outcome = { outcome: "cancelled", text: "Compaction cancelled." };
+		} else {
+			throw error;
+		}
+	} finally {
+		try {
+			await restored.dispose();
+		} catch (error) {
+			const detail = error instanceof Error ? error.message : String(error);
+			if (outcome === undefined) {
+				outcome = { outcome: "release-failed", text: `Compaction of "${sessionId}" did not produce a result, and releasing the restored agent also failed: ${detail}.` };
+			} else if (outcome.outcome === "compacted") {
+				outcome = {
+					outcome: "release-failed",
+					targetSessionId: outcome.targetSessionId,
+					summarySeq: outcome.summarySeq,
+					replacedItems: outcome.replacedItems,
+					replacedTokens: outcome.replacedTokens,
+					text: `${outcome.text} (warning: the restored maintenance agent could not be released cleanly: ${detail}; its writer releases when that handle drains.)`
+				};
+			} else {
+				outcome = { ...outcome, text: `${outcome.text} (warning: releasing the restored agent also failed: ${detail}.)` };
+			}
+		}
+	}
+	return outcome;
+}
+
+/**
+ * Compact one of the caller's direct subagents — live, or persisted after it
+ * finished — through the resolved engine. Expected failures return an
+ * outcome object; only unexpected non-manual errors propagate.
+ * @param ctx - plugin context carrying `agents`.
+ * @param locks - the plugin's per-target operation locks.
+ * @param config - resolved plugin configuration.
+ * @param caller - the exact live Agent authorizing the operation.
+ * @param {string} targetId - the candidate child's shared agent/session id.
+ * @param signal - cancellation scoped to this request.
+ * @param sourceCommandId - initiating command identity, when command-invoked.
+ * @returns outcome with `text`, plus compact stats when `outcome === "compacted"`.
+ */
+async function compactSubagent(ctx, locks, config, caller, targetId, signal, sourceCommandId) {
+	if (typeof targetId !== "string" || targetId.trim().length === 0) {
+		return { outcome: "usage", text: USAGE };
+	}
+	const sessionId = targetId.trim();
+	if (!locks.tryAcquire(sessionId)) {
+		return { outcome: "busy-target", text: `A compaction for subagent "${sessionId}" is already in progress.` };
+	}
+	try {
+		const agent = ctx.agents.get(sessionId);
+		if (agent !== undefined) {
+			if (!ctx.agents.isOwnedBy(sessionId, caller)) {
+				return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
+			}
+			return await compactLiveAgent(ctx, config, caller, agent, sessionId, signal, sourceCommandId);
+		}
+		return await compactPersistedSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+	} finally {
+		locks.release(sessionId);
+	}
+}
+
 /** Render the durable direct-children catalog of the calling session. */
 async function listDirectChildren(ctx, caller, signal) {
 	const entries = await ctx.subagents.listChildren(caller.id, signal);
 	if (entries.length === 0) return { kind: "success", text: "(no direct subagents on record for this session)" };
-	const lines = entries.map((entry) => `${entry.id} [${entry.mode}]${entry.label === undefined ? "" : ` ${entry.label}`}`);
-	return { kind: "success", text: ["Direct subagents of this session:", ...lines].join("\n") };
+	const lines = entries.map((entry) => {
+		const live = ctx.agents.get(entry.id) !== undefined;
+		return `${entry.id} [${entry.mode}]${entry.label === undefined ? "" : ` ${entry.label}`} — ${live ? "live" : "persisted (not loaded)"}`;
+	});
+	return { kind: "success", text: ["Direct subagents of this session (observed at listing time; a listing is not a reservation):", ...lines].join("\n") };
 }
 
 /** Expected outcomes the command reports as success rather than error. */
@@ -214,7 +461,7 @@ function commandKind(outcome) {
 	return outcome === "compacted" || outcome === "nothing-to-compact" ? "success" : "error";
 }
 
-function commandHandler(ctx, config, active) {
+function commandHandler(ctx, locks, config, active) {
 	return (invocation) => {
 		const controller = new AbortController();
 		/* One fused signal for every branch, so the plugin's own unload abort
@@ -233,7 +480,7 @@ function commandHandler(ctx, config, active) {
 			}
 			const parts = raw.split(/\s+/);
 			if (parts.length > 1) return { kind: "error", text: USAGE };
-			const result = await compactSubagent(ctx, config, invocation.agent, parts[0], signal, invocation.commandId);
+			const result = await compactSubagent(ctx, locks, config, invocation.agent, parts[0], signal, invocation.commandId);
 			/* No sourceEventSeq: it would be written into the *parent* command/done
 			 * event, where a bare child-session seq points at the wrong event. The
 			 * child session id and its summary seq travel in the text instead. */
@@ -244,15 +491,15 @@ function commandHandler(ctx, config, active) {
 	};
 }
 
-function subagentCompactTool(ctx, config, active) {
+function subagentCompactTool(ctx, locks, config, active) {
 	return defineTool({
 		name: "compact_subagent",
-		description: "Compact the older history of one of your live direct subagents into a summary so the child frees context while staying usable. Use an id from your subagent catalog. Reports how many history items were replaced and where the summary landed in the child's own session log.",
+		description: "Compact the older history of one of your direct subagents into a summary so the child frees context while staying usable — the child may be live, or a continuable child that already finished (compacted in place by its session id, no new task needed). Use an id from your subagent catalog. Reports how many history items were replaced and where the summary landed in the child's own session log.",
 		parameters: {
 			session_id: {
 				type: "string",
 				required: true,
-				description: "Session id of your live direct subagent to compact."
+				description: "Session id of your direct subagent to compact (live or persisted continuable)."
 			}
 		},
 		output: {
@@ -274,13 +521,13 @@ function subagentCompactTool(ctx, config, active) {
 			const caller = exec.agent;
 			if (caller === undefined) throw new Error("compact_subagent: no calling agent on this execution");
 			const controller = new AbortController();
-			const operation = compactSubagent(ctx, config, caller, args.session_id, operationSignal(exec.signal, controller.signal), undefined);
+			const operation = compactSubagent(ctx, locks, config, caller, args.session_id, operationSignal(exec.signal, controller.signal), undefined);
 			active.begin(operation, controller);
 			const result = await operation;
 			return {
 				text: result.text,
 				outcome: result.outcome,
-				...result.outcome === "compacted" ? {
+				...result.outcome === "compacted" || result.outcome === "release-failed" ? {
 					target_session_id: result.targetSessionId,
 					summary_seq: result.summarySeq,
 					replaced_items: result.replacedItems,
@@ -301,6 +548,7 @@ function subagentCompactTool(ctx, config, active) {
 function apply(ctx, config = {}) {
 	const resolved = Config(config);
 	const active = new ActiveOperations();
+	const locks = new TargetLocks();
 	ctx.effect(function* () {
 		yield async () => {
 			active.abortAll();
@@ -319,7 +567,7 @@ function apply(ctx, config = {}) {
 		yield ctx.commands.register({
 			definitionId: CommandDefinitionId("@local/dsh-subagent-compactor"),
 			name: "subagent-compact",
-			description: "List direct subagents, or compact one live direct subagent's history",
+			description: "List direct subagents, or compact one direct subagent's history (live or finished continuable)",
 			/* Desktop's command UI only claims a NON-bare invocation (arguments
 			 * present) when the definition declares `input`; without it the line
 			 * falls through as a plain user message
@@ -328,9 +576,9 @@ function apply(ctx, config = {}) {
 			input: {
 				hint: "[<subagent-session-id>]"
 			},
-			handler: commandHandler(ctx, resolved, active)
+			handler: commandHandler(ctx, locks, resolved, active)
 		});
-		const unregisterTool = ctx.tools.register(subagentCompactTool(ctx, resolved, active));
+		const unregisterTool = ctx.tools.register(subagentCompactTool(ctx, locks, resolved, active));
 		yield () => unregisterTool();
 	}, "subagent-compactor lifecycle");
 }
