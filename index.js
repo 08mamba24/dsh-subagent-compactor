@@ -258,25 +258,32 @@ function hasIndependentPresetSelection(ownEvents) {
 }
 
 /**
- * Compact one of the caller's FINISHED continuable children by id: observe
- * the persisted session, authorize the direct-parent lineage from the
- * authoritative child header and durable descriptor, refuse when durable
- * pending input exists, then restore the child through the public
- * `agents.resume` with the composition the manager would restore
- * (`applyChildComposition`: independent preset or inherited, persona, tool
- * filter; the descriptor's own route with its optional semantics), compact
- * in the maintenance window, and release the writer this operation created.
- * No ordinary task is ever submitted.
+ * Compact one of the caller's FINISHED continuable children by id through the
+ * manager-owned maintenance capability (`ctx.subagents.runMaintenance`):
+ * the child is restored exactly like a continuation (persisted-header
+ * lineage + own durable descriptor authorization, descriptor route,
+ * independent preset or inherited composition, persona, tool filter),
+ * becomes resident — so every normal route reaches it through the manager
+ * instead of a writer collision — and the engine runs its one maintenance
+ * job while the settlement watcher is held back. Afterwards the ordinary
+ * settlement takes over: accepted input is processed or preserved, the
+ * closing cutoff rejects later input before acceptance, and the writer
+ * releases. The plugin holds no handle of its own; nothing here can drop
+ * accepted input. No ordinary task is ever submitted.
  * @param ctx - plugin context.
- * @param config - resolved plugin configuration (used only when the target
- *   races back live during resolution).
  * @param caller - the exact live Agent authorizing the operation.
  * @param {string} sessionId - the candidate child's shared agent/session id.
  * @param signal - cancellation scoped to this request.
  * @param sourceCommandId - initiating command identity, when command-invoked.
  * @returns outcome object.
  */
-async function compactPersistedSubagent(ctx, active, config, caller, sessionId, signal, unloadSignal, sourceCommandId) {
+async function compactPersistedSubagent(ctx, caller, sessionId, signal, sourceCommandId) {
+	if (typeof ctx.subagents.runMaintenance !== "function") {
+		return {
+			outcome: "host-capability-missing",
+			text: `Compaction of finished subagents needs the host's manager-owned maintenance capability (ctx.subagents.runMaintenance), which this DSH runtime does not provide; see docs/HOST_MAINTENANCE_REQUIREMENTS.md. Live-window compaction is unaffected.`
+		};
+	}
 	const query = ctx.get("sessionQuery");
 	if (query === undefined) {
 		return { outcome: "query-unavailable", text: `Subagent "${sessionId}" is not live, and this composition has no sessionQuery service to load persisted sessions; compaction was refused.` };
@@ -302,10 +309,7 @@ async function compactPersistedSubagent(ctx, active, config, caller, sessionId, 
 		 * it): the ordinary live path applies, with its own authorization. */
 		const liveNow = ctx.agents.get(sessionId);
 		if (liveNow !== undefined) {
-			if (!ctx.agents.isOwnedBy(sessionId, caller)) {
-				return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
-			}
-			return await compactLiveAgent(ctx, config, caller, liveNow, sessionId, signal, sourceCommandId);
+			return { liveNow };
 		}
 		header = observation.header;
 		ownEvents = [...observation.events.slice(observation.inheritedEventCount)];
@@ -328,168 +332,73 @@ async function compactPersistedSubagent(ctx, active, config, caller, sessionId, 
 	if (descriptor.mode !== "continuable") {
 		return { outcome: "unsupported-target", text: `Session "${sessionId}" records subagent mode "${descriptor.mode}"; only continuable children can be compacted in place.` };
 	}
-	/* Independent preset selections must restore their exact preset; the
-	 * current identity comes from the session's agentPreset projection. */
-	const composition = { agentPreset: undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter };
-	if (hasIndependentPresetSelection(ownEvents)) {
-		const selected = projectionValues?.agentPreset;
-		if (typeof selected !== "string") {
-			return { outcome: "restore-failed", text: `Session "${sessionId}" selected an agent preset, but its current identity is unavailable for restoration; compaction was refused.` };
-		}
-		composition.agentPreset = selected;
+	if (hasIndependentPresetSelection(ownEvents) && typeof projectionValues?.agentPreset !== "string") {
+		return { outcome: "restore-failed", text: `Session "${sessionId}" selected an agent preset, but its current identity is unavailable for restoration; compaction was refused.` };
 	}
-	/* Durable pending input must be checked BEFORE materializing anything:
-	 * releasing a restored handle durably cancels parked inbox input, so a
-	 * busy refusal here is what preserves that work for a normal continuation. */
+	/* A read-only pending refusal keeps the common case off the maintenance
+	 * path entirely: unprocessed work belongs to a normal continuation, and
+	 * the maintenance lifecycle (which would also preserve it) is not needed
+	 * just to refuse. */
 	const inbox = projectionValues?.inbox;
-	if (inbox === undefined) {
-		return { outcome: "restore-failed", text: `Pending input for "${sessionId}" cannot be verified in this composition (no inbox projection); compaction was refused.` };
+	if (inbox !== undefined && (inbox["next-turn"]?.length ?? 0) + (inbox["next-step"]?.length ?? 0) > 0) {
+		return { outcome: "pending-input", text: `Session "${sessionId}" still holds ${((inbox["next-turn"]?.length ?? 0) + (inbox["next-step"]?.length ?? 0))} persisted pending message(s). Continue it normally (send it another message) so that work is processed first; this refusal leaves the pending work untouched.` };
 	}
-	const pendingCount = (inbox["next-turn"]?.length ?? 0) + (inbox["next-step"]?.length ?? 0);
-	if (pendingCount > 0) {
-		return { outcome: "pending-input", text: `Session "${sessionId}" still holds ${pendingCount} persisted pending message(s). Continue it normally (send it another message) so that work is processed first; this refusal leaves the pending work untouched.` };
-	}
-	const agentOptions = {
-		...descriptor.agentProvider !== undefined ? { provider: descriptor.agentProvider } : {},
-		...descriptor.agentModel !== undefined ? { model: descriptor.agentModel } : {},
-		...descriptor.agentReasoningEffort !== undefined ? { reasoningEffort: descriptor.agentReasoningEffort } : {}
-	};
-	let restored;
+	/* The manager owns restore, admission, maintenance, and release from here
+	 * on. The engine's compactNow is the only maintenance-window job; this
+	 * plugin never wraps it in another maintenance call. */
+	let engineMissingReason;
 	try {
-		restored = await ctx.agents.resume({
-			resumeSessionId: sessionId,
-			parentAgent: caller,
-			agentOptions,
+		const result = await ctx.subagents.runMaintenance(caller, sessionId, {
 			signal,
-			setup: async (childCtx) => {
-				/* The setup wrapper returns void: applyChildComposition's preset
-				 * mount receipt must not become a setup commit object. */
-				await applyChildComposition(childCtx, caller, composition);
+			job: async (agent, jobSignal) => {
+				const resolvedEngine = resolveCompactionEngine(ctx, agent);
+				if (!resolvedEngine.ok) {
+					engineMissingReason = resolvedEngine.reason;
+					return null;
+				}
+				return resolvedEngine.engine.compactNow(agent, jobSignal, sourceCommandId);
 			}
 		});
+		if (engineMissingReason !== undefined) return { outcome: "engine-missing", text: engineMissingReason };
+		if (result === null) return { outcome: "nothing-to-compact", text: `No compactable history yet in subagent "${sessionId}".` };
+		return {
+			outcome: "compacted",
+			targetSessionId: sessionId,
+			summarySeq: result.summarySeq,
+			replacedItems: result.shadowedSeqs.length,
+			replacedTokens: result.shadowedTokenCount,
+			text: `Compacted subagent "${sessionId}": replaced ${result.shadowedSeqs.length} history items (~${result.shadowedTokenCount} tokens of the replaced history; the summary sits at session-seq ${result.summarySeq} of the child's own log).`
+		};
 	} catch (error) {
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
-		if (chainHasName(error, "SessionAlreadyOwnedError")) {
-			return { outcome: "busy-target", text: `Session "${sessionId}" is concurrently owned by another live writer (a resume or continuation is in flight); retry shortly.` };
-		}
-		return { outcome: "restore-failed", text: `Session "${sessionId}" could not be restored for compaction: ${error instanceof Error ? error.message : String(error)}` };
-	}
-	/* The loaded snapshot is authoritative: pending input that the read
-	 * pre-check could not see (another legal writer raced between the
-	 * observation and this writer) must not be compacted over AND must not
-	 * be released through the queue-clearing dispose path. Strand the
-	 * restored handle on a background drain instead: the pending work stays
-	 * durable and untouched, and the handle releases only after that input
-	 * has actually been processed (a later public input — followup/steer —
-	 * wakes the loop and consumes it). Unload terminates the strand through
-	 * the same dispose every live agent takes on teardown. */
-	if (restored.agent.inbox?.hasPending === true) {
-		const strandedController = new AbortController();
-		active.begin(drainRestoredAgent(restored.agent, restored, strandedController.signal), strandedController);
-		return {
-			outcome: "pending-input",
-			text: `Session "${sessionId}" holds ${restored.agent.inbox.nextTurn.length + restored.agent.inbox.nextStep.length} pending message(s) in the loaded snapshot (input raced in while this operation was starting). Compaction was refused and the pending work is untouched. Honest limitation of the stock runtime: the restored session stays resident holding its writer, and while it does, normal continuation routes (sendMessage / addressed prompts) are refused with NOT_RESUMABLE — this residency is not a recovery path. It ends when the parked input is processed through the Agent's public input surface, on plugin unload (which currently cancels parked input), or on process exit. The manager-owned maintenance capability proposed in docs/HOST_MAINTENANCE_REQUIREMENTS.md removes this state entirely.`
-		};
-	}
-	let outcome;
-	try {
-		outcome = await runEngineCompaction(ctx, restored.agent, sessionId, signal, sourceCommandId);
-	} catch (error) {
-		if (signal !== undefined && signal.aborted) {
-			outcome = { outcome: "cancelled", text: "Compaction cancelled." };
-		} else {
-			/* Release cutoff still applies on the throw path: input accepted
-			 * during the window must drain before the handle goes away. */
-			await drainRestoredAgent(restored.agent, restored, unloadSignal).catch(() => undefined);
-			throw error;
-		}
-	}
-	/* Release cutoff: wait until every input accepted during the maintenance
-	 * window has been fully processed (the maintenance latch wakes a turn
-	 * that consumes it), then release the writer. Input that never wakes the
-	 * loop (no-wake injections) cannot be driven by this plugin without fake
-	 * messages, so the drain waits for the next public input to advance it;
-	 * unload terminates through the ordinary dispose. */
-	try {
-		await drainRestoredAgent(restored.agent, restored, unloadSignal);
-	} catch (error) {
-		const detail = error instanceof Error ? error.message : String(error);
-		if (outcome.outcome === "compacted") {
-			outcome = {
-				outcome: "release-failed",
-				targetSessionId: outcome.targetSessionId,
-				summarySeq: outcome.summarySeq,
-				replacedItems: outcome.replacedItems,
-				replacedTokens: outcome.replacedTokens,
-				text: `${outcome.text} (warning: the restored maintenance agent could not be released cleanly: ${detail}; its writer releases when that handle drains.)`
+		if (isManualCompactionError(error)) {
+			const known = MANUAL_CODES.has(error.code);
+			return {
+				outcome: known ? error.code : "unknown-code",
+				code: error.code,
+				text: manualFailureText(error.code, known ? undefined : error.message)
 			};
-		} else {
-			outcome = { ...outcome, text: `${outcome.text} (warning: releasing the restored agent also failed: ${detail}.)` };
 		}
+		if (error instanceof Error && error.name === "SubagentError") {
+			if (error.code === "UNAUTHORIZED") {
+				return { outcome: "not-authorized", text: `Session "${sessionId}" belongs to another parent session; only its direct runtime parent may compact it.` };
+			}
+			if (error.code === "DUPLICATE_CHILD" || error.code === "ACTIVATION_CLOSING" || error.code === "DRAINING") {
+				return { outcome: "busy-target", text: `Subagent "${sessionId}" has live activity in flight (a continuation or another maintenance); retry shortly.` };
+			}
+			if (error.code === "PERSISTENCE_UNAVAILABLE" || error.code === "CONTINUATION_UNAVAILABLE") {
+				return { outcome: "query-unavailable", text: error.message };
+			}
+			return { outcome: "restore-failed", text: `Session "${sessionId}" could not be restored for compaction: ${error.message}` };
+		}
+		if (chainHasName(error, "SessionAlreadyOwnedError")) {
+			return { outcome: "busy-target", text: `Session "${sessionId}" is concurrently owned by another live writer; retry shortly.` };
+		}
+		throw error;
 	}
-	return outcome;
 }
 
-/** Resolve when the agent's inbox next changes activity, or `signal` aborts. */
-function awaitInboxActivity(agent, signal) {
-	return new Promise((resolve) => {
-		let settled = false;
-		const done = () => {
-			if (settled) return;
-			settled = true;
-			for (const dispose of disposers) dispose();
-			signal?.removeEventListener("abort", onAbort);
-			resolve();
-		};
-		const disposers = [
-			agent.ctx.on("agent/inbox/inserted", done),
-			agent.ctx.on("agent/inbox/claimed", done),
-			agent.ctx.on("agent/inbox/discarded", done)
-		];
-		const onAbort = () => done();
-		signal?.addEventListener("abort", onAbort, { once: true });
-		/* Re-check after subscribing: the deciding event may have fired
-		 * between the caller's check and these registrations. */
-		if (signal?.aborted || agent.inbox.hasPending !== true || agent.status === "running") done();
-	});
-}
-
-/**
- * Release cutoff for one restored maintenance handle: resolve only after the
- * agent is idle AND its inbox holds no accepted-but-unprocessed input, then
- * dispose the handle (an empty inbox makes the teardown's cancel a no-op, so
- * nothing accepted is ever cancelled). No-wake pending input cannot be driven
- * without fake messages, so the drain parks until the next public input
- * advances the loop; `signal` (plugin unload) terminates through the ordinary
- * dispose — the same teardown every live agent takes, queue included.
- * @param agent - the restored Agent (public whenIdle/inbox/ctx surface).
- * @param handle - the owning AgentHandle whose dispose releases the writer.
- * @param signal - unload-scoped termination signal.
- */
-async function drainRestoredAgent(agent, handle, signal) {
-	for (;;) {
-		await agent.whenIdle();
-		if (agent.inbox.hasPending !== true) break;
-		if (signal?.aborted) break;
-		await awaitInboxActivity(agent, signal);
-	}
-	await handle.dispose();
-}
-
-/**
- * Compact one of the caller's direct subagents — live, or persisted after it
- * finished — through the resolved engine. Expected failures return an
- * outcome object; only unexpected non-manual errors propagate.
- * @param ctx - plugin context carrying `agents`.
- * @param locks - the plugin's per-target operation locks.
- * @param config - resolved plugin configuration.
- * @param caller - the exact live Agent authorizing the operation.
- * @param {string} targetId - the candidate child's shared agent/session id.
- * @param signal - cancellation scoped to this request.
- * @param sourceCommandId - initiating command identity, when command-invoked.
- * @returns outcome with `text`, plus compact stats when `outcome === "compacted"`.
- */
-async function compactSubagent(ctx, locks, active, config, caller, targetId, signal, unloadSignal, sourceCommandId) {
+async function compactSubagent(ctx, locks, config, caller, targetId, signal, sourceCommandId) {
 	if (typeof targetId !== "string" || targetId.trim().length === 0) {
 		return { outcome: "usage", text: USAGE };
 	}
@@ -498,14 +407,18 @@ async function compactSubagent(ctx, locks, active, config, caller, targetId, sig
 		return { outcome: "busy-target", text: `A compaction for subagent "${sessionId}" is already in progress.` };
 	}
 	try {
-		const agent = ctx.agents.get(sessionId);
-		if (agent !== undefined) {
-			if (!ctx.agents.isOwnedBy(sessionId, caller)) {
-				return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
-			}
-			return await compactLiveAgent(ctx, config, caller, agent, sessionId, signal, sourceCommandId);
+		let agent = ctx.agents.get(sessionId);
+		if (agent === undefined) {
+			const cold = await compactPersistedSubagent(ctx, caller, sessionId, signal, sourceCommandId);
+			if (cold.liveNow === undefined) return cold;
+			/* The target raced back live during cold resolution: the ordinary
+			 * live path applies, with its own authorization. */
+			agent = cold.liveNow;
 		}
-		return await compactPersistedSubagent(ctx, active, config, caller, sessionId, signal, unloadSignal, sourceCommandId);
+		if (!ctx.agents.isOwnedBy(sessionId, caller)) {
+			return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
+		}
+		return await compactLiveAgent(ctx, config, caller, agent, sessionId, signal, sourceCommandId);
 	} finally {
 		locks.release(sessionId);
 	}
@@ -546,7 +459,7 @@ function commandHandler(ctx, locks, config, active) {
 			}
 			const parts = raw.split(/\s+/);
 			if (parts.length > 1) return { kind: "error", text: USAGE };
-			const result = await compactSubagent(ctx, locks, active, config, invocation.agent, parts[0], signal, controller.signal, invocation.commandId);
+			const result = await compactSubagent(ctx, locks, config, invocation.agent, parts[0], signal, invocation.commandId);
 			/* No sourceEventSeq: it would be written into the *parent* command/done
 			 * event, where a bare child-session seq points at the wrong event. The
 			 * child session id and its summary seq travel in the text instead. */
@@ -587,7 +500,7 @@ function subagentCompactTool(ctx, locks, config, active) {
 			const caller = exec.agent;
 			if (caller === undefined) throw new Error("compact_subagent: no calling agent on this execution");
 			const controller = new AbortController();
-			const operation = compactSubagent(ctx, locks, active, config, caller, args.session_id, operationSignal(exec.signal, controller.signal), controller.signal, undefined);
+			const operation = compactSubagent(ctx, locks, config, caller, args.session_id, operationSignal(exec.signal, controller.signal), undefined);
 			active.begin(operation, controller);
 			const result = await operation;
 			return {

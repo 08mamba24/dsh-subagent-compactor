@@ -1,0 +1,113 @@
+--- /tmp/dsh-asar/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js	2026-10-26 18:43:13
++++ host-patched/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js	2026-10-27 14:27:14
+@@ -768,6 +768,15 @@
+ 	systemPrompt;
+ 	/** Identities fully frozen by this loop; weak references do not retain replaced history. */
+ 	frozenMessages = /* @__PURE__ */ new WeakSet();
++	/**
++	 * Settlement admission cutoff, shared by EVERY public input surface.
++	 * Synchronously checked at the single enqueue chokepoint (`send`), so the
++	 * closer (the subagent manager's close, or a handle teardown) and input
++	 * acceptance share one atomic boundary.
++	 */
++	inputClosed = false;
++	/** Set by `cancel(cause, { keepInbox: true })`: an aborted turn restores its claimed-but-uncommitted batch. */
++	abortKeptInbox = false;
+ 	constructor(loopCtx, id, options, session) {
+ 		this.loopCtx = loopCtx;
+ 		this.id = id;
+@@ -798,11 +807,16 @@
+ 		if (status !== previousStatus) this.dispatch.emit("agent/status", { status });
+ 	}
+ 	send(message, target, wakeup) {
++		if (this.inputClosed) throw new Error(`agent "${this.id}" is no longer accepting input (settlement cutoff); the message was not accepted`);
+ 		const wakingAfterAbort = wakeup && this.phase.kind !== "idle" && this.phase.abort.signal.aborted;
+ 		const resolvedTarget = wakingAfterAbort ? "next-turn" : target;
+ 		this.inbox.splice(resolvedTarget, Infinity, 0, [message]);
+ 		if (wakeup) this.wakeDriver(wakingAfterAbort);
+ 	}
++	/** Close this agent's public input surface synchronously with a close/teardown decision. */
++	closeInput() {
++		this.inputClosed = true;
++	}
+ 	followup(input) {
+ 		this.send(input, "next-turn", true);
+ 	}
+@@ -813,6 +827,7 @@
+ 		this.send(input, "next-step", false);
+ 	}
+ 	cancel(cause, options = {}) {
++		this.abortKeptInbox = options.keepInbox === true;
+ 		if (!options.keepInbox) {
+ 			this.inbox.clear();
+ 			if (this.phase.kind !== "idle") this.phase.wakeRequested = false;
+@@ -949,6 +964,11 @@
+ 		phase.turn = turn;
+ 		let turnEnds = null;
+ 		let target = "next-turn";
++		const claimedThisTurn = [];
++		const committedIds = /* @__PURE__ */ new Set();
++		const stopCommitted = this.ctx.on("session/event", (session, event) => {
++			if (session === this.session && event.type === "user/message") committedIds.add(event.data.id);
++		});
+ 		try {
+ 			while (true) {
+ 				signal.throwIfAborted();
+@@ -957,6 +977,7 @@
+ 					turn,
+ 					step
+ 				});
++				for (const message of decision.messages) if (message.source.kind !== "runtime-context") claimedThisTurn.push(message);
+ 				if (decision.kind === "reject") {
+ 					turnEnds = { kind: "blocked" };
+ 					return false;
+@@ -1014,6 +1035,10 @@
+ 					kind: "aborted",
+ 					reason: cause
+ 				};
++				if (this.abortKeptInbox) {
++					const restore = claimedThisTurn.filter((message) => !committedIds.has(message.id));
++					for (let index = restore.length - 1; index >= 0; index -= 1) this.inbox.prepend("next-turn", restore[index]);
++				}
+ 				throw error;
+ 			}
+ 			turnEnds = {
+@@ -1025,6 +1050,7 @@
+ 			};
+ 			this.throwError(error);
+ 		} finally {
++			stopCommitted();
+ 			try {
+ 				this.session.append("turn/end", {
+ 					turn,
+@@ -1700,7 +1726,7 @@
+ 		let disposing;
+ 		let publication;
+ 		const machineReady = Promise.withResolvers();
+-		const teardown = () => disposing ??= (async () => {
++		const teardown = (keepInbox = false) => disposing ??= (async () => {
+ 			abort.abort(/* @__PURE__ */ new Error(this.ownership.isActive() ? `agent "${id}" lifecycle disposed` : "agent loop is not active"));
+ 			callerSignal?.removeEventListener("abort", onCallerAbort);
+ 			this.ownership.signal.removeEventListener("abort", onFactoryTeardown);
+@@ -1711,7 +1737,8 @@
+ 				if (machine === void 0) await machineReady.promise;
+ 				/* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
+ 				if (machine !== void 0) {
+-					machine.cancel({ kind: "disposed" });
++					machine.closeInput();
++					machine.cancel({ kind: "disposed" }, keepInbox ? { keepInbox: true } : {});
+ 					await machine.whenIdle();
+ 				}
+ 			} catch (error) {
+@@ -1737,9 +1764,9 @@
+ 		})();
+ 		let unfollowScope;
+ 		let unfollowOwner;
+-		const dispose = async () => {
++		const dispose = async (options = {}) => {
+ 			try {
+-				await teardown();
++				await teardown(options.keepInbox === true);
+ 			} finally {
+ 				await Promise.all([unfollowOwner(), unfollowScope?.()]);
+ 			}

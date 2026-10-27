@@ -4,6 +4,30 @@ Plugin version: **1.1.0** (cold compaction feature branch, review round 2). Test
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
 
+## Review round 4 (R3: manager-owned maintenance, isolated candidate patch)
+
+Per review round 3's direction ("no more compensation layers; converge the lifecycle capability"), this round delivers a **minimal host patch + thin plugin call**, verified in an isolated module tree; no installed artifact, the shared evidence tree, or any real profile is touched, and nothing is merged/tagged/pushed/installed.
+
+- **Host source baseline**: `deepseek-ai/deepseek-harness` tag `dsh-v0.2.1-rc.2`, commit `687f282e8625c6b8d11ff58211a90524be2e4317`, patched in a clean worktree (`host-patch/0001-…diff`, reviewable). The same changes applied one-to-one to the two compiled `lib/index.js` files (`0002`/`0003`) build the isolated verification tree `host-patched/node_modules` (all other packages symlinked to the stock tree).
+- **Plugin baseline**: this branch; the cold branch is now a thin `ctx.subagents.runMaintenance(caller, id, { signal, job })` call — the plugin holds no restored handle, and the drain/strand compensation machinery from rounds 1–2 is deleted. On a stock runtime the plugin refuses cold compaction explicitly (`host-capability-missing`).
+- **Round-3 corrections implemented**: the engine's `compactNow` is the only maintenance window (the manager holds the activation lifecycle and the settlement reservation — no nested `runMaintenance`); the admission cutoff is at the loop input layer (`send` checks `closeInput` synchronously before the durable enqueue — `activation.closing`, direct `followup/steer/inject`, and handle teardown share ONE boundary; no check-then-dispose); `keepInbox` covers the claimed-but-uncommitted batch too (restored on abort, verified by message id, order, and exactly-once); unloading only the plugin leaves the host alive with parked input intact.
+
+### Acceptance-contract evidence (patched tree, default mode)
+
+`node --test test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs` → **55/55, three consecutive green runs**. The contract regressions, rewritten as record-then-assert (accepted → processed exactly once with an answer, or rejected explicitly with nothing enqueued; success is honest when the input's fate is safe):
+
+1. **Release cutoff** (reviewer's dispose-wrapper proof, as a formal regression): the attempt at the cutoff is either rejected by the loop-level cutoff or fully processed; zero `outcome:"canceled"` splices.
+2. **Normal routes with injected pending** (reviewer's second-writer proof): `sendMessage` and the addressed `prompt({delivery:"queue"})` deliver while the child holds pending work; the injected sentinel is processed exactly once with an answer.
+3. **Plugin-only unload with parked pending** (reviewer's fiber-unload proof): the Host stays alive, parked input survives with zero cancellations, and the SAME message id is processed exactly once by a later continuation.
+4. **Concurrent normal-route sends during the summary window**: all accepted and delivered exactly once (the old writer-collision refusal is gone — residency is the boundary now).
+5. **Admission cutoff, both sides**: before the cutoff input is accepted and processed; after `closeInput()`, `followup`/`steer`/`inject` all throw before the durable enqueue and nothing reaches the log.
+6. **Claimed-input abort (`keepInbox`)**: an aborted running turn restores its claimed-but-uncommitted batch (or it was already committed exactly once); zero cancellations; exactly-once overall after continuation.
+7. The R1 regressions (window input fully processed before release across success/cancellation/summary-failure; precheck-race work preserved) remain green under the new lifecycle.
+
+### Stock-tree diagnosis (explicit mode)
+
+With `node_modules` pointing at the stock 0.2.1-rc.2 tree: `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` → **3/3 green** (each test asserts the stock runtime lacks `ctx.subagents.runMaintenance` and the plugin refuses cold compaction explicitly). Running the full cold suite on the stock tree without `GAP_DIAG` fails as expected — that is the honest capability statement, not a regression.
+
 ## Review round 3 (R2: contract vs. stock gap)
 
 Review of `c2017f1` found the R1 fix incomplete (a check-then-dispose window still drops input accepted in that window; the strand blocks every normal continuation route with `NOT_RESUMABLE`; plugin unload cancels parked input) and redirected the work: stop stacking compensations, pin the lifecycle capability gap, and propose the host-side fix. All three reviewer proofs were reproduced on `c2017f1` before this round:

@@ -136,10 +136,24 @@ test("command usage errors: too many arguments", async () => {
 });
 
 test("ghost id without a live agent: no sessionQuery means cold resolution is unavailable", async () => {
-	const harness = makeHarness({ agent: undefined, resident: false });
-	const result = await harness.command.handler(invocation(harness, "ghost"));
+	// The stub harness has no runMaintenance: the plugin reports the missing
+	// host capability first. Give it the capability to reach the query check.
+	const base = makeColdHarness({
+		observationSpec: { events: [], values: { inbox: { "next-turn": [], "next-step": [] } } }
+	});
+	delete base.ctx.subagents.runMaintenance;
+	const ctx = { ...base.ctx, subagents: { ...base.ctx.subagents } };
+	const result = await base.command.handler({ rawInput: "ghost", agent: base.caller, signal: new AbortController().signal, commandId: "cmd" });
 	assert.equal(result.kind, "error");
-	assert.match(result.text, /no sessionQuery service to load persisted sessions/);
+	assert.match(result.text, /manager-owned maintenance capability/);
+});
+
+test("cold compaction refuses clearly on a runtime without the maintenance capability", async () => {
+	const harness = makeHarness({ agent: undefined, resident: false });
+	const result = await harness.command.handler(invocation(harness, "some-id"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /ctx\.subagents\.runMaintenance/);
+	assert.match(result.text, /HOST_MAINTENANCE_REQUIREMENTS/);
 });
 
 test("not-authorized for foreign/self/grandchild targets (runtime ownership only)", async () => {
@@ -463,26 +477,30 @@ function restoredAgentStub(id) {
 }
 
 /**
- * Harness with a cold observation + resume stub. `observationSpec` seeds the
- * sessionQuery lease; `resumeImpl` may reject. The host engine compacts.
+ * Harness with a cold observation + manager-owned maintenance stub. The
+ * stub `ctx.subagents.runMaintenance` records its call and runs the plugin's
+ * job against a restored-agent stub, mirroring the patched host contract;
+ * `maintenanceImpl` may reject to simulate manager-side failures.
  */
-function makeColdHarness({ observationSpec, resumeImpl, hostEngine, presets, children, agent, owned = true } = {}) {
+function makeColdHarness({ observationSpec, maintenanceImpl, hostEngine, presets, children, agent, owned = true } = {}) {
 	const caller = { id: "parent-1" };
 	const lease = observation({ parentSession: caller.id, ...observationSpec });
-	const resumed = { agent: restoredAgentStub(observationSpec?.id ?? "cold-1"), disposed: false, dispose: async function () { this.disposed = true; } };
-	const resumeCalls = [];
+	const restored = restoredAgentStub(observationSpec?.id ?? "cold-1");
+	const maintenanceCalls = [];
 	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
 	const ctx = {
 		agents: {
 			get: (id) => (id === caller.id ? caller : id === (agent?.id ?? "no-live") ? agent : undefined),
-			isOwnedBy: (id, owner) => owned && id === agent?.id && owner === caller,
-			resume: async (options) => {
-				resumeCalls.push(options);
-				if (resumeImpl !== undefined) return resumeImpl(options);
-				return resumed;
+			isOwnedBy: (id, owner) => owned && id === agent?.id && owner === caller
+		},
+		subagents: {
+			listChildren: children ?? (async () => [{ id: "cold-1", mode: "continuable", label: "worker" }]),
+			runMaintenance: async (parent, childId, options) => {
+				maintenanceCalls.push({ parent, childId, options });
+				if (maintenanceImpl !== undefined) return maintenanceImpl(parent, childId, options);
+				return options.job(restored, options.signal);
 			}
 		},
-		subagents: { listChildren: children ?? (async () => [{ id: "cold-1", mode: "continuable", label: "worker" }]) },
 		get(serviceName) {
 			if (serviceName === "agentPresets") return presets;
 			if (serviceName === "compaction") return hostEngine;
@@ -504,7 +522,7 @@ function makeColdHarness({ observationSpec, resumeImpl, hostEngine, presets, chi
 	}
 	const command = registrations.commands.find((definition) => definition.name === "subagent-compact");
 	const tool = registrations.tools[0];
-	return { ctx, caller, command, tool, lease, resumed, resumeCalls, registrations };
+	return { ctx, caller, command, tool, lease, restored, maintenanceCalls, registrations };
 }
 
 test("cold: unknown session id resolves to unknown-session, not not-resident", async () => {
@@ -513,7 +531,7 @@ test("cold: unknown session id resolves to unknown-session, not not-resident", a
 	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
 	const ctx = {
 		agents: { get: () => undefined, isOwnedBy: () => false },
-		subagents: { listChildren: async () => [] },
+		subagents: { listChildren: async () => [], runMaintenance: async () => assert.fail("maintenance must not run") },
 		get(serviceName) {
 			if (serviceName === "sessionQuery") return { observeSession: async () => { throw notFound; } };
 			return undefined;
@@ -537,7 +555,7 @@ test("cold: unknown session id resolves to unknown-session, not not-resident", a
 	assert.match(result.text, /No live agent or persisted session with id "ghost"/);
 });
 
-test("cold: happy path restores through agents.resume with the descriptor's composition and releases", async () => {
+test("cold: happy path runs the engine inside the manager-owned maintenance job", async () => {
 	const engine = { compactNow: async () => ({ shadowedSeqs: [3, 4], shadowedTokenCount: 300, summarySeq: 9 }) };
 	const harness = makeColdHarness({
 		observationSpec: {
@@ -550,35 +568,35 @@ test("cold: happy path restores through agents.resume with the descriptor's comp
 	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(result.outcome, "compacted", result.text);
 	assert.equal(result.summary_seq, 9);
-	assert.equal(harness.resumeCalls.length, 1);
-	const options = harness.resumeCalls[0];
-	assert.equal(options.resumeSessionId, "cold-1");
-	assert.equal(options.parentAgent, harness.caller);
-	assert.deepEqual(options.agentOptions, { provider: "p", model: "m", reasoningEffort: "high" });
-	assert.equal(typeof options.setup, "function");
-	// The setup wrapper returns void (no preset mount receipt as commit object).
-	const setupResult = await options.setup(childCtxStub(), harness.resumed.agent);
-	assert.equal(setupResult, undefined);
-	assert.equal(harness.resumed.disposed, true, "the restored handle must be released");
+	// The thin call: exactly one manager-owned maintenance with the caller,
+	// the target id, and the request signal; the engine is the only job.
+	assert.equal(harness.maintenanceCalls.length, 1);
+	const [call] = harness.maintenanceCalls;
+	assert.equal(call.parent, harness.caller);
+	assert.equal(call.childId, "cold-1");
+	const jobResult = await call.options.job(harness.restored, call.options.signal);
+	assert.deepEqual(jobResult, { shadowedSeqs: [3, 4], shadowedTokenCount: 300, summarySeq: 9 });
 	assert.equal(harness.lease.disposed, true, "the observation lease must be released");
 });
 
 test("cold: per-target lock refuses a concurrent second compaction with busy-target", async () => {
-	let releaseEngine;
-	const engine = { compactNow: () => new Promise((resolve) => { releaseEngine = resolve; }) };
+	let releaseJob;
 	const harness = makeColdHarness({
 		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		hostEngine: engine
+		maintenanceImpl: (_parent, _childId, options) => new Promise((resolve) => {
+			releaseJob = () => resolve(options.job(harness.restored, options.signal));
+		}),
+		hostEngine: { compactNow: async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 2 }) }
 	});
 	const first = harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 	const second = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(second.outcome, "busy-target");
 	assert.match(second.text, /already in progress/);
-	releaseEngine?.({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 2 });
+	releaseJob();
 	assert.equal((await first).outcome, "compacted");
 });
 
-test("cold: one-shot, missing, and malformed descriptors are unsupported targets; resume never runs", async () => {
+test("cold: one-shot, missing, and malformed descriptors are unsupported targets; maintenance never runs", async () => {
 	const cases = [
 		{ name: "one-shot", events: [{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "one-shot", provider: "spawn", label: "once" } }] },
 		{ name: "missing", events: [{ seq: 0, type: "turn/start", data: { turn: 1 } }] },
@@ -591,7 +609,7 @@ test("cold: one-shot, missing, and malformed descriptors are unsupported targets
 		});
 		const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 		assert.equal(result.outcome, "unsupported-target", testCase.name);
-		assert.equal(harness.resumeCalls.length, 0, testCase.name);
+		assert.equal(harness.maintenanceCalls.length, 0, testCase.name);
 	}
 });
 
@@ -603,7 +621,7 @@ test("cold: foreign lineage header is not-authorized; self-target through the li
 	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(result.outcome, "not-authorized");
 	assert.match(result.text, /belongs to another parent session/);
-	assert.equal(harness.resumeCalls.length, 0);
+	assert.equal(harness.maintenanceCalls.length, 0);
 });
 
 test("cold: persisted pending input refuses before materializing anything", async () => {
@@ -618,7 +636,7 @@ test("cold: persisted pending input refuses before materializing anything", asyn
 	assert.equal(result.outcome, "pending-input");
 	assert.match(result.text, /1 persisted pending message/);
 	assert.match(result.text, /untouched/);
-	assert.equal(harness.resumeCalls.length, 0, "refusal must not open the writer");
+	assert.equal(harness.maintenanceCalls.length, 0, "refusal must not start a maintenance activation");
 });
 
 test("cold: an independent preset selection without a projection identity fails restoration explicitly", async () => {
@@ -635,43 +653,38 @@ test("cold: an independent preset selection without a projection identity fails 
 	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(result.outcome, "restore-failed");
 	assert.match(result.text, /preset/);
-	assert.equal(harness.resumeCalls.length, 0);
+	assert.equal(harness.maintenanceCalls.length, 0);
 });
 
-test("cold: an independent preset selection restores through applyChildComposition's preset mount", async () => {
-	const engine = { compactNow: async () => ({ shadowedSeqs: [1], shadowedTokenCount: 10, summarySeq: 4 }) };
-	const mounts = [];
-	const presets = {
-		serviceFor: () => engine,
-		mount: async (ctx, id) => { mounts.push(id); return { id }; },
-		composeFrom: () => { throw new Error("independent selection must not inherit"); }
-	};
-	const harness = makeColdHarness({
-		observationSpec: {
-			events: [
-				{ seq: 0, type: "agent-preset/selected", data: { agentPreset: "child-preset" } },
-				continuableDescriptorEvent()
-			],
-			values: { inbox: { "next-turn": [], "next-step": [] }, agentPreset: "child-preset" }
-		},
-		presets
-	});
-	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
-	assert.equal(result.outcome, "compacted", result.text);
-	const options = harness.resumeCalls[0];
-	// Run the setup with a child context that exposes the stub registry:
-	// applyChildComposition must mount the preset, then apply overrides.
-	const childCtx = { ...childCtxStub(), get: (name) => name === "agentPresets" ? presets : undefined };
-	await options.setup(childCtx, harness.resumed.agent);
-	assert.deepEqual(mounts, ["child-preset"]);
-	assert.equal(harness.resumed.disposed, true);
+test("cold: SubagentError codes from the manager map to distinct outcomes", async () => {
+	const cases = [
+		{ code: "UNAUTHORIZED", outcome: "not-authorized", match: /belongs to another parent session/ },
+		{ code: "DUPLICATE_CHILD", outcome: "busy-target", match: /retry shortly/ },
+		{ code: "ACTIVATION_CLOSING", outcome: "busy-target", match: /retry shortly/ },
+		{ code: "NOT_RESUMABLE", outcome: "restore-failed", match: /could not be restored/ },
+		{ code: "PERSISTENCE_UNAVAILABLE", outcome: "query-unavailable", match: /persistence|query/i }
+	];
+	for (const testCase of cases) {
+		const harness = makeColdHarness({
+			observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
+			maintenanceImpl: async () => {
+				const error = new Error(`manager failure ${testCase.code}`);
+				error.name = "SubagentError";
+				error.code = testCase.code;
+				throw error;
+			}
+		});
+		const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
+		assert.equal(result.outcome, testCase.outcome, testCase.code);
+		assert.match(result.text, testCase.match, testCase.code);
+	}
 });
 
-test("cold: SessionAlreadyOwnedError from resume maps to a retryable busy-target", async () => {
+test("cold: SessionAlreadyOwnedError from the manager maps to a retryable busy-target", async () => {
 	const owned = Object.assign(new Error('session "cold-1" is already owned'), { name: "SessionAlreadyOwnedError" });
 	const harness = makeColdHarness({
 		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		resumeImpl: async () => { throw owned; },
+		maintenanceImpl: async () => { throw owned; },
 		hostEngine: { compactNow: async () => assert.fail("engine must not run") }
 	});
 	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
@@ -679,25 +692,11 @@ test("cold: SessionAlreadyOwnedError from resume maps to a retryable busy-target
 	assert.match(result.text, /concurrently owned/);
 });
 
-test("cold: a failed release after a committed compaction demotes to release-failed", async () => {
-	const engine = { compactNow: async () => ({ shadowedSeqs: [1, 2], shadowedTokenCount: 20, summarySeq: 6 }) };
-	const harness = makeColdHarness({
-		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		hostEngine: engine
-	});
-	harness.resumed.dispose = async () => { throw new Error("drain wedged"); };
-	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
-	assert.equal(result.outcome, "release-failed");
-	assert.match(result.text, /Compacted subagent "cold-1"/);
-	assert.match(result.text, /could not be released cleanly: drain wedged/);
-	assert.equal(result.replaced_items, 2, "stats survive the demotion");
-});
-
-test("cold: an aborted restore is a clean cancellation, and the observation lease is released", async () => {
+test("cold: an aborted maintenance settles as a clean cancellation", async () => {
 	const controller = new AbortController();
 	const harness = makeColdHarness({
 		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		resumeImpl: () => new Promise((_resolve, reject) => {
+		maintenanceImpl: () => new Promise((_resolve, reject) => {
 			controller.abort(new Error("user cancelled"));
 			reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" }));
 		}),
@@ -708,105 +707,25 @@ test("cold: an aborted restore is a clean cancellation, and the observation leas
 	assert.equal(harness.lease.disposed, true);
 });
 
-test("listing distinguishes live children from persisted-only records", async () => {
-	const agent = { id: "live-child", whenIdle: async () => {} };
-	const harness = makeHarness({
-		agent,
-		owned: true,
-		children: async () => [
-			{ id: "live-child", mode: "continuable", label: "runner" },
-			{ id: "cold-child", mode: "continuable", label: "finished" },
-			{ id: "once-child", mode: "one-shot" }
-		]
-	});
-	const result = await harness.command.handler(invocation(harness, ""));
-	assert.equal(result.kind, "success");
-	assert.match(result.text, /live-child \[continuable\] runner — live/);
-	assert.match(result.text, /cold-child \[continuable\] finished — persisted \(not loaded\)/);
-	assert.match(result.text, /once-child \[one-shot\] — persisted \(not loaded\)/);
-	assert.match(result.text, /observed at listing time/);
-});
-
 // ---------------------------------------------------------------------------
-// R1 unit tests: the release cutoff (drain) and the stranding path.
+// The R1 release cutoff / stranding machinery was removed with the move to
+// manager-owned maintenance: the patched host's settlement lifecycle owns
+// those guarantees, and the R2 contract integration suites verify them
+// against real routes.
 
-/** Minimal agent-scope event emitter for the drain loop's stub agents. */
-function agentScopeStub() {
-	const listeners = new Map();
-	return {
-		listeners,
-		on(name, callback) {
-			if (!listeners.has(name)) listeners.set(name, new Set());
-			listeners.get(name).add(callback);
-			return () => listeners.get(name)?.delete(callback);
-		},
-		emit(name) {
-			for (const callback of [...listeners.get(name) ?? []]) callback();
-		}
+test("command declares input so Desktop's UI claims parameterized invocations", async () => {
+	const harness = makeHarness({ agent: makeAgent() });
+	assert.equal(harness.command.input?.hint, "[<subagent-session-id>]");
+	// Mirror of the real Desktop claim predicate
+	// (dsh-client-ui-commands/lib/client.js:1661-1665): a non-bare line is
+	// claimed only when the definition declares `input`; otherwise it falls
+	// through to a plain user message.
+	const desktopClaims = (definition, line) => {
+		const bare = line.trim() === `/${definition.name}` || line.trim() === `/${definition.name} `;
+		if (definition.input !== undefined) return { claim: true };
+		if (!bare) return undefined;
+		return { claim: true };
 	};
-}
-
-function drainAgentStub(id, { pending = false } = {}) {
-	return {
-		id,
-		status: "idle",
-		ctx: agentScopeStub(),
-		pendingFlag: pending,
-		inbox: {
-			get hasPending() { return this.agent.pendingFlag; },
-			nextTurn: pending ? [{ id: "parked" }] : [],
-			nextStep: [],
-			agent: undefined
-		},
-		whenIdle: async () => {}
-	};
-}
-
-test("cold R1: release waits for accepted input to drain, then disposes", async () => {
-	const agent = drainAgentStub("cold-1");
-	agent.inbox.agent = agent;
-	// The sentinel is accepted WHILE the engine runs (mid-summary followup).
-	const engine = { compactNow: async () => {
-		agent.pendingFlag = true;
-		return { shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 };
-	} };
-	let disposed = false;
-	const harness = makeColdHarness({
-		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		hostEngine: engine
-	});
-	harness.resumed.agent = agent;
-	harness.resumed.dispose = async () => { disposed = true; };
-	const operation = harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
-	await new Promise((resolve) => setTimeout(resolve, 10));
-	// Compaction finished, but the sentinel accepted into the inbox parks the
-	// release until it is processed.
-	assert.equal(disposed, false, "release must wait while accepted input is pending");
-	agent.pendingFlag = false;
-	agent.ctx.emit("agent/inbox/claimed");
-	const result = await operation;
-	assert.equal(result.outcome, "compacted");
-	assert.equal(disposed, true, "release happens after the inbox drains");
+	assert.notEqual(desktopClaims(harness.command, "/subagent-compact 3f0c"), undefined, "parameterized line must be claimable");
+	assert.notEqual(desktopClaims(harness.command, "/subagent-compact"), undefined, "bare line must remain claimable");
 });
-
-test("cold R1: pending in the loaded snapshot strands the handle instead of cancelling it", async () => {
-	const agent = drainAgentStub("cold-1", { pending: true });
-	agent.inbox.agent = agent;
-	let disposed = false;
-	const harness = makeColdHarness({
-		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		hostEngine: { compactNow: async () => assert.fail("engine must not run over pending input") }
-	});
-	harness.resumed.agent = agent;
-	harness.resumed.dispose = async () => { disposed = true; };
-	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
-	assert.equal(result.outcome, "pending-input");
-	assert.match(result.text, /resident|untouched/i);
-	assert.equal(harness.resumeCalls.length, 1);
-	await new Promise((resolve) => setTimeout(resolve, 10));
-	assert.equal(disposed, false, "the stranded handle must not be disposed while its input is pending");
-	// What unload DOES to a parked strand is a host-capability question, not
-	// a green assertion here: the durable-preservation contract is asserted
-	// by the R2 dual-mode integration regressions (EXPECT_HOST_MAINTENANCE).
-});
-

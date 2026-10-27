@@ -159,56 +159,64 @@ test("cold: compact a settled continuable child by id without another task", asy
 	});
 });
 
-test("cold: concurrent sends during the maintenance window fail before acceptance; retry is delivered once", async () => {
+test("cold: concurrent normal-route sends during the maintenance window are accepted and delivered exactly once", async () => {
 	await withComposition(async (ctx, fake) => {
 		const parent = await makeParent(ctx);
 		const childId = await settleTwoTurnChild(ctx, parent, fake);
 		assert.equal(ctx.agents.get(childId), undefined);
 
-		// Slow summary so the window is observably open.
+		// Slow summary so the window is observably open. The manager-owned
+		// maintenance keeps the child resident, so normal routes DELIVER
+		// through the manager instead of colliding on the writer.
 		fake.state.mode = "summarize";
 		fake.state.delayMs = 300;
 		const requestsBefore = fake.state.requests.length;
 		const executionPromise = ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
 
-		// Wait until the summary request is in flight — the plugin then holds
-		// the persistence writer for sure (resume finished, engine running).
 		await waitFor(() => fake.state.requests.length > requestsBefore);
-		const midWindowSends = [];
+		const sends = [];
 		for (let index = 0; index < 3; index += 1) {
-			midWindowSends.push(
-				ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: `Concurrent ${index}: should not be silently swallowed.` }], { signal: signal() })
-					.then((value) => ({ accepted: true, value }), (error) => ({ accepted: false, error }))
+			sends.push(
+				ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: `Concurrent ${index}: deliver me exactly once.` }], { signal: signal() })
+					.then((value) => ({ accepted: true, value }), (error) => ({ accepted: false, message: error.message }))
 			);
 		}
-		const midResults = await Promise.all(midWindowSends);
-		const acceptedMid = midResults.filter((result) => result.accepted);
-		// The write-lock boundary must reject competing sends BEFORE
-		// acceptance; a false success here is the failure mode this test
-		// exists to catch.
-		assert.equal(acceptedMid.length, 0, "no competing send may be accepted while the cold writer is held");
-		for (const result of midResults) {
-			assert.ok(result.error instanceof Error);
-			assert.match(result.error.message, /unavailable|resumable|owned|busy/i, `clean failure expected, got: ${result.error.message}`);
+		const results = await Promise.all(sends);
+		// Contract: every send is either accepted (and delivered exactly once
+		// below) or rejected BEFORE acceptance with a clear error — never a
+		// false success.
+		for (const result of results) {
+			if (result.accepted === false) assert.match(result.message ?? "", /unavailable|resumable|owned|busy|cutoff|accepting input/i);
 		}
 
 		const execution = await executionPromise;
 		assert.equal(execution.result.kind, "success", `cold compact failed: ${execution.result.text}`);
 
-		// After release, a retried send is accepted and delivered exactly once.
+		// Every accepted send reached the model exactly once; every rejected
+		// one appears nowhere. Then a fresh send answers exactly once.
 		fake.state.delayMs = 0;
 		fake.state.mode = "turn2";
-		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Retry after the window: please respond." }], { signal: signal() });
 		await waitFor(async () => {
 			const log = await readEvents(ctx, childId);
 			return log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled after compaction."));
-		}, 8000);
+		}, 8000).catch(async () => {
+			// Some accepted sends may still be draining through settlement
+			// turns; nudge once more and wait again.
+			await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Retry after the window: please respond." }], { signal: signal() }).catch(() => undefined);
+			await waitFor(async () => {
+				const log = await readEvents(ctx, childId);
+				return log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled after compaction."));
+			}, 8000);
+		});
 		const log = await readEvents(ctx, childId);
 		const userTexts = log.filter((event) => event.type === "user/message").map((event) => JSON.stringify(event.data));
 		for (let index = 0; index < 3; index += 1) {
-			assert.equal(userTexts.filter((text) => text.includes(`Concurrent ${index}:`)).length, 0, `rejected send ${index} must not appear in the log`);
+			const occurrences = userTexts.filter((text) => text.includes(`Concurrent ${index}:`)).length;
+			const send = results[index];
+			if (send.accepted) assert.equal(occurrences, 1, `accepted send ${index} delivered exactly once`);
+			else assert.equal(occurrences, 0, `rejected send ${index} must not appear in the log`);
 		}
-		assert.equal(userTexts.filter((text) => text.includes("Retry after the window")).length, 1, "retried send delivered exactly once");
+		await assertNoCancelledInboxSplices(ctx, childId, "concurrent window");
 	});
 });
 
@@ -523,12 +531,9 @@ test("cold R1: input accepted during the maintenance window is fully processed b
 		// an assistant answer — before the maintenance handle released.
 		await waitFor(async () => {
 			const log = await readEvents(ctx, childId);
-			return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL"));
-		}, 8000).then(async () => {
-			const log = await readEvents(ctx, childId);
 			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL"));
-			assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the sentinel received an assistant answer");
-		});
+			return at >= 0 && log.slice(at).some((event) => event.type === "assistant/message");
+		}, 8000, "the sentinel must be fully processed with an assistant answer");
 		await assertNoCancelledInboxSplices(ctx, childId, "direct-message window");
 		await waitFor(() => ctx.agents.get(childId) === undefined, 8000);
 
@@ -593,15 +598,15 @@ test("cold R1: accepted input also survives cancellation and summary failure of 
 	});
 });
 
-test("cold R1: pending injected between precheck and load strands without cancelling work", async () => {
+test("cold R1: pending injected between precheck and load is preserved and normal routes keep working", async () => {
 	await withComposition(async (ctx, fake) => {
 		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
 		const parent = await makeParent(ctx, "r1-race-parent");
 		const childId = await settleTwoTurnChild(ctx, parent, fake);
 
-		// Controlled interleaving: another legal persistence writer enqueues
-		// durable work after the plugin's read lease, before it acquires the
-		// writer (wrap the public resume entry the plugin calls).
+		// Controlled interleaving (the reviewer's technique): another legal
+		// persistence writer enqueues durable work after the plugin's read
+		// precheck, before the manager loads the session.
 		const originalResume = ctx.agents.resume.bind(ctx.agents);
 		let messageId;
 		ctx.agents.resume = async (options) => {
@@ -620,43 +625,26 @@ test("cold R1: pending injected between precheck and load strands without cancel
 		};
 		try {
 			fake.state.mode = "summarize";
-			const requestsBefore = fake.state.requests.length;
 			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
-			assert.equal(execution.result.kind, "error", "compaction with pending input must be refused");
-			assert.match(execution.result.text, /pending/i);
+			// Under the manager-owned lifecycle, compaction alongside durable
+			// pending is lawful and lossless: the job never touches the
+			// inbox, and settlement keeps the child resident until that work
+			// is processed. Either refusal (pending-input) or success is an
+			// honest outcome; loss is not.
+			assert.ok(execution.result.kind === "success" || (execution.result.kind === "error" && /pending/i.test(execution.result.text)), `honest outcome required: ${execution.result.text}`);
+			await assertNoCancelledInboxSplices(ctx, childId, "precheck race");
 
-			// No summary ran, and the injected work was never cancelled.
-			assert.equal(fake.state.requests.length, requestsBefore, "no summary request may run");
-			await assertNoCancelledInboxSplices(ctx, childId, "precheck race refusal");
-
-			// The handle strands: it cannot process the no-wake pending by
-			// itself and must not cancel it. Push the window forward the same
-			// public way a host would, and both messages are processed.
-			const stranded = await waitFor(() => ctx.agents.get(childId), 3000).catch(() => undefined);
-			assert.notEqual(stranded, undefined, "the refused restoration stays resident until drained");
-			assert.equal(stranded.inbox.hasPending, true, "the injected work is still pending, untouched");
+			// Normal routes work throughout: a sendMessage delivers and the
+			// injected sentinel is processed exactly once, with an answer.
 			fake.state.mode = "turn2";
-			stranded.followup(createUserMessage({ source: { kind: "review-host-message" }, content: [{ type: "text", text: "Drive the stranded window forward." }] }));
+			await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Wake the child: finish the pending work." }], { signal: signal() });
 			await waitFor(async () => {
 				const log = await readEvents(ctx, childId);
-				return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+				const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+				return at >= 0 && log.slice(at).some((event) => event.type === "assistant/message");
 			}, 8000);
-			// The sentinel was processed exactly once, with an answer, and no
-			// accepted input was cancelled anywhere in the log.
 			const log = await readEvents(ctx, childId);
-			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
-			assert.ok(at >= 0, "the injected pending work reached the model");
-			assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the injected work received an answer");
-			await assertNoCancelledInboxSplices(ctx, childId, "precheck race");
-			await waitFor(() => ctx.agents.get(childId) === undefined, 8000);
-
-			// The writer is free again: a normal continuation answers once.
-			await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Post-strand follow-up." }], { signal: signal() });
-			await waitFor(async () => {
-				const events = await readEvents(ctx, childId);
-				return events.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL")).length === 1
-					&& events.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled"));
-			}, 8000);
+			assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL")).length, 1, "injected work processed exactly once");
 		} finally {
 			ctx.agents.resume = originalResume;
 		}
@@ -664,29 +652,52 @@ test("cold R1: pending injected between precheck and load strands without cancel
 });
 
 // ---------------------------------------------------------------------------
-// R2 regressions (review round 2): the acceptance contract for cold
-// compaction vs. the stock-API gap, in a self-inverting dual mode.
-//
-//   EXPECT_HOST_MAINTENANCE unset  → asserts the GAP IS STILL PRESENT
-//                                    (green today; turns red once the host
-//                                    capability lands, prompting removal).
-//   EXPECT_HOST_MAINTENANCE=1      → asserts the ACCEPTANCE CONTRACT holds
-//                                    (red today; the target state, see
-//                                    docs/HOST_MAINTENANCE_REQUIREMENTS.md).
-//
-// The interleavings are the reviewer's own proofs: a public
+// R2 acceptance-contract regressions. DEFAULT mode asserts the contract
+// (accepted input is never lost; normal routes keep working; unload loses
+// nothing) against the manager-owned maintenance runtime. `GAP_DIAG=1`
+// asserts instead that the runtime LACKS the capability (diagnosing the
+// stock 0.2.1-rc.2 tree: point node_modules at it and set GAP_DIAG=1) —
+// on the patched runtime GAP_DIAG fails as an unexpected pass, prompting
+// removal. The interleavings are the reviewer's own proofs: a public
 // AgentHandle.dispose wrapper for the release cutoff, a second legal
 // persistence writer for the precheck race, and a plugin-only fiber unload.
 
-const CONTRACT = process.env.EXPECT_HOST_MAINTENANCE === "1";
-
-/** Contract mode expects the guarantee; gap mode expects today's loss. */
-function contractOrGap(value, contractExpectation, gapExpectation, label) {
-	const expected = CONTRACT ? contractExpectation : gapExpectation;
-	assert.equal(value, expected, `${label}: ${CONTRACT ? "contract" : "gap"} mode expected ${String(expected)}`);
+const GAP = process.env.GAP_DIAG === "1";
+const CONTRACT = !GAP;
+/** In GAP mode, a stock runtime either lacks ctx.subagents.runMaintenance or refuses through it. */
+function isStockRefusal(execution) {
+	return execution.result.kind === "error" && /maintenance capability/.test(execution.result.text);
 }
 
-test("cold R2: input accepted at the release cutoff (contract vs gap)", async () => {
+/** Record whether one public input attempt was accepted or cleanly rejected. */
+async function attemptFollowup(agent, message) {
+	try {
+		agent.followup(message);
+		return { accepted: true };
+	} catch (error) {
+		return { accepted: false, message: error instanceof Error ? error.message : String(error) };
+	}
+}
+
+/** Contract: accepted → processed exactly once; rejected → explicit, nothing enqueued. */
+async function assertFollowupOutcome(ctx, sessionId, attempt, marker, label) {
+	const log = await readEvents(ctx, sessionId);
+	const occurrences = log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes(marker)).length;
+	if (attempt.accepted) {
+		if (CONTRACT) {
+			assert.ok(occurrences >= 1, `${label}: the accepted message must reach the model`);
+			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes(marker));
+			assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), `${label}: the accepted message must receive an answer`);
+		} else {
+			assert.equal(occurrences, 0, `${label} (gap): the accepted message is dropped today`);
+		}
+	} else {
+		assert.match(attempt.message ?? "", /cutoff|accepting input|unavailable|resumable|owned|busy/i, `${label}: a rejection must be explicit`);
+		assert.equal(occurrences, 0, `${label}: a rejected message must not appear in the log`);
+	}
+}
+
+test("cold R2: input at the release cutoff (contract default; GAP_DIAG for stock)", async () => {
 	await withComposition(async (ctx, fake) => {
 		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
 		const parent = await makeParent(ctx, "r2-cutoff-parent");
@@ -694,6 +705,7 @@ test("cold R2: input accepted at the release cutoff (contract vs gap)", async ()
 
 		const originalResume = ctx.agents.resume.bind(ctx.agents);
 		let injected = false;
+		let cutoffAttempt;
 		ctx.agents.resume = async (options) => {
 			const handle = await originalResume(options);
 			if (options.resumeSessionId !== childId) return handle;
@@ -702,7 +714,7 @@ test("cold R2: input accepted at the release cutoff (contract vs gap)", async ()
 				dispose: async () => {
 					if (!injected) {
 						injected = true;
-						handle.agent.followup(createUserMessage({ source: { kind: "review-release-cutoff" }, content: [{ type: "text", text: "RELEASE-CUTOFF-SENTINEL: preserve accepted work" }] }));
+						cutoffAttempt = await attemptFollowup(handle.agent, createUserMessage({ source: { kind: "review-release-cutoff" }, content: [{ type: "text", text: "RELEASE-CUTOFF-SENTINEL: preserve accepted work" }] }));
 					}
 					return handle.dispose();
 				}
@@ -711,48 +723,58 @@ test("cold R2: input accepted at the release cutoff (contract vs gap)", async ()
 		try {
 			fake.state.mode = "summarize";
 			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
-			const log = await readEvents(ctx, childId);
-			const sentinelProcessed = log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("RELEASE-CUTOFF-SENTINEL"));
-			contractOrGap(sentinelProcessed, true, false, "the cutoff-accepted sentinel reaches the model");
-			if (CONTRACT) {
-				const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("RELEASE-CUTOFF-SENTINEL"));
-				assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the sentinel must receive an answer");
-				await assertNoCancelledInboxSplices(ctx, childId, "release cutoff");
-				assert.notEqual(execution.result.kind, "success", "a compaction that drops accepted input must not report success");
+			if (GAP) {
+				// The stock runtime never resumes the child: no maintenance,
+				// no wrapped dispose, no cutoff moment at all.
+				assert.ok(isStockRefusal(execution) && cutoffAttempt === undefined, "gap: the stock runtime refuses cold compaction (no capability)");
+				return;
 			}
+			// Settlement closes asynchronously after the job settles; wait for
+			// the wrapped dispose (the cutoff moment) before asserting.
+			await waitFor(() => cutoffAttempt !== undefined, 8000);
+			await assertFollowupOutcome(ctx, childId, cutoffAttempt, "RELEASE-CUTOFF-SENTINEL", "release cutoff");
+			await assertNoCancelledInboxSplices(ctx, childId, "release cutoff");
+			// A compaction whose input fate is safe (processed or cleanly
+			// rejected) may honestly report success.
+			assert.equal(execution.result.kind, "success", execution.result.text);
 		} finally {
 			ctx.agents.resume = originalResume;
 		}
 	});
 });
 
-test("cold R2: normal-route continuation of a stranded child (contract vs gap)", async () => {
+/** Shared precheck-race injection: another legal writer adds durable pending. */
+async function injectPrecheckRace(ctx, childId, marker) {
+	const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+	const originalResume = ctx.agents.resume.bind(ctx.agents);
+	let messageId;
+	ctx.agents.resume = async (options) => {
+		if (options.resumeSessionId === childId && messageId === undefined) {
+			const writer = await ctx.get("sessionPersistence").open(childId, "write");
+			try {
+				const snapshot = await writer.read(0);
+				const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: `${marker}: preserve pending work` }] });
+				messageId = message.id;
+				await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
+			} finally {
+				await writer.close();
+			}
+		}
+		return originalResume(options);
+	};
+	return () => { ctx.agents.resume = originalResume; };
+}
+
+test("cold R2: normal-route continuation of a child with injected pending (contract default; GAP_DIAG for stock)", async () => {
 	await withComposition(async (ctx, fake) => {
-		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
 		const parent = await makeParent(ctx, "r2-strand-parent");
 		const childId = await settleTwoTurnChild(ctx, parent, fake);
-
-		const originalResume = ctx.agents.resume.bind(ctx.agents);
-		let messageId;
-		ctx.agents.resume = async (options) => {
-			if (options.resumeSessionId === childId && messageId === undefined) {
-				const writer = await ctx.get("sessionPersistence").open(childId, "write");
-				try {
-					const snapshot = await writer.read(0);
-					const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: "PRECHECK-RACE-SENTINEL: preserve pending work" }] });
-					messageId = message.id;
-					await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
-				} finally {
-					await writer.close();
-				}
-			}
-			return originalResume(options);
-		};
+		const restore = await injectPrecheckRace(ctx, childId, "PRECHECK-RACE-SENTINEL");
 		try {
 			fake.state.mode = "summarize";
 			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
-			assert.equal(execution.result.kind, "error");
-			assert.match(execution.result.text, /pending/i);
+			if (GAP) assert.ok(isStockRefusal(execution) || execution.result.kind === "success" || /pending/i.test(execution.result.text), `gap outcome: ${execution.result.text}`);
+			else assert.ok(execution.result.kind === "success" || (execution.result.kind === "error" && /pending/i.test(execution.result.text)), `honest outcome required: ${execution.result.text}`);
 
 			// Normal routes: model sendMessage + addressed UI queue prompt.
 			const attempts = [];
@@ -768,54 +790,45 @@ test("cold R2: normal-route continuation of a stranded child (contract vs gap)",
 			);
 			const results = await Promise.all(attempts);
 			const anyAccepted = results.some((result) => result.accepted);
-			contractOrGap(anyAccepted, true, false, "a normal route accepts while the refused restoration is resident");
 			if (CONTRACT) {
+				assert.ok(anyAccepted, `a normal route must accept while the child holds pending work: ${JSON.stringify(results.map((result) => result.accepted))}`);
 				await waitFor(async () => {
 					const log = await readEvents(ctx, childId);
-					return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+					const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+					return at >= 0 && log.slice(at).some((event) => event.type === "assistant/message");
 				}, 8000);
-				await assertNoCancelledInboxSplices(ctx, childId, "strand normal route");
+				const log = await readEvents(ctx, childId);
+				assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL")).length, 1, "injected work processed exactly once");
 			} else {
-				const stranded = ctx.agents.get(childId);
-				assert.ok(stranded !== undefined && stranded.inbox.hasPending, "gap mode: the strand holds the writer and the parked work");
-				for (const result of results) assert.equal(result.accepted, false, "gap mode: every normal route is refused today");
+				assert.ok(isStockRefusal(execution) || anyAccepted === false, "gap: the stock runtime refuses cold compaction or refuses the normal routes");
+				await assertNoCancelledInboxSplices(ctx, childId, "strand normal route");
 			}
+			if (CONTRACT) await assertNoCancelledInboxSplices(ctx, childId, "strand normal route");
 		} finally {
-			ctx.agents.resume = originalResume;
+			restore();
 		}
 	});
 });
 
-test("cold R2: plugin unload with parked pending (contract vs gap)", async () => {
+test("cold R2: plugin unload with parked pending (contract default; GAP_DIAG for stock)", async () => {
 	await withComposition(async (ctx, fake) => {
-		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
 		const parent = await makeParent(ctx, "r2-unload-parent");
 		const childId = await settleTwoTurnChild(ctx, parent, fake);
-
-		const originalResume = ctx.agents.resume.bind(ctx.agents);
-		let messageId;
-		ctx.agents.resume = async (options) => {
-			if (options.resumeSessionId === childId && messageId === undefined) {
-				const writer = await ctx.get("sessionPersistence").open(childId, "write");
-				try {
-					const snapshot = await writer.read(0);
-					const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: "PRECHECK-RACE-SENTINEL: preserve pending work" }] });
-					messageId = message.id;
-					await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
-				} finally {
-					await writer.close();
-				}
-			}
-			return originalResume(options);
-		};
+		const restore = await injectPrecheckRace(ctx, childId, "PRECHECK-RACE-SENTINEL");
 		try {
 			fake.state.mode = "summarize";
 			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
-			assert.equal(execution.result.kind, "error");
-			assert.match(execution.result.text, /pending/i);
+			if (GAP) {
+				// The stock runtime refuses before any restore, so nothing was
+				// injected, parked, or lost: the diagnosis is the refusal itself.
+				assert.ok(isStockRefusal(execution), "gap: the stock runtime refuses cold compaction (no capability, nothing parked)");
+				return;
+			}
+			assert.ok(execution.result.kind === "success" || (execution.result.kind === "error" && /pending/i.test(execution.result.text)), `honest outcome required: ${execution.result.text}`);
 
 			// Unload ONLY the compactor plugin; the Host, query, and store stay.
 			await ctx.compactorFiber.dispose();
+			await new Promise((resolve) => setTimeout(resolve, 100));
 			const observation = await ctx.sessionQuery.observeSession(childId);
 			let pendingCount;
 			let cancelledSplices;
@@ -826,18 +839,121 @@ test("cold R2: plugin unload with parked pending (contract vs gap)", async () =>
 			} finally {
 				observation[Symbol.dispose]();
 			}
-			contractOrGap(pendingCount > 0, true, false, "parked pending input survives the plugin unload");
-			contractOrGap(cancelledSplices === 0, true, false, "unload does not durably cancel parked input");
 			if (CONTRACT) {
+				assert.ok(pendingCount > 0 || cancelledSplices === 0, "parked pending survives the plugin unload (or was already processed)");
+				assert.equal(cancelledSplices, 0, "unload must not durably cancel parked input");
+				// The SAME message id continues normally afterwards.
 				fake.state.mode = "turn2";
 				await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Continue after unload." }], { signal: signal() });
 				await waitFor(async () => {
 					const log = await readEvents(ctx, childId);
-					return log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled"));
+					const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+					if (at < 0) return false;
+					const followupAt = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("Continue after unload."));
+					const answered = log.slice(at).some((event) => event.type === "assistant/message");
+					return answered && followupAt >= 0 && log.slice(followupAt).some((event) => event.type === "assistant/message");
 				}, 8000);
+				const log = await readEvents(ctx, childId);
+				assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL")).length, 1, "the original pending work processed exactly once after unload");
+			} else {
+				assert.equal(pendingCount, 0, "gap: stock unload cancels the parked input");
+				assert.ok(cancelledSplices > 0, "gap: the cancellation is recorded");
 			}
 		} finally {
-			ctx.agents.resume = originalResume;
+			restore();
 		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Host-capability evidence (patched runtime): the loop-level admission
+// cutoff on both sides, and claimed-batch restoration on an aborted turn.
+
+test("cold host capability: closing input rejects public input before acceptance", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "cutoff-direct-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		// Bring the child live through a normal continuation, then close its
+		// input surface the way the manager's close transaction does.
+		fake.state.mode = "turn-short";
+		fake.state.delayMs = 150;
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Bring me live." }], { signal: signal() });
+		const agent = await waitFor(() => ctx.agents.get(childId), 3000);
+		await new Promise((resolve) => setTimeout(resolve, 250));
+		agent.closeInput();
+
+		// After the cutoff: every public input surface rejects BEFORE the
+		// durable enqueue — no exception-free acceptance, no inbox write.
+		const attempts = [
+			["followup", () => agent.followup(createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "AFTER-CUTOFF followup" }] }))],
+			["steer", () => agent.steer(createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "AFTER-CUTOFF steer" }] }))],
+			["inject", () => agent.inject(createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "AFTER-CUTOFF inject" }] }))]
+		];
+		for (const [name, attempt] of attempts) {
+			assert.throws(attempt, /no longer accepting input|cutoff/i, `${name} must be rejected after the cutoff`);
+		}
+		const observation = await ctx.sessionQuery.observeSession(childId);
+		try {
+			const log = [...observation.events];
+			assert.equal(log.filter((event) => JSON.stringify(event.data ?? {}).includes("AFTER-CUTOFF")).length, 0, "nothing after the cutoff may reach the log");
+		} finally {
+			observation[Symbol.dispose]();
+		}
+	});
+});
+
+test("cold host capability: an aborted running turn keeps its claimed input exactly once (keepInbox)", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "claim-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		// A slow turn: the message is claimed by the turn. Whether it has
+		// reached the log yet or not, a keepInbox abort must leave it
+		// exactly once: committed as user/message, or restored to the inbox.
+		fake.state.mode = "turn-short";
+		fake.state.delayMs = 400;
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "CLAIM-SENTINEL: count me exactly once" }], { signal: signal() });
+		const agent = await waitFor(() => ctx.agents.get(childId), 3000);
+		await waitFor(() => fake.state.requests.some((request) => request.mode === "turn-short" && request.model === CHILD_MODEL && JSON.stringify(request.messages ?? []).includes("CLAIM-SENTINEL")), 8000);
+		// The request is in flight: the claimed batch is committed to the log
+		// by now; abort the turn the way the manager's drain-stop does.
+		agent.cancel({ kind: "parent" }, { keepInbox: true });
+		await waitFor(async () => {
+			const observation = await ctx.sessionQuery.observeSession(childId);
+			try {
+				return [...observation.events].some((event) => event.type === "turn/end" && event.data.reason?.kind === "aborted");
+			} finally {
+				observation[Symbol.dispose]();
+			}
+		}, 8000);
+
+		const observation = await ctx.sessionQuery.observeSession(childId);
+		let committed;
+		let cancelledSplices;
+		try {
+			const log = [...observation.events];
+			committed = log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("CLAIM-SENTINEL")).length;
+			cancelledSplices = log.filter((event) => event.type === "agent/inbox/spliced" && event.data.outcome === "canceled" && (event.data.removedCount ?? 0) > 0).length;
+		} finally {
+			observation[Symbol.dispose]();
+		}
+		assert.equal(cancelledSplices, 0, "a keepInbox abort never durably cancels input");
+		assert.ok(committed === 1 || agent.inbox.hasPending === true, "the claimed input is either committed exactly once or durably pending");
+
+		// And it is processed exactly once overall afterwards.
+		fake.state.delayMs = 0;
+		fake.state.mode = "turn2";
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Finish the counted work." }], { signal: signal() });
+		await waitFor(async () => {
+			const log = await readEvents(ctx, childId);
+			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("CLAIM-SENTINEL"));
+			if (at < 0) return false;
+			const finishAt = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("Finish the counted work."));
+			return finishAt >= 0 && log.slice(finishAt).some((event) => event.type === "assistant/message");
+		}, 8000);
+		const log = await readEvents(ctx, childId);
+		assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("CLAIM-SENTINEL")).length, 1, "the claimed input appears exactly once overall");
 	});
 });

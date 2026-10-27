@@ -1,6 +1,6 @@
 # Host maintenance capability requirements for cold subagent compaction
 
-Status: **proposal for review** (plugin branch `feature/cold-session-compaction`, review round 3). No DSH source is modified by this document; nothing here touches installed artifacts.
+Status: **implemented as an isolated candidate patch** (plugin branch `feature/cold-session-compaction`, review round 4). The capability below exists as a minimal host change — TypeScript source diff plus an equivalent compiled-tree patch under `host-patch/`, verified in an isolated module tree; no installed artifact, shared evidence tree, or real profile is modified. The published plugin does NOT depend on it: on the currently verified public combination (stock 0.2.1-rc.2) there is no implementation satisfying the full contract, and the plugin refuses cold compaction explicitly there.
 
 Runtime under discussion: DSH Harness **0.2.1-rc.2** (DSH Desktop 0.12.1). Acceptance contract (from independent review):
 
@@ -20,6 +20,10 @@ Runtime under discussion: DSH Harness **0.2.1-rc.2** (DSH Desktop 0.12.1). Accep
 | **Lossless unload** | Same teardown as gap B; the manager's own drain-stop (`finishDisposal(stop=true)` → `cancel({kind:"parent"})`) also clears the inbox (review R2 proof 3) | ❌ gap D |
 
 **Root cause:** for a generic resume, restore, input admission, maintenance, and release have **no single owner**. The only mechanism in the host that owns all four is the manager's resident Activation lifecycle (`deliver` admission with `ACTIVATION_CLOSING`/`INPUT_CLOSED`, `watchLocalSettlement` waiting while `inbox` is pending, `runMaintenance`-based close, `finishDisposal`). The plugin cannot reach it: `materialize` is private, and every public entry that creates an activation also submits an ordinary task.
+
+## Implemented candidate (host-patch/)
+
+Everything in the proposal below is realized by the candidate patch at `host-patch/` (source baseline `dsh-v0.2.1-rc.2` = `687f282e8625c6b8d11ff58211a90524be2e4317`), including the round-3 corrections: the engine's `compactNow` is the ONLY maintenance window (the manager holds the activation lifecycle and holds the settlement back — no nested `runMaintenance`); the admission cutoff lives at the LOOP input layer (`send` checks before the durable enqueue), shared by `activation.closing`, direct `followup/steer/inject`, and handle teardown alike — no check-then-dispose; claimed-but-uncommitted batches are restored on a `keepInbox` abort (message ids, order, and exactly-once verified by regression); unloading only the plugin leaves the host alive and parked input intact. See `host-patch/README.md` for the change list, verification-tree rebuild steps, and compatibility notes.
 
 ## Minimal capability proposal
 
