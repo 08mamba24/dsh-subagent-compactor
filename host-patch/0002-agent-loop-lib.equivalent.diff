@@ -1,5 +1,5 @@
 --- /tmp/dsh-asar/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js	2026-10-26 18:43:13
-+++ host-patched/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js	2026-10-27 15:17:19
++++ host-patched/node_modules/@deepseek-ai/dsh-agent-loop/lib/index.js	2026-10-27 17:19:05
 @@ -768,6 +768,16 @@
  	systemPrompt;
  	/** Identities fully frozen by this loop; weak references do not retain replaced history. */
@@ -68,7 +68,7 @@
  				};
 +				if (this.abortKeptInbox) {
 +					const restore = this.claimedForRestore.filter((message) => !committedIds.has(message.id));
-+					for (let index = restore.length - 1; index >= 0; index -= 1) this.inbox.prepend("next-turn", restore[index]);
++					for (const message of restore.slice().reverse()) this.inbox.prepend("next-turn", message);
 +				}
  				throw error;
  			}

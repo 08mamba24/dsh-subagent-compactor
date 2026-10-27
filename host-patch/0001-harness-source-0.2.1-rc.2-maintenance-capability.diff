@@ -1,5 +1,5 @@
 diff --git a/packages/core/agent-loop/src/agent.ts b/packages/core/agent-loop/src/agent.ts
-index adf2e33ddc..74856e6f52 100644
+index adf2e33ddc..cce7f36a39 100644
 --- a/packages/core/agent-loop/src/agent.ts
 +++ b/packages/core/agent-loop/src/agent.ts
 @@ -118,6 +118,24 @@ export class ReactLoopAgent implements Agent {
@@ -100,7 +100,7 @@ index adf2e33ddc..74856e6f52 100644
          turnEnds = { kind: 'aborted', reason: cause }
 +        if (this.abortKeptInbox) {
 +          const restore = this.claimedForRestore.filter((message) => !committedIds.has(message.id))
-+          for (let index = restore.length - 1; index >= 0; index -= 1) this.inbox.prepend('next-turn', restore[index])
++          for (const message of restore.slice().reverse()) this.inbox.prepend('next-turn', message)
 +        }
          throw error
        }
@@ -241,7 +241,7 @@ index 119cc26a6a..a11cfdde46 100644
     * Steer one model-authored message to the sender's direct parent or direct
     * continuable child. A running target admits it at the nearest step boundary;
 diff --git a/packages/subagent/subagent/src/manager.ts b/packages/subagent/subagent/src/manager.ts
-index b89732c29e..e5a5bd755e 100644
+index b89732c29e..6eb18863d7 100644
 --- a/packages/subagent/subagent/src/manager.ts
 +++ b/packages/subagent/subagent/src/manager.ts
 @@ -771,9 +771,17 @@ export class SubagentManager {
@@ -302,7 +302,7 @@ index b89732c29e..e5a5bd755e 100644
 +   * The caller owns what happens next; the activation is not yet announced,
 +   * so the settlement watcher (and therefore any release) cannot start.
 +   */
-+  private async resumeActivation(parent: Agent, childId: SessionId, signal: AbortSignal | undefined, delivery: 'parent' | 'caller'): Promise<Activation> {
++  private async resumeActivation(parent: Agent, childId: SessionId, signal: AbortSignal, delivery: 'parent' | 'caller'): Promise<Activation> {
      const query = this.requireSessionQuery()
      let observation: SessionObservation
      try {
@@ -312,7 +312,7 @@ index b89732c29e..e5a5bd755e 100644
        })
      } catch (error: unknown) {
 -      options.signal.throwIfAborted()
-+      signal?.throwIfAborted()
++      signal.throwIfAborted()
        throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
      }
      using source = observation
@@ -342,7 +342,7 @@ index b89732c29e..e5a5bd755e 100644
        })
      } catch (error: unknown) {
 -      options.signal.throwIfAborted()
-+      signal?.throwIfAborted()
++      signal.throwIfAborted()
        if (error instanceof SubagentError) throw error
        throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
      }

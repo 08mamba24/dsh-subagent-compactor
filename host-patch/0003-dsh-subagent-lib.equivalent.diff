@@ -1,5 +1,5 @@
 --- /tmp/dsh-asar/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-26 18:43:13
-+++ host-patched/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-27 15:17:19
++++ host-patched/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-27 17:19:05
 @@ -1706,6 +1706,7 @@
  	/** Close admission synchronously and share one release, including startup rollback. */
  	close(activation, release) {
@@ -46,7 +46,7 @@
 +				observation = await query.observeSession(childId, { signal });
  			} catch (error) {
 -				options.signal.throwIfAborted();
-+				signal?.throwIfAborted();
++				signal.throwIfAborted();
  				throw new SubagentError(`subagent "${childId}" is unavailable`, "NOT_RESUMABLE", { cause: error });
  			}
  			const source = __addDisposableResource$2(env_1, observation, false);
@@ -74,7 +74,7 @@
  				});
  			} catch (error) {
 -				options.signal.throwIfAborted();
-+				signal?.throwIfAborted();
++				signal.throwIfAborted();
  				if (error instanceof SubagentError) throw error;
  				throw new SubagentError(`subagent "${childId}" is unavailable`, "NOT_RESUMABLE", { cause: error });
  			}
