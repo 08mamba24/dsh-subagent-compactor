@@ -57,7 +57,15 @@
 /subagent-compact --all
 ```
 
-对调用父会话**启动时刻的持久化目录快照**中的每个直接子成员逐个压缩（快照之后新增的成员属于下一次运行；不递归孙成员、不涉及其他父会话的成员）。各项**串行**执行并沿用同一 per-target 锁——并发的单项压缩同一目标会得到 `busy-target`。每一项都单独报告结果与原因（压缩成功含 summary seq / 替换条目数 / 被替换历史 token 估算、无可压历史、one-shot 或 pending 被拒、引擎失败等）；单项失败不会吞掉其余项。批量结果只有在每个子成员都压缩成功或无可压历史时才是 `completed`；全部未成功为 `all-failed`，部分失败为 `partial-failure`，被取消为 `batch-cancelled`——包括取消落在目录读取尚未结束时的情形；这些非干净结果都会让命令报错，绝不报成功。取消（或卸载插件）会停止尚未开始的项（记为 `not-started`）并保留已完成的结果。由于宿主的 abort 语义会丢弃被取消命令自身的结果，已完成的逐项报告保留在插件上：裸 `/subagent-compact` 列表会在上一批未干净完成时附上该报告（存储随插件存活，重启即忘；持久记录在各自子会话日志里）。每个被压缩的子成员仍会在自己的模型路由上多一次摘要请求。原版运行时上冷路径项会被拒（`host-capability-missing` 计入 failed），live 项照常压缩。
+对调用父会话**启动时刻的持久化目录快照**中的每个直接子成员逐个压缩（快照之后新增的成员属于下一次运行；不递归孙成员、不涉及其他父会话的成员）。各项**串行**执行并沿用同一 per-target 锁——并发的单项压缩同一目标会得到 `busy-target`。每一项都单独报告结果与原因（压缩成功含 summary seq / 替换条目数 / 被替换历史 token 估算、无可压历史、one-shot 或 pending 被拒、引擎失败等）；单项失败不会吞掉其余项。批量结果只有在每个子成员都压缩成功或无可压历史时才是 `completed`；全部未成功为 `all-failed`，部分失败为 `partial-failure`，被取消为 `batch-cancelled`——包括取消落在目录读取尚未结束时的情形；这些非干净结果都会让命令报错，绝不报成功。取消（或卸载插件）会停止尚未开始的项（记为 `not-started`）并保留已完成的结果；取消落地时目录已读出的，已知的全部目标都会逐项记为 `not-started`，目录真未读出的则明确报告快照未知。每个被压缩的子成员仍会在自己的模型路由上多一次摘要请求。原版运行时上冷路径项会被拒（`host-capability-missing` 计入 failed），live 项照常压缩。
+
+每个完成的批量都会持久化一条**回执**——写入**调用父会话自己日志**的 plugin record（`plugin:local/dsh-subagent-compactor/batch-report`），并经 sessions 服务 flush 落盘（与官方压缩同一持久化检查点）。回执天然按父会话隔离（其他父会话读不到也覆盖不了，fork 继承的历史不会冒充本会话自己创建的回执），日志只追加（后续批量不会覆盖未读回执），插件重载、会话恢复后仍在。宿主的 abort 语义会丢弃被取消命令自身的结果——回执写进日志正是为此。裸 `/subagent-compact` 列表会附上本父最近一条**未干净完成**的回执（干净批次的结果当时已正常送达）；任意回执（干净与否）都可按 id 取回：
+
+```text
+/subagent-compact report <batch-id>
+```
+
+持久化失败（写入或 flush）会在返回文本中如实写明（`NOT persisted: …`），绝不谎称已持久化；读取时遇到形状不符的记录会跳过，不做信任。
 
 父智能体也可以在回合内调用工具：
 
@@ -78,7 +86,7 @@ compact_all_subagents({})   // 上述批量入口，附结构化计数
 
 ## 环境与边界
 
-- 组合需要 `commands`、`tools`、`agents`、`subagents` 服务，以及子成员对应的压缩引擎；冷压缩另需 `sessionQuery` 与会话持久化（同类组合中通常已具备）。
+- 组合需要 `commands`、`tools`、`agents`、`subagents` 服务，以及子成员对应的压缩引擎；冷压缩另需 `sessionQuery` 与会话持久化（同类组合中通常已具备）。批量回执是经 `@deepseek-ai/dsh-session` 的实验性 `appendPluginRecord` 写入的 plugin record（新增必需 peer；该记录 ignorable、不进模型可见面，格式迁移时尽力保留），并经 `sessions` 服务 flush 落盘；两者任一不可用时，批量文本会如实写 `NOT persisted`，绝不谎称已持久化。
 - 只允许运行时直接父级操作。live 目标按运行时所有权拒绝他人；已结束目标按子会话持久化 header 的父级血缘与其持久 descriptor 拒绝他人子成员、自身和孙成员。
 - preset 组合通过 `agentPresets.serviceFor` 解析子成员引擎（绝不回退 Host 平面）；无该注册表的组合使用 Host 引擎。
 - 冷压缩依赖宿主的管理器侧维护能力（`ctx.subagents.runMaintenance`）。在原版 0.2.1-rc.2 运行时上，插件会明确拒绝冷压缩（`host-capability-missing`）；[host-patch/](host-patch/README.md) 中的隔离候选宿主补丁提供该能力：已接受输入不丢失、正常续接全程可用、仅卸载插件不损滞留输入。live 窗口压缩在两种运行时上都可用。

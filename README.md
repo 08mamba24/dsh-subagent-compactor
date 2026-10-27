@@ -42,7 +42,7 @@ Use the command in the parent session that created the subagent:
 /subagent-compact
 ```
 
-This lists the parent's persisted direct-child catalog. Each line ends with `— live` (a loaded agent) or `— persisted (not loaded)` (a record whose agent is not loaded; a listing is an observation, not a reservation). Copy a full child session ID, then invoke:
+This lists the parent's persisted direct-child catalog (and, when the parent's latest batch did not complete cleanly, that batch's durable receipt — see below). Each line ends with `— live` (a loaded agent) or `— persisted (not loaded)` (a record whose agent is not loaded; a listing is an observation, not a reservation). Copy a full child session ID, then invoke:
 
 ```text
 /subagent-compact <subagent-session-id>
@@ -59,7 +59,15 @@ Two lawful situations:
 /subagent-compact --all
 ```
 
-Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. The batch outcome is `completed` only when every child compacted or had nothing to compact, `all-failed` when nothing succeeded, `partial-failure` in between, and `batch-cancelled` when it was cancelled — including a cancellation that lands while the catalog read is still resolving; every non-clean outcome makes the command report an error, never success. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result. Because the host's abort semantics drop a cancelled command's own result, the finished per-child report is kept on the plugin: the bare `/subagent-compact` listing appends the last batch report whenever the last batch did not complete cleanly (the store lives with the plugin — a restart forgets it; each child's own session log is the durable record). Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
+Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. The batch outcome is `completed` only when every child compacted or had nothing to compact, `all-failed` when nothing succeeded, `partial-failure` in between, and `batch-cancelled` when it was cancelled — including a cancellation that lands while the catalog read is still resolving; every non-clean outcome makes the command report an error, never success. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result; a catalog that already resolved when the cancellation lands keeps its known target list (every target reported `not-started`), while a read that never resolved reports the snapshot as unknown. Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
+
+Every finished batch persists one **receipt** — a plugin record (`plugin:local/dsh-subagent-compactor/batch-report`) in the **caller's own session log**, flushed through the sessions service like the official compaction. Receipts are scoped to their parent by construction (another parent can neither read nor overwrite them, and a forked history never masquerades as receipts this session created), the log is append-only (a later run never overwrites an unread receipt), and they survive plugin reloads and session restores. The host's abort semantics drop a cancelled command's own result — that is exactly why the receipt lives in the log. The bare `/subagent-compact` listing appends the caller's latest **unclean** receipt (clean runs were already delivered as their own result), and any receipt — clean or not — comes back by id:
+
+```text
+/subagent-compact report <batch-id>
+```
+
+A persistence failure (record or flush) is stated in the returned text (`NOT persisted: …`), never claimed as durable. Records of an unrecognized shape are skipped on read, not trusted.
 
 The parent model can call the same operations through:
 
@@ -80,7 +88,7 @@ Refusals are explicit outcomes, never silent: `unknown-session` (no live or pers
 
 ## Requirements and limits
 
-- The composition must provide `commands`, `tools`, `agents`, and `subagents`, plus a compaction engine for the target child. Normal subagent-capable Desktop presets provide these services. Cold compaction additionally needs `sessionQuery` and session persistence (present in the same compositions).
+- The composition must provide `commands`, `tools`, `agents`, and `subagents`, plus a compaction engine for the target child. Normal subagent-capable Desktop presets provide these services. Cold compaction additionally needs `sessionQuery` and session persistence (present in the same compositions). Batch receipts are plugin records written through `@deepseek-ai/dsh-session`'s experimental `appendPluginRecord` (a required peer; the record is ignorable, never model-visible, and retained best-effort across session-format migrations) and flushed through the `sessions` service; when either is unavailable the batch text says the receipt was `NOT persisted` instead of claiming durability.
 - Only the exact runtime parent can compact its direct child. Other parents, the caller itself, and grandchildren are rejected — for live targets through runtime ownership, for finished targets through the child's persisted header lineage and its durable descriptor.
 - Preset compositions resolve the child's engine through `agentPresets.serviceFor` (no Host-plane fallback); compositions without that registry use the Host engine.
 - Cold compaction uses the host's manager-owned maintenance capability (`ctx.subagents.runMaintenance`). On a stock 0.2.1-rc.2 runtime the plugin refuses cold compaction explicitly (`host-capability-missing`); the isolated candidate host patch in [host-patch/](host-patch/README.md) provides the capability, under which accepted input is never lost, normal routes keep working throughout, and unloading the plugin preserves parked input. Live-window compaction works everywhere.
@@ -99,7 +107,7 @@ ln -s "$DSH_MODULES" node_modules
 node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
 ```
 
-The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. `test/cold.integration.test.mjs` is the 1.1.0 candidate's contract suite: on the isolated patched tree (see [host-patch/README.md](host-patch/README.md)) all suites pass (74/74 — unit 41, integration 1, cold 32); on a stock tree point `node_modules` at it and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` for the capability-missing diagnostics. Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
+The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. `test/cold.integration.test.mjs` is the 1.1.0 candidate's contract suite: on the isolated patched tree (see [host-patch/README.md](host-patch/README.md)) all suites pass (80/80 — unit 43, integration 1, cold 36); on a stock tree point `node_modules` at it and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` for the capability-missing diagnostics. Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Source and license
 

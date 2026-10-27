@@ -20,6 +20,7 @@
   ],
   "peerDependencies": {
     "@deepseek-ai/dsh-commands": "*",
+    "@deepseek-ai/dsh-session": "*",
     "@deepseek-ai/dsh-subagent": "*",
     "@deepseek-ai/dsh-tools": "*",
     "@deepseek-ai/schemastery": "*"

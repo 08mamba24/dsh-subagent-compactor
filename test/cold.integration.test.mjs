@@ -27,7 +27,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { pluginRecordOf } from "@deepseek-ai/dsh-session";
 import { withComposition, waitFor, readEvents, settleChild, startChild, PROVIDER, MODEL, CHILD_MODEL } from "./helpers.mjs";
+
+const BATCH_RECORD_TYPE = "plugin:local/dsh-subagent-compactor/batch-report";
 
 const signal = () => new AbortController().signal;
 
@@ -1245,16 +1248,23 @@ test("batch: abort mid-run stops unstarted items and keeps finished results", as
 			assert.match(execution.text, /not-started: 2/);
 			assert.match(execution.text, new RegExp(ids[0]));
 		} else {
-			// The command result was lost to the host's abort semantics, but the
-			// finished report must stay retrievable: the bare listing surfaces
-			// the last batch report once the background operation settles.
+			// The command result was lost to the host's abort semantics; the
+			// finished receipt must stay retrievable: the bare listing shows
+			// this parent's latest non-clean receipt, and the report entry
+			// returns the same per-item data by batch id.
 			const listingText = await waitFor(async () => {
 				const listing = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
 				const text = listing.result?.text ?? "";
-				return /Last batch report/.test(text) ? text : undefined;
+				return /Last unclean batch report \(batch br-/.test(text) ? text : undefined;
 			}, 8000);
 			assert.match(listingText, /not-started: 2/);
 			assert.match(listingText, new RegExp(ids[0]));
+			const batchId = /br-[0-9a-f]+/.exec(listingText)?.[0];
+			assert.notEqual(batchId, undefined);
+			const receipt = await ctx.commands.execute(parent, `/subagent-compact report ${batchId}`, [], signal());
+			assert.equal(receipt.result.kind, "success", receipt.result.text);
+			assert.match(receipt.result.text, /not-started: 2/);
+			assert.match(receipt.result.text, new RegExp(ids[0]));
 			for (const id of ids.slice(1)) {
 				const log = await readEvents(ctx, id);
 				assert.equal(log.filter((event) => event.type === "compaction/summary").length, 0, `${id} was never started`);
@@ -1377,6 +1387,148 @@ test("batch: cancelling while the catalog read resolves is batch-cancelled, neve
 		} finally {
 			service.listChildren = original;
 		}
+	});
+});
+
+// Batch review R2: receipts are durable plugin records scoped to their OWN
+// parent session — no cross-parent leak, no overwrite by later runs, survival
+// across plugin reload and parent restore, and a known non-empty snapshot is
+// never discarded on cancel.
+
+test("batch: cancelling after a NON-EMPTY catalog read resolves keeps the known snapshot", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-cancel-known-parent");
+		const ids = [];
+		for (let index = 0; index < 2; index += 1) ids.push(await settleTwoTurnChild(ctx, parent, fake));
+		fake.state.mode = "summarize";
+		const service = ctx.subagents;
+		const original = service.listChildren;
+		service.listChildren = async (parentId, _signal) => {
+			await new Promise((resolve) => setTimeout(resolve, 80));
+			return original.call(service, parentId, undefined);
+		};
+		try {
+			const controller = new AbortController();
+			const tool = ctx.tools.get("compact_all_subagents");
+			const run = tool.execute({}, { agent: parent, signal: controller.signal });
+			setTimeout(() => controller.abort(new Error("user cancelled")), 20);
+			const result = await run;
+			assert.equal(result.outcome, "batch-cancelled", result.text);
+			assert.equal(result.total, 2, "the resolved snapshot is known knowledge, not discarded");
+			assert.equal(result.not_started, 2);
+			for (const id of ids) assert.match(result.text, new RegExp(`${id}: not-started`));
+			assert.equal(fake.state.requests.filter((request) => request.mode === "summarize").length, 0, "no engine call was started");
+		} finally {
+			service.listChildren = original;
+		}
+	});
+});
+
+test("batch: receipts are scoped to their own parent — no leak, no cross-parent overwrite", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parentA = await makeParent(ctx, "batch-scope-A");
+		const parentB = await makeParent(ctx, "batch-scope-B");
+		const childA = await settleTwoTurnChild(ctx, parentA, fake);
+		fake.state.mode = "summarize-fail";
+		const failed = await ctx.commands.execute(parentA, "/subagent-compact --all", [], signal());
+		assert.equal(failed.result.kind, "error");
+		assert.match(failed.result.text, /\(all-failed\)/);
+		const batchId = /br-[0-9a-f]+/.exec(failed.result.text)?.[0];
+		assert.notEqual(batchId, undefined, "the returned batch text carries its receipt id");
+		// Parent B has an empty catalog and a clean history of its own: its
+		// listing must not surface A's child ids, failures, or receipt.
+		const foreignListing = await ctx.commands.execute(parentB, "/subagent-compact", [], signal());
+		assert.ok(!foreignListing.result.text.includes(childA), "B's listing must not leak A's child id");
+		assert.ok(!/batch br-/.test(foreignListing.result.text), "B's listing must not show A's receipt");
+		const foreignReport = await ctx.commands.execute(parentB, `/subagent-compact report ${batchId}`, [], signal());
+		assert.equal(foreignReport.result.kind, "error");
+		assert.match(foreignReport.result.text, /No batch receipt/);
+		// B's own later run must not erase A's unread failure receipt.
+		const emptyB = await ctx.commands.execute(parentB, "/subagent-compact --all", [], signal());
+		assert.equal(emptyB.result.kind, "success");
+		const aListing = await ctx.commands.execute(parentA, "/subagent-compact", [], signal());
+		assert.match(aListing.result.text, /Last unclean batch report \(batch br-/, "A's unread receipt survives B's run");
+		assert.match(aListing.result.text, new RegExp(childA));
+		assert.equal(batchId, /br-[0-9a-f]+/.exec(aListing.result.text)?.[0], "the surviving receipt is the SAME batch");
+	});
+});
+
+test("batch: receipts persist per parent, survive reload, and are never overwritten by later runs", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-persist-parent");
+		await settleTwoTurnChild(ctx, parent, fake);
+		await settleTwoTurnChild(ctx, parent, fake);
+		// A failed run, then a clean run: append-only history keeps both.
+		fake.state.mode = "summarize-fail";
+		const failed = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.match(failed.result.text, /\(all-failed\)/);
+		const failedId = /br-[0-9a-f]+/.exec(failed.result.text)?.[0];
+		fake.state.mode = "summarize";
+		const clean = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.equal(clean.result.kind, "success", clean.result.text);
+		const cleanId = /br-[0-9a-f]+/.exec(clean.result.text)?.[0];
+		assert.notEqual(cleanId, failedId);
+		// The bare listing shows the latest NON-CLEAN receipt: the clean run
+		// neither replaces nor hides it.
+		const listing = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
+		assert.match(listing.result.text, /Last unclean batch report \(batch br-/);
+		assert.equal(failedId, /br-[0-9a-f]+/.exec(listing.result.text)?.[0]);
+		// Both receipts stay retrievable by id — including the clean one.
+		const failedReceipt = await ctx.commands.execute(parent, `/subagent-compact report ${failedId}`, [], signal());
+		assert.equal(failedReceipt.result.kind, "success", failedReceipt.result.text);
+		assert.match(failedReceipt.result.text, /\(all-failed\)/);
+		const cleanReceipt = await ctx.commands.execute(parent, `/subagent-compact report ${cleanId}`, [], signal());
+		assert.equal(cleanReceipt.result.kind, "success", cleanReceipt.result.text);
+		assert.match(cleanReceipt.result.text, /\(completed\)/);
+		// The receipts are durable plugin records in the parent's own log.
+		const durable = await ctx.sessionQuery.readSession(parent.id);
+		const records = durable.events.map((event) => pluginRecordOf(event)).filter((record) => record?.type === BATCH_RECORD_TYPE);
+		assert.equal(records.length, 2, "both receipts persisted in the parent session log");
+		assert.deepEqual(records.map((record) => record.data.batchId).sort(), [failedId, cleanId].sort());
+		// A plugin-only reload keeps them readable: nothing in the plugin is
+		// the source of truth.
+		await ctx.compactorFiber.dispose();
+		ctx.compactorFiber = await ctx.plugin(await import("../index.js"), { waitForIdle: true });
+		const afterReload = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
+		assert.match(afterReload.result.text, /Last unclean batch report \(batch br-/);
+		assert.equal(failedId, /br-[0-9a-f]+/.exec(afterReload.result.text)?.[0]);
+	});
+});
+
+test("batch: cancel after the first child compacted keeps the full receipt — kept, cancelled, not started", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-partial-cancel-parent");
+		const ids = [];
+		for (let index = 0; index < 3; index += 1) ids.push(await settleTwoTurnChild(ctx, parent, fake));
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 300;
+		const controller = new AbortController();
+		const run = ctx.commands.execute(parent, "/subagent-compact --all", [], controller.signal);
+		// Abort only once the FIRST child's summary is durably persisted AND
+		// the second child's summary request is in flight — not merely after
+		// "some request" — so compacted 1 / cancelled 1 / not-started 1 is exact.
+		await waitFor(async () => {
+			const firstLog = await readEvents(ctx, ids[0]);
+			return firstLog.some((event) => event.type === "compaction/summary") && fake.state.requests.filter((request) => request.mode === "summarize").length >= 2;
+		}, 8000);
+		controller.abort(new Error("user cancelled"));
+		const execution = await run.then(
+			(settled) => settled.result,
+			(error) => ({ kind: "error", text: String(error?.message ?? error) })
+		);
+		assert.equal(execution.kind, "error", "a cancelled batch never reports success");
+		const listingText = await waitFor(async () => {
+			const listing = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
+			const text = listing.result?.text ?? "";
+			return /Last unclean batch report \(batch br-/.test(text) ? text : undefined;
+		}, 8000);
+		assert.match(listingText, /\(batch-cancelled\) — total 3: compacted 1, nothing-to-compact 0, failed 0, cancelled 1, not-started: 1\./, listingText);
+		for (const id of ids) assert.match(listingText, new RegExp(id));
+		const batchId = /br-[0-9a-f]+/.exec(listingText)?.[0];
+		const receipt = await ctx.commands.execute(parent, `/subagent-compact report ${batchId}`, [], signal());
+		assert.match(receipt.result.text, /compacted 1/);
+		assert.equal((await readEvents(ctx, ids[0])).filter((event) => event.type === "compaction/summary").length, 1, "the first child's compaction is kept");
+		assert.equal((await readEvents(ctx, ids[2])).filter((event) => event.type === "compaction/summary").length, 0, "the third child never started");
 	});
 });
 

@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Session } from "@deepseek-ai/dsh-session";
 import { apply, inject, name as pluginName, Config } from "../index.js";
 
 class ManualError extends Error {
@@ -415,7 +416,7 @@ test("pending listing is cancelled by plugin unload through the fused signal", a
 
 test("command declares input so Desktop's UI claims parameterized invocations", async () => {
 	const harness = makeHarness({ agent: makeAgent() });
-	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id>]");
+	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id> | report <batch-id>]");
 	// Mirror of the real Desktop claim predicate
 	// (dsh-client-ui-commands/lib/client.js:1661-1665): a non-bare line is
 	// claimed only when the definition declares `input`; otherwise it falls
@@ -716,7 +717,7 @@ test("cold: an aborted maintenance settles as a clean cancellation", async () =>
 
 test("command declares input so Desktop's UI claims parameterized invocations", async () => {
 	const harness = makeHarness({ agent: makeAgent() });
-	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id>]");
+	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id> | report <batch-id>]");
 	// Mirror of the real Desktop claim predicate
 	// (dsh-client-ui-commands/lib/client.js:1661-1665): a non-bare line is
 	// claimed only when the definition declares `input`; otherwise it falls
@@ -734,8 +735,11 @@ test("command declares input so Desktop's UI claims parameterized invocations", 
 // ---------------------------------------------------------------------------
 // Batch unit tests: runner decision table on stub contexts.
 
-function makeBatchHarness({ children, agentsById = new Map(), enginesById = new Map(), maintenanceById = new Map() } = {}) {
-	const caller = { id: "parent-1" };
+function makeBatchHarness({ children, agentsById = new Map(), enginesById = new Map(), maintenanceById = new Map(), callerSession = true } = {}) {
+	// A real detached Session so batch receipts exercise the actual
+	// appendPluginRecord/pluginRecordOf round trip; callerSession:false covers
+	// compositions whose caller cannot record receipts.
+	const caller = { id: "parent-1", ...(callerSession ? { session: Session.create("parent-1") } : {}) };
 	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
 	const maintenanceCalls = [];
 	const liveAgents = agentsById;
@@ -760,13 +764,25 @@ function makeBatchHarness({ children, agentsById = new Map(), enginesById = new 
 					return engine(agent, signal);
 				}
 			};
-			if (serviceName === "sessionQuery") return { observeSession: async (id) => ({
-				header: { id, parentSession: caller.id },
-				inheritedEventCount: 0,
-				events: Object.freeze([{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "continuable", provider: "spawn", label: "w" } }]),
-				projections: { values: { inbox: { "next-turn": [], "next-step": [] } } },
-				[Symbol.dispose]() {}
-			}) };
+			if (serviceName === "sessions") return { flush: async () => {} };
+			if (serviceName === "sessionQuery") return { observeSession: async (id) => {
+				if (id === caller.id) {
+					return {
+						header: { id, parentSession: caller.id },
+						inheritedEventCount: 0,
+						events: Object.freeze([...(caller.session?.log ?? [])]),
+						projections: { values: {} },
+						[Symbol.dispose]() {}
+					};
+				}
+				return {
+					header: { id, parentSession: caller.id },
+					inheritedEventCount: 0,
+					events: Object.freeze([{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "continuable", provider: "spawn", label: "w" } }]),
+					projections: { values: { inbox: { "next-turn": [], "next-step": [] } } },
+					[Symbol.dispose]() {}
+				};
+			} };
 			return undefined;
 		},
 		commands: { register(d) { registrations.commands.push(d); return () => {}; } },
@@ -811,7 +827,7 @@ test("batch: an all-failing catalog classifies as all-failed", async () => {
 	assert.equal(result.total, 2);
 });
 
-test("batch: a not-clean batch report stays retrievable through the bare listing", async () => {
+test("batch: a not-clean receipt stays retrievable through the bare listing and the report entry", async () => {
 	const engines = new Map([
 		["a", async () => { const e = new Error("child cancelled"); e.name = "ManualCompactionError"; e.code = "cancelled"; throw e; }],
 		["b", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]
@@ -820,19 +836,54 @@ test("batch: a not-clean batch report stays retrievable through the bare listing
 	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
 	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
 	assert.equal(result.outcome, "partial-failure");
+	assert.match(result.text, /batch receipt br-[0-9a-f]+ persisted/, "the in-band text carries the receipt id and durability");
 	/* A cancelled command's own result is dropped by the host's abort
-	 * semantics; the finished report must survive on the plugin and stay
-	 * retrievable through the bare /subagent-compact listing. */
+	 * semantics; the durable receipt in the caller's own session log must
+	 * stay retrievable through the bare listing and by id. */
 	const listing = await harness.registrations.commands[0].handler(invocation(harness, ""));
-	assert.match(listing.text, /Last batch report/);
+	assert.match(listing.text, /Last unclean batch report \(batch br-/);
 	assert.match(listing.text, /partial-failure/);
 	assert.match(listing.text, /cancelled 1/);
+	const batchId = /br-[0-9a-f]+/.exec(listing.text)?.[0];
+	const receipt = await harness.registrations.commands[0].handler(invocation(harness, `report ${batchId}`));
+	assert.equal(receipt.kind, "success");
+	assert.match(receipt.text, /partial-failure/);
+	assert.match(receipt.text, /a: cancelled/);
+	// A later clean batch does not replace or hide the non-clean receipt.
+	engines.set("a", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 }));
+	const second = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(second.outcome, "completed");
+	const listingAfterClean = await harness.registrations.commands[0].handler(invocation(harness, ""));
+	assert.match(listingAfterClean.text, /Last unclean batch report \(batch br-/);
+	assert.equal(batchId, /br-[0-9a-f]+/.exec(listingAfterClean.text)?.[0], "the non-clean receipt is still the one shown");
+});
+
+test("batch: report entry — usage, unknown id, and cross-session scoping", async () => {
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }], enginesById: new Map([["a", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]]) });
+	const command = harness.registrations.commands[0];
+	const badUsage = await command.handler(invocation(harness, "report"));
+	assert.equal(badUsage.kind, "error");
+	assert.match(badUsage.text, /Usage/);
+	const unknown = await command.handler(invocation(harness, "report br-deadbeef"));
+	assert.equal(unknown.kind, "error");
+	assert.match(unknown.text, /No batch receipt/);
+});
+
+test("batch: when the caller cannot record receipts, the text says so instead of claiming persistence", async () => {
+	const engines = new Map([["a", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]]);
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }], enginesById: engines, callerSession: false });
+	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "completed");
+	assert.match(result.text, /batch receipt br-[0-9a-f]+ NOT persisted: /, "persistence failure is exposed, never claimed");
+	const listing = await harness.registrations.commands[0].handler(invocation(harness, ""));
+	assert.ok(!/Last unclean batch report/.test(listing.text), "nothing durable exists to list");
 });
 
 test("batch: registers the --all hint and the batch tool", async () => {
 	const harness = makeBatchHarness({});
 	const command = harness.registrations.commands[0];
-	assert.equal(command.input?.hint, "[--all | <subagent-session-id>]");
+	assert.equal(command.input?.hint, "[--all | <subagent-session-id> | report <batch-id>]");
 	// Mirror of the Desktop claim predicate: a parameterized line is claimed
 	// only when the definition declares `input`.
 	const desktopClaims = (definition, line) => {
