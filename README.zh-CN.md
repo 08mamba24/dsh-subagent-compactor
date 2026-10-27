@@ -2,9 +2,11 @@
 
 [English](README.md)
 
+**状态：1.1.0 为未发布候选。** 下文的冷压缩能力已通过代码复审但**尚未发布**：它依赖候选宿主维护能力（`ctx.subagents.runMaintenance`，见 [host-patch/](host-patch/README.md)）。在原版 DSH 0.2.1-rc.2 运行时上，插件会明确拒绝冷压缩（`host-capability-missing`），只有 live 窗口压缩可用。当前已发布版本为 **1.0.1**（仅 live 窗口）。
+
 在 DSH Desktop 的父会话中，手动压缩直接子智能体的历史——子智能体仍在运行时可以压缩，**已经结束的 continuable 子智能体也可以按 session id 直接压缩**。插件复用子智能体自己的压缩引擎，提供斜杠命令和模型工具。
 
-**插件版本：** `1.1.0` · **包名：** `@local/dsh-subagent-compactor` · **已验证环境：** Desktop `0.12.1` / Harness `0.2.1-rc.2`。
+**候选版本：** `1.1.0`（未发布）· **包名：** `@local/dsh-subagent-compactor` · **验证环境：** Desktop `0.12.1` / Harness `0.2.1-rc.2`（live 窗口为发布版运行时验证；冷路径为隔离补丁树验证）。
 
 ## 1.1.0 变化
 
@@ -12,27 +14,23 @@
 
 ## 安装
 
+### 已发布版本（1.0.1，live 窗口压缩）
+
 1. 打开 DSH Desktop → **插件 → 添加插件**。
 2. 在“包名或地址”中粘贴：
 
    ```text
-   https://github.com/08mamba24/dsh-subagent-compactor.git#v1.1.0
+   https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1
    ```
 
-3. 点击 **安装 → 立即启用**，确认 `@local/dsh-subagent-compactor` `1.1.0` 正在运行。
+3. 点击 **安装 → 立即启用**，确认 `@local/dsh-subagent-compactor` `1.0.1` 正在运行。
 4. 替换已有安装后，完整退出并重新打开 Desktop。实测版本中，仅刷新界面可能保留旧命令定义。
 
 如果之前从本地目录安装过同名包，先卸载旧来源，再安装 GitHub 版本。安装由 Desktop 插件管理器处理，无需手动修改 profile，也无需发布 npm 包。`private: true` 限制的是 npm 发布，不影响 Git 来源安装。
 
-也可以先下载源码，再在“添加插件”里选择仓库根目录：
+### 1.1.0 候选（没有可安装的发布 tag）
 
-```sh
-git clone https://github.com/08mamba24/dsh-subagent-compactor.git
-cd dsh-subagent-compactor
-git checkout v1.1.0
-```
-
-需要固定不可变版本时，将安装地址中的 `v1.1.0` 换成本仓库的完整 40 位 commit。
+1.1.0 候选**没有 tag、没有发布**：它以 `feature/cold-session-compaction` 分支加候选宿主补丁的形式存在。不要把它装进真实 Desktop 并期待冷压缩——原版运行时缺少所需能力，插件会明确拒绝冷压缩。评估候选请按 [host-patch/README.md](host-patch/README.md) 的隔离验证树进行。引用时请使用分支头部的完整 40 位 commit，而不是不存在的 tag。
 
 ## 使用
 

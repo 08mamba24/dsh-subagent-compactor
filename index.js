@@ -8,17 +8,19 @@
  * - `compact_subagent` tool — same operation from inside a model turn.
  *
  * A target that is still live is authorized through runtime ownership
- * (`agents.isOwnedBy`). A target that already finished is restored from
- * persistence through the public `agents.resume` + the child's own durable
- * `subagent/descriptor` (the same reconstruction the subagent manager uses
- * for continuation), compacted in a maintenance window, and released — no
- * new task is submitted and no live window is raced. Release is a cutoff:
- * input accepted through the published Agent's public surface during the
- * window is fully processed before the handle goes away, and pending input
- * found in the loaded snapshot strands the handle instead of being
- * cancelled. The engine is resolved on exactly one of two lawful planes
- * (preset `serviceFor`, or Host `compaction` when the composition has no
- * preset registry); there is no cross-realm fallback.
+ * (`agents.isOwned`). A target that already finished is compacted through
+ * the host's manager-owned maintenance capability
+ * (`ctx.subagents.runMaintenance`, provided by the candidate host patch in
+ * host-patch/): the manager restores the child exactly like a continuation,
+ * keeps it resident so normal routes deliver, runs the engine's compactNow
+ * as the single maintenance job, and hands the activation to the ordinary
+ * settlement lifecycle (loop-level admission cutoff, preserve-and-wait for
+ * pending input, writer release). This plugin holds no restored handle and
+ * never submits a task. On a stock runtime without the capability the cold
+ * path refuses explicitly (host-capability-missing). The engine is resolved
+ * on exactly one of two lawful planes (preset `serviceFor`, or Host
+ * `compaction` when the composition has no preset registry); there is no
+ * cross-realm fallback.
  *
  * @module @local/dsh-subagent-compactor
  */

@@ -60,12 +60,26 @@ GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.
    the writer). `SubagentRuntime.runMaintenance` delegates with the same
    exact-live-parent check as `startActivation`.
 
+## Scope of verification (honest boundaries)
+
+- Source baseline: `deepseek-ai/deepseek-harness` tag `dsh-v0.2.1-rc.2`, commit `687f282e8625c6b8d11ff58211a90524be2e4317` (clean worktree; `0001` is its full diff).
+- Affected host packages: **three** — `@deepseek-ai/dsh-agent-loop` (cutoff, claimed-batch restore, keepInbox teardown), `@deepseek-ai/dsh-subagent` (`resumeActivation`, `runMaintenance`, lossless stop), and `@deepseek-ai/dsh-agent` (public type declarations only: `Agent.closeInput`, `AgentHandle.dispose(options)`; no runtime change).
+- Type checking: targeted tsc program over all six affected files compared against the clean baseline (`/tmp/dsh-r4-full-type-review.cjs` method): baseline 6 = patched 6, zero NEW diagnostics (the six are external-dependency diagnostics shared with the clean tree). A **complete monorepo build has not been run**; that remains open for the upstream route.
+- Runtime validation is the isolated patched tree only (fake LLM, temp storage). Real-Desktop cold-compaction acceptance has not been run; the 1.0.1 Desktop acceptance covered the live-window behavior only.
+
+## Upstream PR draft
+
+See [UPSTREAM_PR_NOTES.md](UPSTREAM_PR_NOTES.md) — problem, candidate API, regression evidence, compatibility risk. Not submitted anywhere.
+
 ## Compatibility
 
 Stock runtime: the plugin reports `host-capability-missing` for cold
-compaction and live-window compaction is unaffected (all pre-existing
-suites pass unchanged on the stock tree). Patched runtime: all 55 tests
-pass, including the acceptance-contract regressions. The patch adds
+compaction and live-window compaction is unaffected (the pre-existing
+suites pass unchanged on the stock tree). Patched runtime: **59/59**
+tests pass across the full suites, including the acceptance-contract
+regressions; the type-only follow-up round (`d7dc960`) additionally ran a
+targeted 7/7 (R4 regressions, claim evidence, live-window integration)
+with no behavior change. The patch adds
 capability; it does not change existing paths except (a) a `close()` now
 also closes the agent's input surface at the same instant (post-close
 public input is rejected instead of being accepted-then-cancelled), and
