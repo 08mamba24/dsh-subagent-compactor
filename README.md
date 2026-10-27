@@ -6,7 +6,9 @@
 
 Manually compact a direct subagent's history from its parent session in DSH Desktop — while the child is live, **or after it finished** by its session id. The plugin reuses the child's own compaction engine and provides a chat command and a model tool.
 
-**Candidate version:** `1.1.0` (unreleased) · **Package:** `@local/dsh-subagent-compactor` · **Validated against:** DSH Desktop `0.12.1` / Harness `0.2.1-rc.2` (live window: released runtime; cold path: isolated patched tree).
+**Candidate version:** `1.1.0` (unreleased) · **Package:** `@local/dsh-subagent-compactor` · **Validated against:** DSH Desktop `0.12.1` / Harness `0.2.1-rc.2` (live window: released runtime; cold and batch paths: independent patched Desktop copy).
+
+[Real Desktop batch acceptance](docs/acceptance/2026-10-27-batch/acceptance.md): both settled children compacted through the command and model tool, continued on the same IDs with remembered facts, and retained both receipts through a full app restart. This verifies the candidate host patch, not stock Desktop support.
 
 ## What changed in 1.1.0
 
@@ -107,7 +109,7 @@ ln -s "$DSH_MODULES" node_modules
 node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
 ```
 
-The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. `test/cold.integration.test.mjs` is the 1.1.0 candidate's contract suite: on the isolated patched tree (see [host-patch/README.md](host-patch/README.md)) all suites pass (80/80 — unit 43, integration 1, cold 36); on a stock tree point `node_modules` at it and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs` for the capability-missing diagnostics. Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
+The integration suites use isolated temporary storage and a local fake model endpoint. They make no external model calls and delete their test storage afterward. The last complete run on the isolated patched tree was 82/82 (unit 44, integration 1, cold 37); the subsequent packaging-only change passed 45/45 unit tests, with no runtime code change. For stock capability-missing diagnostics, point `node_modules` at the stock tree and run `GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs`. Host setup: [host-patch/README.md](host-patch/README.md). Full evidence history: [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Source and license
 

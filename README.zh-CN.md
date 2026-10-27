@@ -6,7 +6,9 @@
 
 在 DSH Desktop 的父会话中，手动压缩直接子智能体的历史——子智能体仍在运行时可以压缩，**已经结束的 continuable 子智能体也可以按 session id 直接压缩**。插件复用子智能体自己的压缩引擎，提供斜杠命令和模型工具。
 
-**候选版本：** `1.1.0`（未发布）· **包名：** `@local/dsh-subagent-compactor` · **验证环境：** Desktop `0.12.1` / Harness `0.2.1-rc.2`（live 窗口为发布版运行时验证；冷路径为隔离补丁树验证）。
+**候选版本：** `1.1.0`（未发布）· **包名：** `@local/dsh-subagent-compactor` · **验证环境：** Desktop `0.12.1` / Harness `0.2.1-rc.2`（live 窗口为发布版运行时验证；冷路径与批量入口已在独立补丁版 Desktop 副本验收）。
+
+[真实 Desktop 批量验收记录](docs/acceptance/2026-10-27-batch/acceptance.md)：命令与模型工具均成功压缩两个已结束成员；原 ID 续接保留事实，完整重启后两份回执仍可查询。此结论验证候选宿主补丁，原版 Desktop 仍缺少冷维护能力。
 
 ## 1.1.0 变化
 

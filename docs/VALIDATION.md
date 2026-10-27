@@ -1,8 +1,20 @@
 # Validation record
 
-Plugin version: **1.1.0** (cold compaction feature branch, review round 4). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
+Plugin version: **1.1.0 unreleased candidate** (cold and batch compaction). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
 
-This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
+This record covers independent review, automated tests, and real Desktop acceptance. Selected screenshots and sanitized evidence from the synthetic batch acceptance are included below; credentials, raw conversations, machine configuration, and session logs remain outside the public repository. Historical sections describe the state at that review round.
+
+## Real Desktop batch acceptance — passed on the isolated patched copy
+
+Candidate `804c9d997cf27ff3711d073af4a893a8481dcdeb` installed and enabled through the copied Desktop's official plugin UI, with zod 4.4.3 resolved inside its active generation. Both fresh continuable children completed two substantive read-only rounds and were listed as `persisted (not loaded)` before compaction.
+
+- Human `/subagent-compact --all`: two compacted, zero failures; real parent command/run 89 and command/done 90. Both child summaries at seq 39, successful ends at 41.
+- Same-ID continuation: both remembered all three original facts without tools or answers supplied in the followup. Real input usage fell from 22,103 to 16,664 tokens and from 22,024 to 16,472 tokens. These differences include the summary and new continuation message.
+- Real model `compact_all_subagents({})`: call 134 / result 135; two compacted, zero failures, both child summaries at seq 58.
+- Full copied-app restart: process 12333 exited, fresh process 14995 started. Reports `br-24b4ed045cf5` and `br-9fd32335cb6c` were retrieved through UI commands at 143/144 and 145/146, with full text matching the physical domain records.
+- Fixture hashes and original installed Desktop ASAR hash remained unchanged. No session plugin records were used for receipts.
+
+See the [acceptance report](acceptance/2026-10-27-batch/acceptance.md) and [machine evidence](acceptance/2026-10-27-batch/evidence.json). This proves the reviewed candidate patch on an independent Desktop copy. Stock Harness still lacks `runMaintenance`; a complete host source build and the host distribution route remain open. No 1.1.0 tag or release exists.
 
 ## Batch review round 4 (code review APPROVED; Desktop install finding fixed)
 
