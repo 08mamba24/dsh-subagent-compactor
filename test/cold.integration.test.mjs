@@ -957,3 +957,136 @@ test("cold host capability: an aborted running turn keeps its claimed input exac
 		assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("CLAIM-SENTINEL")).length, 1, "the claimed input appears exactly once overall");
 	});
 });
+
+// ---------------------------------------------------------------------------
+// R4 host-capability regressions (review round 4 proofs, formalized).
+
+test("cold host capability: input claimed inside pre-step survives a keepInbox abort", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const handle = await ctx.agents.create({ sessionId: "r4-claim-abort", agentOptions: { provider: PROVIDER, model: MODEL } });
+		const agent = handle.agent;
+		try {
+			// Abort inside the pre-step waterfall: the sentinel is CLAIMED but
+			// the turn has not yet decided, let alone committed it.
+			const unhook = ctx.on("agent/pre-step", async (payload, next) => {
+				if (payload.agent === agent && payload.messages.some((message) => JSON.stringify(message).includes("PRESTEP-CLAIM-SENTINEL"))) {
+					agent.cancel({ kind: "parent" }, { keepInbox: true });
+				}
+				return next();
+			});
+			const input = createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "PRESTEP-CLAIM-SENTINEL: must remain durable after abort" }] });
+			agent.followup(input);
+			await agent.whenIdle();
+			unhook();
+
+			const observation = await ctx.sessionQuery.observeSession(agent.id);
+			let pending;
+			let log;
+			try {
+				pending = observation.projections?.values?.inbox;
+				log = [...observation.events];
+			} finally {
+				observation[Symbol.dispose]();
+			}
+			const committed = log.filter((event) => event.type === "user/message" && event.data.id === input.id).length;
+			const cancelled = log.filter((event) => event.type === "agent/inbox/spliced" && event.data.outcome === "canceled" && (event.data.removedCount ?? 0) > 0).length;
+			assert.ok(log.some((event) => event.type === "turn/end" && event.data.reason?.kind === "aborted"), "the turn records its abort");
+			assert.equal(cancelled, 0, "a keepInbox abort never durably cancels input");
+			const pendingHasIt = ((pending?.["next-turn"]?.length ?? 0) + (pending?.["next-step"]?.length ?? 0)) > 0;
+			assert.ok(committed === 1 || pendingHasIt, "the claimed sentinel is committed exactly once or durably pending — never lost");
+
+			// Either way it is processed exactly once afterwards.
+			fake.state.mode = "turn2";
+			agent.followup(createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "Drive the restored work." }] }));
+			await waitFor(async () => {
+				const events = await readEvents(ctx, agent.id);
+				return events.filter((event) => event.type === "user/message" && event.data.id === input.id).length === 1
+					&& events.some((event) => event.type === "assistant/message");
+			}, 8000);
+			const events = await readEvents(ctx, agent.id);
+			assert.equal(events.filter((event) => event.type === "user/message" && event.data.id === input.id).length, 1, "exactly once overall");
+		} finally {
+			await handle.dispose({ keepInbox: true }).catch(() => undefined);
+		}
+	});
+});
+
+test("cold host capability: a pre-step rejection stays blocked, not a TypeError", async () => {
+	await withComposition(async (ctx) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const handle = await ctx.agents.create({ sessionId: "r4-reject", agentOptions: { provider: PROVIDER, model: MODEL } });
+		const agent = handle.agent;
+		const errors = [];
+		const unerr = ctx.on("agent/error", (payload) => { if (payload.agent === agent) errors.push(payload.error?.message); });
+		const unhook = ctx.on("agent/pre-step", async (payload, next) => payload.agent === agent ? { kind: "reject" } : next());
+		try {
+			agent.followup(createUserMessage({ source: { kind: "user" }, content: [{ type: "text", text: "Should be rejected as blocked, not TypeError." }] }));
+			await agent.whenIdle();
+			const log = await readEvents(ctx, agent.id);
+			const ends = log.filter((event) => event.type === "turn/end").map((event) => event.data.reason?.kind);
+			assert.ok(ends.includes("blocked"), `the rejection ends the turn as blocked: ${JSON.stringify(ends)}`);
+			assert.equal(errors.filter((message) => /iterable|not a function|TypeError/i.test(message ?? "")).length, 0, "no TypeError may replace the rejection");
+		} finally {
+			unhook();
+			unerr();
+			await handle.dispose({ keepInbox: true }).catch(() => undefined);
+		}
+	});
+});
+
+test("cold host capability: the manager stop transaction preserves accepted input (drainChildren)", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r4-stop-parent");
+		fake.state.delayMs = 200;
+		const activation = await startChild(ctx, parent, "Work while I stop you");
+		const childId = activation.childId;
+		await waitFor(() => fake.state.requests.length > 0);
+		const agent = ctx.agents.get(childId);
+		const sentinel = createUserMessage({ source: { kind: "review-host" }, content: [{ type: "text", text: "STOP-PRESERVE-SENTINEL: survive the stop" }] });
+		agent.inject(sentinel);
+		assert.equal(agent.inbox.nextStep.some((message) => message.id === sentinel.id), true, "the injection was accepted");
+
+		await ctx.subagents.drainChildren(parent, [childId]);
+		await waitFor(() => ctx.agents.get(childId) === undefined, 8000);
+
+		const observation = await ctx.sessionQuery.observeSession(childId);
+		let pending;
+		let log;
+		try {
+			pending = observation.projections?.values?.inbox;
+			log = [...observation.events];
+		} finally {
+			observation[Symbol.dispose]();
+		}
+		const cancelled = log.filter((event) => event.type === "agent/inbox/spliced" && event.data.outcome === "canceled" && (event.data.removedCount ?? 0) > 0).length;
+		const pendingHasIt = [...(pending?.["next-turn"] ?? []), ...(pending?.["next-step"] ?? [])].some((message) => message.id === sentinel.id);
+		const committed = log.filter((event) => event.type === "user/message" && event.data.id === sentinel.id).length;
+		assert.equal(cancelled, 0, "the stop transaction never durably cancels accepted input");
+		assert.ok(pendingHasIt || committed === 1, "the accepted sentinel survives pending or committed exactly once");
+
+		// The same id continues normally and processes the sentinel exactly once.
+		fake.state.delayMs = 0;
+		fake.state.mode = "turn2";
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Continue after the stop." }], { signal: signal() });
+		await waitFor(async () => {
+			const events = await readEvents(ctx, childId);
+			const at = events.findIndex((event) => event.type === "user/message" && event.data.id === sentinel.id);
+			if (at < 0) return false;
+			const followAt = events.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("Continue after the stop."));
+			return followAt >= 0 && events.slice(followAt).some((event) => event.type === "assistant/message");
+		}, 8000);
+		const events = await readEvents(ctx, childId);
+		assert.equal(events.filter((event) => event.type === "user/message" && event.data.id === sentinel.id).length, 1, "exactly once overall");
+	});
+});
+
+test("cold host capability: runMaintenance succeeds without a signal", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "r4-nosignal-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+		const answer = await ctx.subagents.runMaintenance(parent, childId, { job: async () => 42 });
+		assert.equal(answer, 42, "an omitted signal is legal: the entry normalizes one internally");
+	});
+});

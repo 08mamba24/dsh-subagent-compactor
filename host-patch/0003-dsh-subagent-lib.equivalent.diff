@@ -1,5 +1,5 @@
 --- /tmp/dsh-asar/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-26 18:43:13
-+++ host-patched/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-27 14:31:34
++++ host-patched/node_modules/@deepseek-ai/dsh-subagent/lib/index.js	2026-10-27 15:17:19
 @@ -1706,6 +1706,7 @@
  	/** Close admission synchronously and share one release, including startup rollback. */
  	close(activation, release) {
@@ -17,6 +17,15 @@
  					const idle = activation.handle.agent.whenIdle();
  					const children = [...activation.ownedChildren].map((child) => this.resident.get(child)).filter((child) => child !== void 0);
  					const pending = [...this.materializations].filter((item) => item.lineage.includes(activation.handle.agent));
+@@ -2023,7 +2024,7 @@
+ 			failures.push(new SubagentError(`subagent "${childId}" activation teardown failed: ${detail(error)}`, "ACTIVATION_TEARDOWN_FAILED", { cause: error }));
+ 		}
+ 		try {
+-			if (activation.kind === "local") await activation.handle.dispose();
++			if (activation.kind === "local") await activation.handle.dispose({ keepInbox: true });
+ 			else await (externalDisposal ?? activation.run.dispose());
+ 		} catch (error) {
+ 			failures.push(new SubagentError(`subagent "${childId}" activation handle disposal failed: ${detail(error)}`, "ACTIVATION_TEARDOWN_FAILED", { cause: error }));
 @@ -2139,6 +2140,11 @@
  	* supplies every reconstruction input; no subagent provider is dispatched.
  	*/
@@ -55,7 +64,7 @@
  					kind: "local",
  					childId,
  					provider: descriptor.provider,
-@@ -2179,19 +2184,49 @@
+@@ -2179,19 +2184,51 @@
  						persona: descriptor.persona,
  						toolFilter: descriptor.toolFilter
  					},
@@ -89,29 +98,33 @@
 +	*/
 +	async runMaintenance(parent, childId, options) {
 +		this.assertAdmitting(parent);
++		const signal = options.signal ?? new AbortController().signal;
 +		const releaseHold = this.holdOwnership(parent, childId);
 +		try {
 +			return await this.locks.run(childId, async () => {
 +				if (this.resident.has(childId)) throw new SubagentError(`subagent "${childId}" is already resident; wait for its current activity to settle`, "DUPLICATE_CHILD");
-+				const activation = await this.resumeActivation(parent, childId, options.signal, "caller");
++				const activation = await this.resumeActivation(parent, childId, signal, "caller");
++				if (activation.kind !== "local") throw new SubagentError(`subagent "${childId}" restored through an unsupported backend for maintenance`, "NOT_RESUMABLE");
 +				try {
-+					return await options.job(activation.handle.agent, options.signal);
++					return await options.job(activation.handle.agent, signal);
 +				} finally {
 +					this.announce(activation);
 +				}
 +			});
 +		} catch (error) {
-+			options.signal?.throwIfAborted();
++			signal.throwIfAborted();
 +			throw error;
 +		} finally {
 +			releaseHold();
  		}
  	}
  	/** Admit a materialized child, commit its creation fact, and release it on failure. */
-@@ -3056,6 +3091,21 @@
+@@ -3054,6 +3091,21 @@
+ 		*/
+ 		async waitForChildren(parent) {
  			return this.manager?.waitForChildren(parent) ?? false;
- 		}
- 		/**
++		}
++		/**
 +		* Run one maintenance job on a persisted continuable child through the
 +		* manager's activation lifecycle (resident restore, settlement held back
 +		* for the job, ordinary settlement afterwards). See
@@ -125,8 +138,6 @@
 +			const manager = this.requireManager();
 +			if (this.ctx.get("agents")?.get(parent.id) !== parent) throw new SubagentError("subagent maintenance requires the exact live parent agent", "UNAUTHORIZED");
 +			return manager.runMaintenance(parent, childId, options);
-+		}
-+		/**
+ 		}
+ 		/**
  		* Steer one model-authored message to the sender's direct parent or direct
- 		* continuable child. A running target admits it at the nearest step boundary;
- 		* an idle target starts a turn, and an absent direct child cold-resumes from

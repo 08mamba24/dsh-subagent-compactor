@@ -1,8 +1,8 @@
 diff --git a/packages/core/agent-loop/src/agent.ts b/packages/core/agent-loop/src/agent.ts
-index adf2e33ddc..80eae268ee 100644
+index adf2e33ddc..74856e6f52 100644
 --- a/packages/core/agent-loop/src/agent.ts
 +++ b/packages/core/agent-loop/src/agent.ts
-@@ -118,6 +118,17 @@ export class ReactLoopAgent implements Agent {
+@@ -118,6 +118,24 @@ export class ReactLoopAgent implements Agent {
    private readonly systemPrompt: SystemPromptProjection
    /** Identities fully frozen by this loop; weak references do not retain replaced history. */
    private readonly frozenMessages = new WeakSet<Message>()
@@ -17,10 +17,17 @@ index adf2e33ddc..80eae268ee 100644
 +  private inputClosed = false
 +  /** Set by `cancel(cause, { keepInbox: true })`: an aborted turn restores its claimed-but-uncommitted batch. */
 +  private abortKeptInbox = false
++  /**
++   * Messages claimed by the running turn but not yet committed to the log as
++   * user/message events. Registered synchronously AT the claim (inside
++   * preStep, before any await), so an abort during assembly, the pre-step
++   * waterfall, or the step itself still knows exactly what to restore.
++   */
++  private claimedForRestore: UserMessage[] = []
  
    constructor(
      private loopCtx: Context,
-@@ -152,6 +163,12 @@ export class ReactLoopAgent implements Agent {
+@@ -152,6 +170,12 @@ export class ReactLoopAgent implements Agent {
    }
  
    send(message: UserMessage, target: InboxTarget, wakeup: boolean): void {
@@ -33,7 +40,7 @@ index adf2e33ddc..80eae268ee 100644
      // Waking input cannot join an aborted activity, so it starts the next turn.
      // Captured before the insertion so a reentrant cancel from a splice observer cannot reclassify it.
      const wakingAfterAbort = wakeup && this.phase.kind !== 'idle' && this.phase.abort.signal.aborted
-@@ -160,6 +177,16 @@ export class ReactLoopAgent implements Agent {
+@@ -160,6 +184,16 @@ export class ReactLoopAgent implements Agent {
      if (wakeup) this.wakeDriver(wakingAfterAbort)
    }
  
@@ -50,7 +57,7 @@ index adf2e33ddc..80eae268ee 100644
    followup(input: UserMessage): void {
      this.send(input, 'next-turn', true)
    }
-@@ -173,6 +200,9 @@ export class ReactLoopAgent implements Agent {
+@@ -173,6 +207,9 @@ export class ReactLoopAgent implements Agent {
    }
  
    cancel(cause: AgentCancelCause, options: CancelOptions = {}): void {
@@ -60,7 +67,17 @@ index adf2e33ddc..80eae268ee 100644
      if (!options.keepInbox) {
        this.inbox.clear()
        if (this.phase.kind !== 'idle') this.phase.wakeRequested = false
-@@ -311,11 +341,24 @@ export class ReactLoopAgent implements Agent {
+@@ -269,6 +306,9 @@ export class ReactLoopAgent implements Agent {
+     if (this.phase.kind !== 'running') throw new Error(`agent "${this.id}": pre-step outside running phase`)
+     const signal = this.phase.abort.signal
+     const claimed = this.inbox.claim(target, position.turn)
++    for (const message of claimed) {
++      if (message.source.kind !== 'runtime-context') this.claimedForRestore.push(message)
++    }
+     const assembly = await this.loopCtx.systemPrompt.assemble(assembleContextFor(this, signal))
+     signal.throwIfAborted()
+     const decision = await this.dispatch.waterfall(
+@@ -311,6 +351,16 @@ export class ReactLoopAgent implements Agent {
      phase.turn = turn
      let turnEnds: TurnEndReason | null = null
      let target: InboxTarget = 'next-turn'
@@ -69,7 +86,7 @@ index adf2e33ddc..80eae268ee 100644
 +    // reached the model-visible history as a user/message event. An abort
 +    // under `keepInbox` restores the difference to the inbox instead of
 +    // dropping claimed work that never reached the model.
-+    const claimedThisTurn: UserMessage[] = []
++    this.claimedForRestore = []
 +    const committedIds = new Set<UserMessage['id']>()
 +    const stopCommitted = this.ctx.on('session/event', (session, event) => {
 +      if (session === this.session && event.type === 'user/message') committedIds.add(event.data.id)
@@ -77,29 +94,22 @@ index adf2e33ddc..80eae268ee 100644
      try {
        while (true) {
          signal.throwIfAborted()
-         const step = phase.step + 1
-         const decision = await this.preStep(target, { turn, step })
-+        for (const message of decision.messages) {
-+          if (message.source.kind !== 'runtime-context') claimedThisTurn.push(message)
-+        }
-         if (decision.kind === 'reject') {
-           turnEnds = { kind: 'blocked' }
-           return false
-@@ -370,6 +413,10 @@ export class ReactLoopAgent implements Agent {
+@@ -370,6 +420,10 @@ export class ReactLoopAgent implements Agent {
        const cause = abortedCancelCause(signal)
        if (cause !== undefined) {
          turnEnds = { kind: 'aborted', reason: cause }
 +        if (this.abortKeptInbox) {
-+          const restore = claimedThisTurn.filter((message) => !committedIds.has(message.id))
++          const restore = this.claimedForRestore.filter((message) => !committedIds.has(message.id))
 +          for (let index = restore.length - 1; index >= 0; index -= 1) this.inbox.prepend('next-turn', restore[index])
 +        }
          throw error
        }
        // Every failure is structured: an `LlmError` keeps its facts, anything
-@@ -382,6 +429,7 @@ export class ReactLoopAgent implements Agent {
+@@ -382,6 +436,8 @@ export class ReactLoopAgent implements Agent {
        }
        this.throwError(error)
      } finally {
++      this.claimedForRestore = []
 +      stopCommitted()
        try {
          // oxlint-disable-next-line typescript/no-non-null-assertion -- every exit assigns a turn ending
@@ -156,6 +166,47 @@ index ca4532af8c..2f83d20387 100644
        } finally {
          await Promise.all([unfollowOwner(), unfollowScope?.()])
        }
+diff --git a/packages/core/agent/src/index.ts b/packages/core/agent/src/index.ts
+index dd8d09e6b7..17b3c7500d 100644
+--- a/packages/core/agent/src/index.ts
++++ b/packages/core/agent/src/index.ts
+@@ -159,7 +159,14 @@ export interface ResumeAgentOptions {
+  */
+ export interface AgentHandle {
+   agent: Agent
+-  dispose(): Promise<void>
++  /**
++   * Release this agent. `keepInbox: true` preserves accepted input: parked
++   * inbox messages stay durable for a later continuation, and an aborted
++   * running turn restores its claimed-but-uncommitted batch instead of
++   * dropping it. The teardown closes the public input surface first, so
++   * input racing the release is rejected before acceptance either way.
++   */
++  dispose(options?: { keepInbox?: boolean }): Promise<void>
+ }
+ 
+ /**
+diff --git a/packages/core/agent/src/runtime-types.ts b/packages/core/agent/src/runtime-types.ts
+index 0fa89afc05..5e3cd9f36d 100644
+--- a/packages/core/agent/src/runtime-types.ts
++++ b/packages/core/agent/src/runtime-types.ts
+@@ -182,6 +182,16 @@ declare module './types.ts' {
+    */
+     cancel(cause: AgentCancelCause, options?: CancelOptions): void
+ 
++    /**
++   * Close this agent's public input surface synchronously. Every public input
++   * (`followup`/`steer`/`inject`, and therefore every manager delivery)
++   * checks the cutoff before its durable enqueue; a closed input rejects
++   * new work before acceptance instead of accepting and later cancelling it.
++   * Callers that own a close transaction set this in the same synchronous
++   * section as their own closing state.
++   */
++    closeInput(): void
++
+     /**
+    * Resolve after the current whole-agent activity reaches quiescence. This
+    * follows replacement work started before the observed driver retires,
 diff --git a/packages/subagent/subagent/src/index.ts b/packages/subagent/subagent/src/index.ts
 index 119cc26a6a..a11cfdde46 100644
 --- a/packages/subagent/subagent/src/index.ts
@@ -190,7 +241,7 @@ index 119cc26a6a..a11cfdde46 100644
     * Steer one model-authored message to the sender's direct parent or direct
     * continuable child. A running target admits it at the nearest step boundary;
 diff --git a/packages/subagent/subagent/src/manager.ts b/packages/subagent/subagent/src/manager.ts
-index b89732c29e..8ac2355a87 100644
+index b89732c29e..e5a5bd755e 100644
 --- a/packages/subagent/subagent/src/manager.ts
 +++ b/packages/subagent/subagent/src/manager.ts
 @@ -771,9 +771,17 @@ export class SubagentManager {
@@ -224,7 +275,19 @@ index b89732c29e..8ac2355a87 100644
            const idle = activation.handle.agent.whenIdle()
            const children = [...activation.ownedChildren]
              .map(child => this.resident.get(child))
-@@ -1332,14 +1343,26 @@ export class SubagentManager {
+@@ -1151,7 +1162,10 @@ export class SubagentManager {
+       ))
+     }
+     try {
+-      if (activation.kind === 'local') await activation.handle.dispose()
++      // The lossless stop policy carries through the whole release: the
++      // close's synchronous cutoff already rejects later input, so anything
++      // still parked here was accepted before it and must survive.
++      if (activation.kind === 'local') await activation.handle.dispose({ keepInbox: true })
+       else await (externalDisposal ?? activation.run.dispose())
+     } catch (error: unknown) {
+       failures.push(new SubagentError(
+@@ -1332,14 +1346,26 @@ export class SubagentManager {
      content: ContentBlock[],
      options: ChildDeliveryOptions,
    ): Promise<MessageId> {
@@ -253,7 +316,7 @@ index b89732c29e..8ac2355a87 100644
        throw new SubagentError(`subagent "${childId}" is unavailable`, 'NOT_RESUMABLE', { cause: error })
      }
      using source = observation
-@@ -1353,14 +1376,13 @@ export class SubagentManager {
+@@ -1353,14 +1379,13 @@ export class SubagentManager {
          'NOT_RESUMABLE',
        )
      }
@@ -269,7 +332,7 @@ index b89732c29e..8ac2355a87 100644
          kind: 'local',
          childId,
          provider: descriptor.provider,
-@@ -1373,14 +1395,67 @@ export class SubagentManager {
+@@ -1373,14 +1398,73 @@ export class SubagentManager {
              : {},
          },
          composition: { agentPreset: agentPreset ?? undefined, persona: descriptor.persona, toolFilter: descriptor.toolFilter },
@@ -315,15 +378,21 @@ index b89732c29e..8ac2355a87 100644
 +    options: { signal?: AbortSignal, job: (agent: Agent, signal: AbortSignal) => Promise<T> },
 +  ): Promise<T> {
 +    this.assertAdmitting(parent)
++    // An omitted signal is legal: normalize one so the restore and the job
++    // share a single always-present cancellation source.
++    const signal = options.signal ?? new AbortController().signal
 +    const releaseHold = this.holdOwnership(parent, childId)
 +    try {
 +      return await this.locks.run(childId, async () => {
 +        if (this.resident.has(childId)) {
 +          throw new SubagentError(`subagent "${childId}" is already resident; wait for its current activity to settle`, 'DUPLICATE_CHILD')
 +        }
-+        const activation = await this.resumeActivation(parent, childId, options.signal, 'caller')
++        const activation = await this.resumeActivation(parent, childId, signal, 'caller')
++        if (activation.kind !== 'local') {
++          throw new SubagentError(`subagent "${childId}" restored through an unsupported backend for maintenance`, 'NOT_RESUMABLE')
++        }
 +        try {
-+          return await options.job(activation.handle.agent, options.signal)
++          return await options.job(activation.handle.agent, signal)
 +        } finally {
 +          // Hand the activation to the ordinary settlement lifecycle. Pending
 +          // input keeps it resident and reachable by normal routes; an empty
@@ -332,7 +401,7 @@ index b89732c29e..8ac2355a87 100644
 +        }
 +      })
 +    } catch (error: unknown) {
-+      options.signal?.throwIfAborted()
++      signal.throwIfAborted()
 +      throw error
 +    } finally {
 +      releaseHold()
