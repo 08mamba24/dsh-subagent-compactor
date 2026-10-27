@@ -1,10 +1,35 @@
 # Validation record
 
-Plugin version: **1.1.0** (cold compaction feature branch). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
+Plugin version: **1.1.0** (cold compaction feature branch, review round 2). Tested runtime: **DSH Desktop 0.12.1 / Harness 0.2.1-rc.2**. Recorded: **2026-10-27**.
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
 
-## Automated checks
+## Review round 2 (R1/P2 fixes)
+
+The independent review of commit `2c9bc5e` returned REQUEST_CHANGES with one P1: the cold handle's unconditional dispose durably cancelled accepted input — the write lock does not fence the published Agent's public input surface (`followup`/`steer`/`inject` via `agents.get(id)`), and a legal second persistence writer can enqueue pending between the read precheck and the writer open. Both red proofs were reproduced against `2c9bc5e` before the fix:
+
+- `node /tmp/dsh-cold-direct-message-proof.mjs` — a `followup` sentinel accepted mid-summary was inserted at seq 26, then cancelled by the release (`{removedCount: 1, outcome: "canceled"}`), never reaching the model.
+- `node /tmp/dsh-cold-precheck-race-proof.mjs` — pending injected between precheck and load was refused but then cancelled by the rollback dispose; `pendingInbox` ended empty.
+
+### The fix
+
+- **Release cutoff** (`drainRestoredAgent`): after the compaction settles (success, failure, or cancellation), the plugin waits for the restored agent to become idle **and** its inbox to hold no accepted-but-unprocessed input before disposing. Input accepted during the maintenance window is latched by the loop, wakes a real turn, and is fully processed (durable `user/message` + assistant answer) before release; an empty inbox makes the teardown cancel a no-op, so accepted input is never durably cancelled.
+- **Stranding**: pending found in the **loaded** snapshot (precheck-race input, or no-wake injections) refuses compaction and strands the restored handle on a background drain — the pending work stays durable and untouched, and the handle releases once that input is actually processed (the next public input wakes the loop and consumes the queue). Same-id compaction during residency serializes on the live path.
+- **Unload termination**: every drain and strand is an unload-abortable operation; unload terminates through the ordinary dispose — the same teardown any live agent takes. Input still parked at unload can be cancelled by that termination, matching the manager's own stop semantics. This is the residual loss window (host gap below).
+- **P2**: `withComposition` now runs boot inside the guard and removes its temp storage in `finally` (verified: no leftover `subagent-compactor-it-*` dirs).
+
+### Host capability gap (reported to review)
+
+`AgentHandle.dispose` cannot release a restored handle while preserving accepted input — its teardown unconditionally cancels a non-empty inbox, and no public wake exists that does not inject a message. Hence the residency for no-wake pending and the unload caveat. A `dispose({ keepInbox })`-equivalent, or a resume variant whose validation rollback writes nothing, would remove both.
+
+### R1 regression suites (new; all red on 2c9bc5e, green after the fix)
+
+- `cold R1: input accepted during the maintenance window is fully processed before release` — sentinel `followup` mid-summary; asserts a durable `user/message` + assistant answer, **zero** `outcome:"canceled"` inbox splices, writer release, and exactly-once continuation of the same id.
+- `cold R1: accepted input also survives cancellation and summary failure of the compaction` — the same guarantees hold when the compaction is aborted mid-summary or fails its shrink check.
+- `cold R1: pending injected between precheck and load strands without cancelling work` — controlled interleaving (wrap of the public resume entry + a second legal persistence writer, the reviewer's own technique): compaction refused, no summary request, no cancellation splice, the injected work reaches the model with an answer after a public input advances the strand, writer releases, normal continuation answers exactly once.
+- Unit: drain waits for accepted input then disposes; loaded-snapshot pending strands (no dispose while pending; unload terminates through dispose); unload during the cutoff terminates through the ordinary dispose.
+
+### Automated checks
 
 Run from the repository root with the matching DSH module tree linked at `node_modules`:
 
@@ -12,9 +37,9 @@ Run from the repository root with the matching DSH module tree linked at `node_m
 node --test --test-timeout=30000 test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
 ```
 
-The feature branch passes **47 tests: 37 unit, 1 live-window integration, 9 cold-path integration** (three consecutive full-green runs on 2026-10-27).
+The branch passes **53 tests: 40 unit, 1 live-window integration, 12 cold-path integration** (three consecutive full-green runs on 2026-10-27; temp storage cleanup verified).
 
-### Red/green reproduction for the cold feature
+### Red/green reproduction for the cold feature (round 1, still applies)
 
 The cold suite fails against the 1.0.1 implementation and passes against this branch:
 
@@ -41,8 +66,8 @@ The headline red assertion is `cold compact failed: No live agent with session i
 ### Honest scope of the automated proof
 
 - The fake endpoint scripts turn and summary texts; summary **quality** is not evaluated.
-- Concurrent sends are exercised at the deterministic points (writer definitely held during the delayed summary, and after release). The micro-window during restore (between `observeSession` and `persistence.open`) is not deterministically interleaveable without host hooks; both orderings resolve to one side winning the writer and the other failing/retrying cleanly.
-- The release-boundary send (during `dispose()`) is approximated by the after-release retry; the dispose window itself is sub-millisecond and not controllable without hooks.
+- Manager-routed concurrent sends are exercised at the deterministic points (writer definitely held during the delayed summary, and after release); the public Agent input surface (`followup` during the window, plus a racing second writer before the load) is covered deterministically by the R1 suites. Remaining micro-windows (a send landing inside `observeSession`→`open` or inside `dispose` itself) are not deterministically interleaveable without host hooks; every ordering resolves into one of the proven arms (manager refusal before acceptance, stranding, or drain-before-release).
+- The release-boundary send (during `dispose()`) is approximated by the after-release retry and the drain cutoff; the dispose window itself is sub-millisecond and not controllable without hooks.
 - Persistence-failure injection (e.g., disk errors during the compaction flush) was not automated; the engine's `persistence`/`commit` codes remain covered only by unit-level mapping tests.
 - Plugin unload during a cold compaction is covered at unit level (abort + bounded settle + release); an integration unload race was not automated.
 

@@ -74,7 +74,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 - 组合需要 `commands`、`tools`、`agents`、`subagents` 服务，以及子成员对应的压缩引擎；冷压缩另需 `sessionQuery` 与会话持久化（同类组合中通常已具备）。
 - 只允许运行时直接父级操作。live 目标按运行时所有权拒绝他人；已结束目标按子会话持久化 header 的父级血缘与其持久 descriptor 拒绝他人子成员、自身和孙成员。
 - preset 组合通过 `agentPresets.serviceFor` 解析子成员引擎（绝不回退 Host 平面）；无该注册表的组合使用 Host 引擎。
-- 存在持久化未处理输入的已结束子智能体会被拒绝（`pending-input`），以保证这些工作留给正常续接处理。
+- 存在持久化未处理输入的已结束子智能体会被拒绝（`pending-input`），以保证这些工作留给正常续接处理；若 pending 只在加载快照中出现（写入方竞态），恢复的会话会驻留等待该输入被处理，而不是被取消。
 - 支持列目录和手动压缩；删除、handoff、自动触发不在此版本范围内。
 - 已验证 Desktop `0.12.1` / Harness `0.2.1-rc.2`；其他版本需要另行验证。
 

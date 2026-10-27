@@ -30,16 +30,23 @@ Both surfaces serialize per target: one compaction per session id at a time insi
 - With an `agentPresets` registry (Desktop/Web presets): the engine is published inside the preset's **isolated** group, so it is resolved strictly via `agentPresets.serviceFor(target, 'compaction')` — for a cold-restored child, after its composition is applied in resume setup. A plain context lookup (including `agent.ctx`) would resolve the Host realm instance, which is not the engine that owns the target's session — this plugin never does that fallback. A missing preset engine fails with an explicit message.
 - Without a registry (headless/ACP-style compositions): the engine, when composed, is the Host-plane `compaction` service — the same source official `/compact` injects.
 
-## Concurrency and message admission
+## Concurrency, message admission, and the release cutoff
 
-The cold path holds the persisted session's **write lock** (through `agents.resume` → `persistence.open(id, "write")`) for the whole restore→compact→release window. This is the admission boundary, not a plugin lock:
+The cold path holds the persisted session's **write lock** (through `agents.resume` → `persistence.open(id, "write")`) for the whole restore→compact→release window. What that lock does and does not fence:
 
-- Every real input route to a continuable child goes through the subagent manager (`subagents.sendMessage`/`queuePrompt`/`steerPrompt`, team relay to members). With no resident activation, each takes the manager's own cold-resume path and fails at the write lock **before acceptance** — the sender gets a clear `NOT_RESUMABLE`-family error, no message is accepted, nothing is lost, and a retry after the window succeeds (integration-proven, delivered exactly once).
-- Direct inbox writes (`followup`/`steer`/`inject`) are only reachable by code holding the Agent object; no host route delivers directly into a non-resident child, and this plugin never injects.
-- A competing writer that wins first (concurrent continuation) surfaces as `SessionAlreadyOwnedError` → retryable `busy-target`.
-- The plugin's own per-target lock serializes its two entry points; a second invocation reports `busy-target` immediately.
+- Every **manager-routed** input (`subagents.sendMessage`/`queuePrompt`/`steerPrompt`, team relay to members) goes through the manager's own cold-resume path when no activation is resident, and fails at the write lock **before acceptance** — a clear `NOT_RESUMABLE`-family error, nothing accepted, nothing lost, retry after the window succeeds (integration-proven, delivered exactly once).
+- The write lock does **not** fence the **public Agent input surface**: once the restored Agent is published it is reachable through `agents.get(id)`, and its public `followup`/`steer`/`inject` accept messages at any time. A second writer is also legal in the narrow window between the plugin's read-only precheck and its `open` call.
 
-Releasing the restored handle runs the loop's standard disposal, whose cancel clears a non-empty inbox — which is exactly why step 5 refuses *before* materializing anything, and why the post-restore `hasPending` belt-and-suspenders check refuses rather than compacting over parked work.
+Because of that, release is a **cutoff, not an instant** (`drainRestoredAgent`):
+
+1. After the compaction settles (success, failure, or cancellation — caller cancellation never interrupts this part), the plugin waits for the agent to become idle. Input accepted during the maintenance window (a `followup`/`steer`) is latched by the loop and wakes a real turn the moment the maintenance job ends; waiting for idle lets that turn **fully process** the accepted message (durable `user/message` + assistant answer) before anything is released.
+2. Only when the agent is idle **and** the inbox holds no accepted-but-unprocessed input does the plugin dispose the restored handle. An empty inbox makes the teardown's cancel a no-op, so nothing accepted is ever durably cancelled.
+3. Input that never wakes the loop (a no-wake `inject`, or pending that a racing legal writer durably enqueued between the precheck and the load) cannot be driven forward without fake messages. The plugin **refuses to compact** over it and **strands** the restored handle on a background drain: the pending work stays durable and untouched, and the handle releases only once that input has actually been processed (the next public input — e.g. a normal follow-up message — wakes the loop and consumes it, inbox queue included). While stranded, the target reports `pending-input` and same-id compaction attempts serialize on the live path.
+4. Plugin unload terminates every drain and strand through the ordinary dispose — the same teardown every live agent takes on shutdown. That termination can durably cancel input still parked at unload time, matching how the manager's own stop path cancels children; there is no public API to do better (see the host-gap note below).
+
+A per-target lock serializes the plugin's own two entry points (`busy-target`); the engine's maintenance phase serializes concurrent engine attempts.
+
+**Host capability gap (reported, not worked around):** `AgentHandle.dispose` provides no way to release a restored handle while preserving accepted input — its teardown unconditionally cancels a non-empty inbox, and no public wake exists that does not inject a message. The stranding drain is the closest supported behavior: pending input is preserved and processed through real turns, and the only loss window is an unload that terminates while input is still parked. A `dispose({ keepInbox })`-equivalent, or a resume variant whose validation rollback writes nothing, would remove the residency and the unload caveat entirely.
 
 ## Error contract
 
@@ -54,7 +61,7 @@ All six `ManualCompactionError` codes map to distinct messages: `busy`, `cancell
 5. **Pending work is preserved, not compacted past.** A finished child with durable pending input is refused; send it a message to let it process that work first.
 6. **No auto-compact-on-end.** Deliberately absent: in 0.2.1-rc.2 the subagent manager disposes the child's AgentHandle *before* emitting `subagent/end`, so an end-hook listener sees no live agent. The 1.1.0 cold path covers the same need by id after settlement.
 7. **Hard injections** `commands`, `tools`, `agents`, `subagents`: in compositions without these services the row stays inactive instead of half-working. `agentPresets`/`compaction`/`sessionQuery` are resolved dynamically on purpose (see Engine resolution).
-8. **Post-restore pending is treated as a host-invariant violation.** If the inbox is non-empty *after* resume (the pre-check read the same store, so this should be unreachable short of a host bug), the plugin refuses and reports that releasing the handle would cancel that parked input.
+8. **Pending is checked twice; the loaded-snapshot arm strands.** Durable pending input is refused read-only through the observation's `inbox` projection before anything is materialized, and checked again against the loaded authoritative snapshot after resume — a legal writer can race pending input into the store between those two checks. The loaded-snapshot arm refuses compaction and strands the handle instead of cancelling (see Concurrency and the release cutoff).
 
 ## Install
 

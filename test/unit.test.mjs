@@ -726,3 +726,117 @@ test("listing distinguishes live children from persisted-only records", async ()
 	assert.match(result.text, /once-child \[one-shot\] — persisted \(not loaded\)/);
 	assert.match(result.text, /observed at listing time/);
 });
+
+// ---------------------------------------------------------------------------
+// R1 unit tests: the release cutoff (drain) and the stranding path.
+
+/** Minimal agent-scope event emitter for the drain loop's stub agents. */
+function agentScopeStub() {
+	const listeners = new Map();
+	return {
+		listeners,
+		on(name, callback) {
+			if (!listeners.has(name)) listeners.set(name, new Set());
+			listeners.get(name).add(callback);
+			return () => listeners.get(name)?.delete(callback);
+		},
+		emit(name) {
+			for (const callback of [...listeners.get(name) ?? []]) callback();
+		}
+	};
+}
+
+function drainAgentStub(id, { pending = false } = {}) {
+	return {
+		id,
+		status: "idle",
+		ctx: agentScopeStub(),
+		pendingFlag: pending,
+		inbox: {
+			get hasPending() { return this.agent.pendingFlag; },
+			nextTurn: pending ? [{ id: "parked" }] : [],
+			nextStep: [],
+			agent: undefined
+		},
+		whenIdle: async () => {}
+	};
+}
+
+test("cold R1: release waits for accepted input to drain, then disposes", async () => {
+	const agent = drainAgentStub("cold-1");
+	agent.inbox.agent = agent;
+	// The sentinel is accepted WHILE the engine runs (mid-summary followup).
+	const engine = { compactNow: async () => {
+		agent.pendingFlag = true;
+		return { shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 };
+	} };
+	let disposed = false;
+	const harness = makeColdHarness({
+		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
+		hostEngine: engine
+	});
+	harness.resumed.agent = agent;
+	harness.resumed.dispose = async () => { disposed = true; };
+	const operation = harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	// Compaction finished, but the sentinel accepted into the inbox parks the
+	// release until it is processed.
+	assert.equal(disposed, false, "release must wait while accepted input is pending");
+	agent.pendingFlag = false;
+	agent.ctx.emit("agent/inbox/claimed");
+	const result = await operation;
+	assert.equal(result.outcome, "compacted");
+	assert.equal(disposed, true, "release happens after the inbox drains");
+});
+
+test("cold R1: pending in the loaded snapshot strands the handle instead of cancelling it", async () => {
+	const agent = drainAgentStub("cold-1", { pending: true });
+	agent.inbox.agent = agent;
+	let disposed = false;
+	const harness = makeColdHarness({
+		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
+		hostEngine: { compactNow: async () => assert.fail("engine must not run over pending input") }
+	});
+	harness.resumed.agent = agent;
+	harness.resumed.dispose = async () => { disposed = true; };
+	const result = await harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "pending-input");
+	assert.match(result.text, /resident|untouched/i);
+	assert.equal(harness.resumeCalls.length, 1);
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	assert.equal(disposed, false, "the stranded handle must not be disposed while its input is pending");
+
+	// The stranding drain is registered as an unload-abortable operation:
+	// plugin unload terminates it through the ordinary dispose.
+	for (const disposer of [...harness.registrations.effectDisposers].reverse()) {
+		await (typeof disposer === "function" ? disposer() : disposer);
+	}
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	assert.equal(disposed, true, "unload terminates the strand through dispose");
+});
+
+test("cold R1: unload during the release cutoff terminates through dispose", async () => {
+	const agent = drainAgentStub("cold-1");
+	agent.inbox.agent = agent;
+	// Accepted mid-window; unload arrives while the cutoff is still parked.
+	const engine = { compactNow: async () => {
+		agent.pendingFlag = true;
+		return { shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 };
+	} };
+	let disposed = false;
+	const harness = makeColdHarness({
+		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
+		hostEngine: engine
+	});
+	harness.resumed.agent = agent;
+	harness.resumed.dispose = async () => { disposed = true; };
+	const operation = harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
+	await new Promise((resolve) => setTimeout(resolve, 10));
+	assert.equal(disposed, false, "cutoff holds while input is pending");
+	for (const disposer of [...harness.registrations.effectDisposers].reverse()) {
+		await (typeof disposer === "function" ? disposer() : disposer);
+	}
+	const result = await operation;
+	assert.equal(result.outcome, "compacted");
+	assert.equal(disposed, true, "unload terminates the cutoff through the ordinary dispose");
+});

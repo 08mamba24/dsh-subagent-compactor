@@ -7,7 +7,7 @@
  * @module test/helpers
  */
 import http from "node:http";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Context } from "@deepseek-ai/cordis";
@@ -129,17 +129,20 @@ export async function bootComposition(baseURL, storageRoot, { extra = [], plugin
 	return ctx;
 }
 
-/** Boot with a fresh fake server and temp storage;_disposes both afterwards. */
+/** Boot with a fresh fake server and temp storage; disposes all of them afterwards. */
 export async function withComposition(run, options = {}) {
 	const fake = createFakeMessagesServer();
-	const baseURL = await fake.start();
-	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-it-"));
-	const ctx = await bootComposition(baseURL, storageRoot, options);
+	let ctx;
+	let storageRoot;
 	try {
+		const baseURL = await fake.start();
+		storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-it-"));
+		ctx = await bootComposition(baseURL, storageRoot, options);
 		await run(ctx, fake, storageRoot);
 	} finally {
-		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
+		await Promise.resolve(ctx?.fiber?.dispose?.()).catch(() => {});
 		await fake.close();
+		if (storageRoot !== undefined) rmSync(storageRoot, { recursive: true, force: true });
 	}
 }
 

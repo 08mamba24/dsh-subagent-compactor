@@ -76,7 +76,7 @@ Refusals are explicit outcomes, never silent: `unknown-session` (no live or pers
 - The composition must provide `commands`, `tools`, `agents`, and `subagents`, plus a compaction engine for the target child. Normal subagent-capable Desktop presets provide these services. Cold compaction additionally needs `sessionQuery` and session persistence (present in the same compositions).
 - Only the exact runtime parent can compact its direct child. Other parents, the caller itself, and grandchildren are rejected — for live targets through runtime ownership, for finished targets through the child's persisted header lineage and its durable descriptor.
 - Preset compositions resolve the child's engine through `agentPresets.serviceFor` (no Host-plane fallback); compositions without that registry use the Host engine.
-- A finished child with persisted pending input is refused (`pending-input`) so that work survives for a normal continuation.
+- A finished child with persisted pending input is refused (`pending-input`) so that work survives for a normal continuation; if the pending appears only in the loaded snapshot (a racing writer), the restored session stays resident until that input is processed instead of being cancelled.
 - This release provides listing and manual compaction. Child deletion, handoff, and automatic triggers are outside its scope.
 - Compatibility was verified on the versions above. Later Harness versions require verification.
 

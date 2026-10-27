@@ -484,3 +484,181 @@ test("cold: preset-registry composition restores an independent child preset and
 		]
 	});
 });
+
+// ---------------------------------------------------------------------------
+// R1 regressions (independent review): the cold handle must not discard
+// accepted input when it releases, and pending discovered at load time must
+// survive without a queue-clearing dispose.
+
+/** Assert one session's log records no durable inbox cancellation. */
+async function assertNoCancelledInboxSplices(ctx, sessionId, label) {
+	const log = await readEvents(ctx, sessionId);
+	const cancellations = log.filter((event) => event.type === "agent/inbox/spliced" && event.data.outcome === "canceled" && (event.data.removedCount ?? 0) > 0);
+	assert.deepEqual(cancellations, [], `${label}: accepted input must not be cancelled by the cold handle`);
+}
+
+test("cold R1: input accepted during the maintenance window is fully processed before release", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r1-direct-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		// Slow summary; while it is in flight the restored Agent is live in
+		// the public registry and accepts a message through its public input.
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 400;
+		const start = fake.state.requests.length;
+		const executionPromise = ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		await waitFor(() => fake.state.requests.slice(start).some((request) => request.mode === "summarize" && request.model === CHILD_MODEL));
+		const target = ctx.agents.get(childId);
+		assert.notEqual(target, undefined, "the restored maintenance agent is live in the registry");
+		const sentinel = createUserMessage({ source: { kind: "review-host-message" }, content: [{ type: "text", text: "DIRECT-ACCEPTED-SENTINEL: process this message once" }] });
+		target.followup(sentinel);
+		assert.equal(target.inbox.hasPending, true, "the public input was accepted");
+
+		const execution = await executionPromise;
+		assert.equal(execution.result.kind, "success", `cold compact failed: ${execution.result.text}`);
+
+		// The sentinel was fully processed — model-visible user message plus
+		// an assistant answer — before the maintenance handle released.
+		await waitFor(async () => {
+			const log = await readEvents(ctx, childId);
+			return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL"));
+		}, 8000).then(async () => {
+			const log = await readEvents(ctx, childId);
+			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL"));
+			assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the sentinel received an assistant answer");
+		});
+		await assertNoCancelledInboxSplices(ctx, childId, "direct-message window");
+		await waitFor(() => ctx.agents.get(childId) === undefined, 8000);
+
+		// Normal continuation of the same id still works, exactly once.
+		fake.state.delayMs = 0;
+		fake.state.mode = "turn2";
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Follow-up after the sentinel." }], { signal: signal() });
+		await waitFor(async () => {
+			const log = await readEvents(ctx, childId);
+			return log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL")).length === 1
+				&& log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled after compaction."));
+		}, 8000);
+		const log = await readEvents(ctx, childId);
+		assert.equal(log.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("DIRECT-ACCEPTED-SENTINEL")).length, 1, "sentinel processed exactly once");
+	});
+});
+
+test("cold R1: accepted input also survives cancellation and summary failure of the compaction", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r1-cancel-parent");
+
+		// Cancellation mid-summary with an already-accepted sentinel.
+		const cancelId = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 300;
+		const start = fake.state.requests.length;
+		const controller = new AbortController();
+		const cancelling = ctx.commands.execute(parent, `/subagent-compact ${cancelId}`, [], controller.signal);
+		await waitFor(() => fake.state.requests.slice(start).some((request) => request.mode === "summarize" && request.model === CHILD_MODEL));
+		const cancelTarget = ctx.agents.get(cancelId);
+		cancelTarget.followup(createUserMessage({ source: { kind: "review-host-message" }, content: [{ type: "text", text: "CANCEL-WINDOW-SENTINEL: still process me" }] }));
+		controller.abort(new Error("user cancelled"));
+		await cancelling.then(() => undefined, () => undefined);
+		await waitFor(async () => {
+			const log = await readEvents(ctx, cancelId);
+			return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("CANCEL-WINDOW-SENTINEL"));
+		}, 8000);
+		await assertNoCancelledInboxSplices(ctx, cancelId, "cancellation window");
+		await waitFor(() => ctx.agents.get(cancelId) === undefined, 8000);
+
+		// Summary failure with an already-accepted sentinel.
+		const failId = await settleTwoTurnChild(ctx, parent, fake);
+		// Delay the failing response so the sentinel lands while the
+		// summary is still in flight (delayMs 0 settles before waitFor polls).
+		fake.state.delayMs = 300;
+		fake.state.mode = "summarize-fail";
+		const failStart = fake.state.requests.length;
+		const failing = ctx.commands.execute(parent, `/subagent-compact ${failId}`, [], signal());
+		await waitFor(() => fake.state.requests.slice(failStart).some((request) => request.mode === "summarize-fail" && request.model === CHILD_MODEL));
+		const failTarget = ctx.agents.get(failId);
+		failTarget.followup(createUserMessage({ source: { kind: "review-host-message" }, content: [{ type: "text", text: "FAIL-WINDOW-SENTINEL: still process me" }] }));
+		const failed = await failing;
+		assert.equal(failed.result.kind, "error");
+		assert.match(failed.result.text, /summary/i);
+		await waitFor(async () => {
+			const log = await readEvents(ctx, failId);
+			return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("FAIL-WINDOW-SENTINEL"));
+		}, 8000);
+		await assertNoCancelledInboxSplices(ctx, failId, "summary-failure window");
+		await waitFor(() => ctx.agents.get(failId) === undefined, 8000);
+	});
+});
+
+test("cold R1: pending injected between precheck and load strands without cancelling work", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r1-race-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		// Controlled interleaving: another legal persistence writer enqueues
+		// durable work after the plugin's read lease, before it acquires the
+		// writer (wrap the public resume entry the plugin calls).
+		const originalResume = ctx.agents.resume.bind(ctx.agents);
+		let messageId;
+		ctx.agents.resume = async (options) => {
+			if (options.resumeSessionId === childId && messageId === undefined) {
+				const writer = await ctx.get("sessionPersistence").open(childId, "write");
+				try {
+					const snapshot = await writer.read(0);
+					const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: "PRECHECK-RACE-SENTINEL: preserve pending work" }] });
+					messageId = message.id;
+					await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
+				} finally {
+					await writer.close();
+				}
+			}
+			return originalResume(options);
+		};
+		try {
+			fake.state.mode = "summarize";
+			const requestsBefore = fake.state.requests.length;
+			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+			assert.equal(execution.result.kind, "error", "compaction with pending input must be refused");
+			assert.match(execution.result.text, /pending/i);
+
+			// No summary ran, and the injected work was never cancelled.
+			assert.equal(fake.state.requests.length, requestsBefore, "no summary request may run");
+			await assertNoCancelledInboxSplices(ctx, childId, "precheck race refusal");
+
+			// The handle strands: it cannot process the no-wake pending by
+			// itself and must not cancel it. Push the window forward the same
+			// public way a host would, and both messages are processed.
+			const stranded = await waitFor(() => ctx.agents.get(childId), 3000).catch(() => undefined);
+			assert.notEqual(stranded, undefined, "the refused restoration stays resident until drained");
+			assert.equal(stranded.inbox.hasPending, true, "the injected work is still pending, untouched");
+			fake.state.mode = "turn2";
+			stranded.followup(createUserMessage({ source: { kind: "review-host-message" }, content: [{ type: "text", text: "Drive the stranded window forward." }] }));
+			await waitFor(async () => {
+				const log = await readEvents(ctx, childId);
+				return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+			}, 8000);
+			// The sentinel was processed exactly once, with an answer, and no
+			// accepted input was cancelled anywhere in the log.
+			const log = await readEvents(ctx, childId);
+			const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+			assert.ok(at >= 0, "the injected pending work reached the model");
+			assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the injected work received an answer");
+			await assertNoCancelledInboxSplices(ctx, childId, "precheck race");
+			await waitFor(() => ctx.agents.get(childId) === undefined, 8000);
+
+			// The writer is free again: a normal continuation answers once.
+			await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Post-strand follow-up." }], { signal: signal() });
+			await waitFor(async () => {
+				const events = await readEvents(ctx, childId);
+				return events.filter((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL")).length === 1
+					&& events.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled"));
+			}, 8000);
+		} finally {
+			ctx.agents.resume = originalResume;
+		}
+	});
+});
