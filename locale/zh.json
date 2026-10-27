@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "子代理压缩器",
+    "description": "提供 /subagent-compact 命令与 compact_subagent 工具，通过组合内的压缩引擎压缩存活直接子代理的历史。"
+  }
+}

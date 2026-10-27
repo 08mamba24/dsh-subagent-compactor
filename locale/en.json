@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent Compactor",
+    "description": "Adds /subagent-compact and the compact_subagent tool to compact a live direct subagent's history through the composition's compaction engine."
+  }
+}

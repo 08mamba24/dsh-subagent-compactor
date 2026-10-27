@@ -1,0 +1,9 @@
+# Manual compaction of the caller's live direct subagents, reusing the
+# composition's compaction engine (dsh-compaction-basic or a compatible
+# backend). waitForIdle: wait for a busy child to become idle before
+# compacting instead of failing with `busy`.
+- insert:
+    - id: subagent-compactor
+      name: '@local/dsh-subagent-compactor'
+      config:
+        waitForIdle: true

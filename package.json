@@ -1,0 +1,44 @@
+{
+  "name": "@local/dsh-subagent-compactor",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Manual history compaction for a caller's live direct subagents via the composed compaction engine.",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "TECHNICAL.md",
+    "docs/VALIDATION.md"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-commands": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/08mamba24/dsh-subagent-compactor.git"
+  },
+  "homepage": "https://github.com/08mamba24/dsh-subagent-compactor#readme",
+  "bugs": {
+    "url": "https://github.com/08mamba24/dsh-subagent-compactor/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "subagent",
+    "compaction"
+  ]
+}
