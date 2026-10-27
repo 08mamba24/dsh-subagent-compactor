@@ -37,7 +37,7 @@ releases with `keepInbox`.
 
 ## Regression evidence (isolated patched tree, fake LLM, temp storage)
 
-- 59/59 tests: 39 unit, 1 live-window integration, 19 cold/contract integration.
+- 59/59 tests: 37 unit, 1 live-window integration, 21 cold/contract integration.
 - Acceptance contract: accepted input never lost (including the pre-step
   claim window and release-cutoff interleavings); normal routes (`sendMessage`,
   addressed `prompt({delivery:"queue"})`) deliver throughout, including while

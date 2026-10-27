@@ -10,7 +10,7 @@ Manually compact a direct subagent's history from its parent session in DSH Desk
 
 ## What changed in 1.1.0
 
-A finished continuable child can now be compacted by its session id without starting another task or racing the live window: the plugin restores the persisted session through the public `agents.resume` with the composition the subagent manager itself restores (descriptor route, independently selected agent preset or inherited composition, persona, tool filter), runs one idle compaction, and releases the writer it created. See [TECHNICAL.md](TECHNICAL.md) for the authorization, pending-input, and concurrency rules.
+A finished continuable child can be compacted by its session id on the candidate patched host, without starting another task or racing the live window. The plugin calls `ctx.subagents.runMaintenance`; the manager restores the child's composition, runs the compaction job, and owns settlement and writer release. The plugin holds no restored handle. See [TECHNICAL.md](TECHNICAL.md) for the authorization, pending-input, and concurrency rules.
 
 ## Install in DSH Desktop
 

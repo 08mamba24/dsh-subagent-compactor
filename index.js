@@ -8,7 +8,7 @@
  * - `compact_subagent` tool — same operation from inside a model turn.
  *
  * A target that is still live is authorized through runtime ownership
- * (`agents.isOwned`). A target that already finished is compacted through
+ * (`agents.isOwnedBy`). A target that already finished is compacted through
  * the host's manager-owned maintenance capability
  * (`ctx.subagents.runMaintenance`, provided by the candidate host patch in
  * host-patch/): the manager restores the child exactly like a continuation,

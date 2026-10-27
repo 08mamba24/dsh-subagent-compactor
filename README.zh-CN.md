@@ -10,7 +10,7 @@
 
 ## 1.1.0 变化
 
-结束后的 continuable 子智能体现在可以按 session id 压缩：无需再派一个任务、也无需抢 live 窗口。插件通过公开的 `agents.resume`，按子智能体管理器续接时使用的同一套组合（descriptor 记录的路由、独立选择的 agent preset 或继承组合、persona、tool filter）恢复持久化会话，执行一次空闲压缩，然后释放本次创建的写入句柄。鉴权、pending 输入与并发规则见 [TECHNICAL.md](TECHNICAL.md)。
+在候选补丁宿主上，结束后的 continuable 子智能体可以按 session id 压缩，无需再派任务或抢 live 窗口。插件调用 `ctx.subagents.runMaintenance`，由管理器恢复子成员组合、执行压缩，并负责结算和释放写入句柄；插件不持有恢复句柄。鉴权、pending 输入与并发规则见 [TECHNICAL.md](TECHNICAL.md)。
 
 ## 安装
 
