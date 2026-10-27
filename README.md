@@ -53,10 +53,19 @@ Two lawful situations:
 - **Child still live** — invoke while it is running; the default `waitForIdle: true` waits for its turn to finish before compacting.
 - **Child finished** (a continuable child that settled and was reclaimed) — invoke by id at any later time. The plugin restores the child, compacts once, and releases it; no new task is sent. The same id stays continuable afterwards.
 
-The parent model can call the same operation through:
+### Batch: compact every direct child at once
+
+```text
+/subagent-compact --all
+```
+
+Compacts every child in **one durable catalog snapshot** of the calling parent, taken when the run starts (children spawned afterwards belong to the next run; no recursion into grandchildren, no other parents' children). Items run **serially** under the same per-target locks — a concurrent single compaction of the same child reports `busy-target`. Each item reports its own outcome and reason (compacted with its summary seq / replaced items / replaced-history token estimate, nothing-to-compact, refused for unsupported mode or pending input, engine failure, …); one child's failure never hides the rest. Cancelling (or unloading the plugin) stops children that have not started yet — reported as `not-started` — and keeps every finished result; a cancelled batch never reports success. Each compacted child still costs one summary request on its own model route. On a stock runtime the cold items are refused (`host-capability-missing` counts as failed) while live items still compact.
+
+The parent model can call the same operations through:
 
 ```text
 compact_subagent({ "session_id": "<subagent-session-id>" })
+compact_all_subagents({})   // the batch above, with structured counts
 ```
 
 You can ask the parent: “Call `compact_subagent` for child session X and report the tool result.” A tool call remains subject to the host's permissions.

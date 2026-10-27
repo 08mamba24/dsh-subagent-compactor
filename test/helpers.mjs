@@ -44,7 +44,7 @@ export function createFakeMessagesServer() {
 				turn: `Turn complete. ${filler}`,
 				"turn-short": "Round two done.",
 				summarize: "Checkpoint summary: the worker completed its assigned turns; details condensed.",
-				"summarize-fail": "Checkpoint summary too small to be useful, forcing the summary stage to fail the shrink check with a deliberately short replacement.",
+				"summarize-fail": `Checkpoint summary that deliberately fails the shrink check by being far larger than the replaced span: ${"it restates every detail at verbose length instead of condensing anything, so the engine rejects this summary outright every single time. ".repeat(90)}`,
 				turn2: "Follow-up handled after compaction."
 			};
 			const respond = () => {

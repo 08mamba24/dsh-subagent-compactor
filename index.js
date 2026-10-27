@@ -4,8 +4,11 @@
  *
  * Surfaces:
  * - `/subagent-compact` — no arguments: list the caller session's durable
- *   direct-subagent catalog; with one session id: compact that child.
- * - `compact_subagent` tool — same operation from inside a model turn.
+ *   direct-subagent catalog; with one session id: compact that child;
+ *   with `--all`: compact every child in one catalog snapshot, serialized,
+ *   with honest per-child outcomes and counts.
+ * - `compact_subagent` tool — the single-child operation from a model turn.
+ * - `compact_all_subagents` tool — the batch operation from a model turn.
  *
  * A target that is still live is authorized through runtime ownership
  * (`agents.isOwnedBy`). A target that already finished is compacted through
@@ -36,7 +39,7 @@ const Config = z.object({
 	waitForIdle: z.boolean().default(true)
 });
 
-const USAGE = "Usage: /subagent-compact [<subagent-session-id>]";
+const USAGE = "Usage: /subagent-compact [--all | <subagent-session-id>]";
 /** Closed set of ManualCompactionError codes from @deepseek-ai/dsh-compaction. */
 const MANUAL_CODES = new Set(["busy", "cancelled", "changed", "summary", "commit", "persistence"]);
 /** Bounded unload wait so one pathological engine cannot hang teardown. */
@@ -426,6 +429,82 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
 	}
 }
 
+/**
+ * Compact every direct subagent in ONE durable catalog snapshot of the
+ * calling parent: the snapshot is taken once at start (children spawned
+ * afterwards belong to the next run), ids are de-duplicated, and each item
+ * runs through the ordinary per-target compaction (live wait or cold
+ * maintenance) SERIALLY under the same per-target locks — a concurrent
+ * single compaction of the same target reports busy. Every item reports its
+ * own outcome and reason; one item's failure never hides the rest. A batch
+ * signal abort stops UNSTARTED items (reported as not-started) and preserves
+ * every finished result; a cancelled batch never reports success. Each
+ * compaction still costs one summary request on the child's own route.
+ */
+async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCommandId) {
+	let entries;
+	try {
+		entries = await ctx.subagents.listChildren(caller.id, signal);
+	} catch (error) {
+		if (signal.aborted) return { outcome: "batch-cancelled", text: "Batch compaction cancelled before the catalog was read.", counts: emptyBatchCounts() };
+		return { outcome: "listing-failed", text: `Batch catalog unavailable: ${error instanceof Error ? error.message : String(error)}`, counts: emptyBatchCounts() };
+	}
+	const seen = new Set();
+	const items = [];
+	for (const entry of entries) {
+		if (seen.has(entry.id)) continue;
+		seen.add(entry.id);
+		items.push(entry);
+	}
+	if (items.length === 0) {
+		return { outcome: "empty-catalog", text: "(no direct subagents on record for this session; nothing to compact)", counts: emptyBatchCounts() };
+	}
+	const counts = { compacted: 0, "nothing-to-compact": 0, failed: 0, cancelled: 0, "not-started": 0 };
+	const lines = [];
+	for (const item of items) {
+		if (signal.aborted) {
+			counts["not-started"] += 1;
+			lines.push(`${item.id}: not-started (batch cancelled before this child began)`);
+			continue;
+		}
+		let result;
+		try {
+			result = await compactSubagent(ctx, locks, config, caller, item.id, signal, sourceCommandId);
+		} catch (error) {
+			result = { outcome: "error", text: `unexpected error: ${error instanceof Error ? error.message : String(error)}` };
+		}
+		switch (result.outcome) {
+			case "compacted":
+			case "release-failed":
+				counts.compacted += 1;
+				break;
+			case "nothing-to-compact":
+				counts["nothing-to-compact"] += 1;
+				break;
+			case "cancelled":
+				counts.cancelled += 1;
+				break;
+			default:
+				counts.failed += 1;
+				break;
+		}
+		if (result.outcome === "compacted" || result.outcome === "release-failed") {
+			lines.push(`${item.id}: ${result.outcome} — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`);
+		} else if (result.outcome === "usage") {
+			lines.push(`${item.id}: skipped (usage)`);
+		} else {
+			lines.push(`${item.id}: ${result.outcome} — ${result.text}`);
+		}
+	}
+	const summary = `Summary — total ${items.length}: compacted ${counts.compacted}, nothing-to-compact ${counts["nothing-to-compact"]}, failed ${counts.failed}, cancelled ${counts.cancelled}, not-started: ${counts["not-started"]}.`;
+	const text = ["Batch compaction of the caller's direct-subagent snapshot:", ...lines, summary].join("\n");
+	return { outcome: signal.aborted ? "batch-cancelled" : "completed", text, counts };
+}
+
+function emptyBatchCounts() {
+	return { compacted: 0, "nothing-to-compact": 0, failed: 0, cancelled: 0, "not-started": 0 };
+}
+
 /** Render the durable direct-children catalog of the calling session. */
 async function listDirectChildren(ctx, caller, signal) {
 	const entries = await ctx.subagents.listChildren(caller.id, signal);
@@ -435,6 +514,11 @@ async function listDirectChildren(ctx, caller, signal) {
 		return `${entry.id} [${entry.mode}]${entry.label === undefined ? "" : ` ${entry.label}`} — ${live ? "live" : "persisted (not loaded)"}`;
 	});
 	return { kind: "success", text: ["Direct subagents of this session (observed at listing time; a listing is not a reservation):", ...lines].join("\n") };
+}
+
+/** Batch outcomes the command reports as success rather than error. */
+function batchCommandKind(outcome) {
+	return outcome === "completed" || outcome === "empty-catalog" ? "success" : "error";
 }
 
 /** Expected outcomes the command reports as success rather than error. */
@@ -460,6 +544,11 @@ function commandHandler(ctx, locks, config, active) {
 				}
 			}
 			const parts = raw.split(/\s+/);
+			if (parts[0] === "--all") {
+				if (parts.length > 1) return { kind: "error", text: `${USAGE} (--all takes no other arguments)` };
+				const batch = await compactAllSubagents(ctx, locks, config, invocation.agent, signal, invocation.commandId);
+				return { kind: batchCommandKind(batch.outcome), text: batch.text };
+			}
 			if (parts.length > 1) return { kind: "error", text: USAGE };
 			const result = await compactSubagent(ctx, locks, config, invocation.agent, parts[0], signal, invocation.commandId);
 			/* No sourceEventSeq: it would be written into the *parent* command/done
@@ -519,8 +608,60 @@ function subagentCompactTool(ctx, locks, config, active) {
 	});
 }
 
+function compactAllSubagentsTool(ctx, locks, config, active) {
+	return defineTool({
+		name: "compact_all_subagents",
+		description: "Compact the older history of ALL of your direct subagents in one run — every child in the current catalog snapshot (live children, and continuable children that already finished), serialized one at a time. Reports per-child outcomes and full counts. Each compacted child costs one summary request on its own model route. Cancellation stops children that have not started yet; finished results are kept.",
+		parameters: {},
+		output: {
+			schema: {
+				type: "object",
+				additionalProperties: false,
+				properties: {
+					text: { type: "string", required: true },
+					outcome: { type: "string", required: true },
+					total: { type: "number" },
+					compacted: { type: "number" },
+					nothing_to_compact: { type: "number" },
+					failed: { type: "number" },
+					cancelled: { type: "number" },
+					not_started: { type: "number" }
+				}
+			},
+			render: (_args, value) => [{ type: "text", text: value.text }]
+		},
+		async execute(_args, exec) {
+			const caller = exec.agent;
+			if (caller === undefined) throw new Error("compact_all_subagents: no calling agent on this execution");
+			const controller = new AbortController();
+			const operation = compactAllSubagents(ctx, locks, config, caller, operationSignal(exec.signal, controller.signal), undefined);
+			active.begin(operation, controller);
+			const result = await operation;
+			const counts = result.counts ?? emptyBatchCounts();
+			return {
+				text: result.text,
+				outcome: result.outcome,
+				...counts["not-started"] + counts.compacted + counts["nothing-to-compact"] + counts.failed + counts.cancelled > 0 || result.outcome !== "empty-catalog" ? {
+					total: totalCount(result.text),
+					compacted: counts.compacted,
+					nothing_to_compact: counts["nothing-to-compact"],
+					failed: counts.failed,
+					cancelled: counts.cancelled,
+					not_started: counts["not-started"]
+				} : { total: 0 }
+			};
+		}
+	});
+}
+
+/** Parse the batch total back out of the summary line for the tool output. */
+function totalCount(text) {
+	const match = /total (\d+):/.exec(text ?? "");
+	return match === null ? 0 : Number(match[1]);
+}
+
 /**
- * Register the command and tool inside one effect. The cleanup hook is
+ * Register the command and tools inside one effect. The cleanup hook is
  * yielded first so Cordis disposes it last: registrations go offline before
  * in-flight operations are aborted and awaited.
  * @param ctx - plugin context.
@@ -548,19 +689,23 @@ function apply(ctx, config = {}) {
 		yield ctx.commands.register({
 			definitionId: CommandDefinitionId("@local/dsh-subagent-compactor"),
 			name: "subagent-compact",
-			description: "List direct subagents, or compact one direct subagent's history (live or finished continuable)",
+			description: "List direct subagents, compact one by id, or compact all of them (--all)",
 			/* Desktop's command UI only claims a NON-bare invocation (arguments
 			 * present) when the definition declares `input`; without it the line
 			 * falls through as a plain user message
 			 * (dsh-client-ui-commands/lib/client.js claim: `desc.input !== void 0`,
 			 * else `if (!bare) return void 0`). Official exemplar: /goal. */
 			input: {
-				hint: "[<subagent-session-id>]"
+				hint: "[--all | <subagent-session-id>]"
 			},
 			handler: commandHandler(ctx, locks, resolved, active)
 		});
 		const unregisterTool = ctx.tools.register(subagentCompactTool(ctx, locks, resolved, active));
-		yield () => unregisterTool();
+		const unregisterBatchTool = ctx.tools.register(compactAllSubagentsTool(ctx, locks, resolved, active));
+		yield () => {
+			unregisterBatchTool();
+			unregisterTool();
+		};
 	}, "subagent-compactor lifecycle");
 }
 

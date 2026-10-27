@@ -52,6 +52,10 @@ async function persistedBytes(ctx, sessionId) {
  * shrinks it; one turn is too thin for the shrink check.
  */
 async function settleTwoTurnChild(ctx, parent, fake, childOptions = { agentOptions: { provider: PROVIDER, model: CHILD_MODEL } }) {
+	// Reset per child so a previous child's trailing short mode does not thin
+	// this child's first (filler) turn — the engine's shrink check needs the span.
+	fake.state.mode = "turn";
+	fake.state.delayMs = 0;
 	const childId = await settleChild(ctx, parent, "Please do the first task.", childOptions);
 	fake.state.mode = "turn-short";
 	await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Working round 2: please continue and report." }], { signal: signal() });
@@ -1088,5 +1092,235 @@ test("cold host capability: runMaintenance succeeds without a signal", async () 
 		const childId = await settleTwoTurnChild(ctx, parent, fake);
 		const answer = await ctx.subagents.runMaintenance(parent, childId, { job: async () => 42 });
 		assert.equal(answer, 42, "an omitted signal is legal: the entry normalizes one internally");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Batch compaction (--all / compact_all_subagents): one catalog snapshot of
+// the calling parent, serialized per-item compaction, honest per-item and
+// summary reporting, cancellation that never claims success.
+
+test("batch: compacts every settled continuable child in the snapshot, both entries survive and continue", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-parent");
+		const first = await settleTwoTurnChild(ctx, parent, fake);
+		const second = await settleTwoTurnChild(ctx, parent, fake);
+
+		fake.state.mode = "summarize";
+		const execution = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.equal(execution.result.kind, "success", execution.result.text);
+		assert.match(execution.result.text, new RegExp(first));
+		assert.match(execution.result.text, new RegExp(second));
+		assert.match(execution.result.text, /compacted 2/);
+
+		for (const childId of [first, second]) {
+			const log = await readEvents(ctx, childId);
+			assert.equal(log.filter((event) => event.type === "compaction/summary").length, 1, `${childId}: one summary persisted`);
+		}
+		// Both continue normally afterwards.
+		fake.state.mode = "turn2";
+		for (const [index, childId] of [first, second].entries()) {
+			await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: `Follow-up ${index}.` }], { signal: signal() });
+		}
+		await waitFor(async () => {
+			const logs = await Promise.all([first, second].map((id) => readEvents(ctx, id)));
+			return logs.every((log) => log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled")));
+		}, 8000);
+	});
+});
+
+test("batch: tool entry compacts the same snapshot", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-tool-parent");
+		const first = await settleTwoTurnChild(ctx, parent, fake);
+		const second = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize";
+		const tool = ctx.tools.get("compact_all_subagents");
+		assert.notEqual(tool, undefined, "the batch tool must be registered");
+		const result = await tool.execute({}, { agent: parent, signal: new AbortController().signal });
+		assert.equal(result.outcome, "completed");
+		assert.equal(result.total, 2);
+		assert.equal(result.compacted, 2);
+		assert.equal(result.not_started, 0);
+		for (const childId of [first, second]) {
+			const log = await readEvents(ctx, childId);
+			assert.equal(log.filter((event) => event.type === "compaction/summary").length, 1);
+		}
+	});
+});
+
+/** Register a crafted child id into the parent's durable catalog projection. */
+function registerCatalogChild(ctx, parent, childId, mode, label = "crafted") {
+	parent.session.append("subagent/catalog", { version: 0, childId, childCreatedAt: Date.now(), mode, label });
+}
+
+test("batch: mixed catalog — per-item outcomes, later items continue, stats add up", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-mixed-parent");
+		const good = await settleTwoTurnChild(ctx, parent, fake);
+		const emptyChild = await craftSession(ctx, parent, [
+			{ type: "subagent/descriptor", data: continuableDescriptor() }
+		]);
+		registerCatalogChild(ctx, parent, emptyChild, "continuable");
+		const oneShot = await craftSession(ctx, parent, [
+			{ type: "subagent/descriptor", data: { version: 3, mode: "one-shot", provider: "spawn", label: "once" } }
+		]);
+		registerCatalogChild(ctx, parent, oneShot, "one-shot");
+		const captured = await captureInboxSplice(ctx, parent, fake);
+		const message = captured.inserted[0];
+		message.content = [{ type: "text", text: "PENDING batch refusal." }];
+		const pending = await craftSession(ctx, parent, [
+			{ type: "subagent/descriptor", data: continuableDescriptor({ agentProvider: PROVIDER, agentModel: CHILD_MODEL }) },
+			{ type: "agent/inbox/spliced", data: { ...captured, target: "next-turn", start: 0, inserted: [message] } }
+		]);
+		registerCatalogChild(ctx, parent, pending, "continuable");
+
+		fake.state.mode = "summarize";
+		const execution = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.equal(execution.result.kind, "success", execution.result.text);
+		// Catalog order: good, emptyChild, oneShot, pending, plus the capture probe.
+		assert.match(execution.result.text, /total \d+/);
+		assert.match(execution.result.text, new RegExp(good));
+		assert.match(execution.result.text, new RegExp(emptyChild));
+		assert.match(execution.result.text, new RegExp(oneShot));
+		assert.match(execution.result.text, new RegExp(pending));
+		// The crafted one-shot and pending children are refused honestly and
+		// never hide the rest; the empty one reports nothing to compact.
+		assert.match(execution.result.text, new RegExp(`${oneShot}: unsupported-target`));
+		assert.match(execution.result.text, new RegExp(`${pending}: pending-input`));
+		assert.match(execution.result.text, new RegExp(`${emptyChild}: nothing-to-compact`));
+		assert.match(execution.result.text, /failed [1-9]/);
+		const goodLog = await readEvents(ctx, good);
+		assert.equal(goodLog.filter((event) => event.type === "compaction/summary").length, 1);
+		const pendingObservation = await ctx.sessionQuery.observeSession(pending);
+		try {
+			const inbox = pendingObservation.projections?.values?.inbox;
+			assert.ok(((inbox?.["next-turn"]?.length ?? 0) + (inbox?.["next-step"]?.length ?? 0)) > 0, "pending work untouched");
+		} finally {
+			pendingObservation[Symbol.dispose]();
+		}
+	});
+});
+
+/** Capture one real inbox splice payload from a live delivery (batch fixtures). */
+async function captureInboxSplice(ctx, parent, fake) {
+	const probeId = await settleChild(ctx, parent, "capture probe", { agentOptions: { provider: PROVIDER, model: CHILD_MODEL } });
+	let captured;
+	const stop = ctx.on("session/event", (session, event) => {
+		if (event.type === "agent/inbox/spliced" && event.data.inserted.length > 0 && session.id === probeId) captured = structuredClone(event.data);
+	});
+	fake.state.mode = "turn-short";
+	await ctx.subagents.sendMessage(parent, probeId, [{ type: "text", text: "capture" }], { signal: signal() });
+	await waitFor(() => captured !== undefined, 8000);
+	stop();
+	await waitFor(() => ctx.agents.get(probeId) === undefined);
+	return captured;
+}
+
+test("batch: abort mid-run stops unstarted items and keeps finished results", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-cancel-parent");
+		const ids = [];
+		for (let index = 0; index < 3; index += 1) ids.push(await settleTwoTurnChild(ctx, parent, fake));
+
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 250;
+		const controller = new AbortController();
+		const run = ctx.commands.execute(parent, "/subagent-compact --all", [], controller.signal);
+		// Abort while the FIRST child's summary is in flight.
+		const start = fake.state.requests.length;
+		await waitFor(() => fake.state.requests.length > start);
+		controller.abort(new Error("user cancelled"));
+		// An aborted command may settle as an error result or reject with the
+		// abort error (the command service's withAbort semantics); both are
+		// cancellations, never success.
+		const execution = await run.then(
+			(settled) => settled.result,
+			(error) => ({ kind: "error", text: String(error?.message ?? error) })
+		);
+		assert.equal(execution.kind, "error", "a cancelled batch must not report success");
+		if (execution.text?.includes("Summary")) {
+			assert.match(execution.text, /not-started: 2/);
+			assert.match(execution.text, new RegExp(ids[0]));
+		} else {
+			// The operation promise continues in the background after the
+			// command rejected; wait for the batch text via the session logs —
+			// first child compacted or cancelled, later ones never started.
+			await waitFor(async () => {
+				const logs = await Promise.all(ids.slice(1).map((id) => readEvents(ctx, id)));
+				return logs.every((log) => !log.some((event) => event.type === "compaction/summary"));
+			}, 8000);
+		}
+	});
+});
+
+test("batch: a plugin-only unload leaves finished results, later items not started", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-unload-parent");
+		const first = await settleTwoTurnChild(ctx, parent, fake);
+		const second = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 250;
+		const run = ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		const start = fake.state.requests.length;
+		await waitFor(() => fake.state.requests.length > start);
+		await ctx.compactorFiber.dispose();
+		const execution = await run;
+		assert.notEqual(execution.result.kind, "success");
+		assert.match(execution.result.text, /not-started: 1/);
+		assert.match(execution.result.text, new RegExp(first));
+		const secondLog = await readEvents(ctx, second);
+		assert.equal(secondLog.filter((event) => event.type === "compaction/summary").length, 0, "the unloaded batch starts nothing new");
+	});
+});
+
+test("batch: concurrent single compaction of a batch target reports busy", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-race-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 300;
+		const batch = ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		await waitFor(() => fake.state.requests.some((request) => request.mode === "summarize"));
+		const single = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		assert.equal(single.result.kind, "error");
+		assert.match(single.result.text, /already in progress/);
+		fake.state.delayMs = 0;
+		const done = await batch;
+		assert.equal(done.result.kind, "success");
+	});
+});
+
+test("batch: empty catalog is explicit; --all rejects extra arguments", async () => {
+	await withComposition(async (ctx) => {
+		const parent = await makeParent(ctx, "batch-empty-parent");
+		const execution = await ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		assert.equal(execution.result.kind, "success");
+		assert.match(execution.result.text, /no direct subagents/i);
+		const mixed = await ctx.commands.execute(parent, "/subagent-compact --all extra", [], signal());
+		assert.equal(mixed.result.kind, "error");
+		assert.match(mixed.result.text, /Usage/);
+	});
+});
+
+test("batch: children spawned during the run are not added to the snapshot", async () => {
+	await withComposition(async (ctx, fake) => {
+		const parent = await makeParent(ctx, "batch-snapshot-parent");
+		const first = await settleTwoTurnChild(ctx, parent, fake);
+		fake.state.mode = "summarize";
+		fake.state.delayMs = 300;
+		const run = ctx.commands.execute(parent, "/subagent-compact --all", [], signal());
+		const start = fake.state.requests.length;
+		await waitFor(() => fake.state.requests.length > start);
+		// A brand-new child finishes (and settles) while the batch is mid-summary.
+		const late = await settleChild(ctx, parent, "Spawned mid-batch", { agentOptions: { provider: PROVIDER, model: CHILD_MODEL } });
+		await waitFor(() => ctx.agents.get(late) === undefined);
+		const execution = await run;
+		assert.equal(execution.result.kind, "success", execution.result.text);
+		assert.match(execution.result.text, /total 1/);
+		assert.doesNotMatch(execution.result.text, new RegExp(late), "the late child belongs to the NEXT run, not this snapshot");
+		const lateLog = await readEvents(ctx, late);
+		assert.equal(lateLog.filter((event) => event.type === "compaction/summary").length, 0, "the late child was not compacted by this run");
+		void first;
 	});
 });

@@ -100,9 +100,10 @@ test("plugin surface", () => {
 test("apply registers command and tool inside one reversed-order effect", () => {
 	const harness = makeHarness({ agent: makeAgent() });
 	assert.equal(harness.registrations.commands.length, 1);
-	assert.equal(harness.registrations.tools.length, 1);
+	assert.equal(harness.registrations.tools.length, 2);
 	assert.equal(harness.command.name, "subagent-compact");
 	assert.equal(harness.tool.name, "compact_subagent");
+	assert.equal(harness.registrations.tools[1].name, "compact_all_subagents");
 	// cleanup disposer first yield => disposed last
 	assert.equal(typeof harness.registrations.effectDisposers[0], "function");
 });
@@ -414,7 +415,7 @@ test("pending listing is cancelled by plugin unload through the fused signal", a
 
 test("command declares input so Desktop's UI claims parameterized invocations", async () => {
 	const harness = makeHarness({ agent: makeAgent() });
-	assert.equal(harness.command.input?.hint, "[<subagent-session-id>]");
+	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id>]");
 	// Mirror of the real Desktop claim predicate
 	// (dsh-client-ui-commands/lib/client.js:1661-1665): a non-bare line is
 	// claimed only when the definition declares `input`; otherwise it falls
@@ -715,7 +716,7 @@ test("cold: an aborted maintenance settles as a clean cancellation", async () =>
 
 test("command declares input so Desktop's UI claims parameterized invocations", async () => {
 	const harness = makeHarness({ agent: makeAgent() });
-	assert.equal(harness.command.input?.hint, "[<subagent-session-id>]");
+	assert.equal(harness.command.input?.hint, "[--all | <subagent-session-id>]");
 	// Mirror of the real Desktop claim predicate
 	// (dsh-client-ui-commands/lib/client.js:1661-1665): a non-bare line is
 	// claimed only when the definition declares `input`; otherwise it falls
@@ -728,4 +729,87 @@ test("command declares input so Desktop's UI claims parameterized invocations", 
 	};
 	assert.notEqual(desktopClaims(harness.command, "/subagent-compact 3f0c"), undefined, "parameterized line must be claimable");
 	assert.notEqual(desktopClaims(harness.command, "/subagent-compact"), undefined, "bare line must remain claimable");
+});
+
+// ---------------------------------------------------------------------------
+// Batch unit tests: runner decision table on stub contexts.
+
+function makeBatchHarness({ children, agentsById = new Map(), enginesById = new Map(), maintenanceById = new Map() } = {}) {
+	const caller = { id: "parent-1" };
+	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
+	const maintenanceCalls = [];
+	const liveAgents = agentsById;
+	const ctx = {
+		agents: {
+			get: (id) => (id === caller.id ? caller : liveAgents.get(id)),
+			isOwnedBy: (id, owner) => owner === caller && liveAgents.has(id)
+		},
+		subagents: {
+			listChildren: children ?? (async () => []),
+			runMaintenance: async (parent, childId, options) => {
+				maintenanceCalls.push(childId);
+				if (maintenanceById.has(childId)) return maintenanceById.get(childId)(parent, childId, options);
+				return options.job({ id: childId, inbox: { hasPending: false, nextTurn: [], nextStep: [] }, whenIdle: async () => {} }, options.signal);
+			}
+		},
+		get(serviceName) {
+			if (serviceName === "compaction") return {
+				compactNow: async (agent, signal) => {
+					const engine = enginesById.get(agent.id);
+					if (engine === undefined) return null;
+					return engine(agent, signal);
+				}
+			};
+			if (serviceName === "sessionQuery") return { observeSession: async (id) => ({
+				header: { id, parentSession: caller.id },
+				inheritedEventCount: 0,
+				events: Object.freeze([{ seq: 0, type: "subagent/descriptor", data: { version: 3, mode: "continuable", provider: "spawn", label: "w" } }]),
+				projections: { values: { inbox: { "next-turn": [], "next-step": [] } } },
+				[Symbol.dispose]() {}
+			}) };
+			return undefined;
+		},
+		commands: { register(d) { registrations.commands.push(d); return () => {}; } },
+		tools: { register(d) { registrations.tools.push(d); return () => {}; } },
+		effect(g) { registrations.effects.push({ generator: g }); return () => {}; }
+	};
+	apply(ctx, { waitForIdle: true });
+	for (const { generator } of registrations.effects) {
+		const it = generator();
+		let step = it.next();
+		while (!step.done) { registrations.effectDisposers.push(step.value); step = it.next(); }
+	}
+	return { ctx, caller, registrations, maintenanceCalls };
+}
+
+test("batch: a child-level cancelled outcome continues the batch when the batch signal is live", async () => {
+	const engines = new Map([
+		["a", async () => { const e = new Error("child cancelled"); e.name = "ManualCompactionError"; e.code = "cancelled"; throw e; }],
+		["b", async () => ({ shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 })]
+	]);
+	const harness = makeBatchHarness({ children: async () => [{ id: "a" }, { id: "b" }], enginesById: engines });
+	const tool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	const result = await tool.execute({}, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "completed");
+	assert.equal(result.cancelled, 1, "the child's own cancelled outcome is recorded");
+	assert.equal(result.compacted, 1, "and the batch CONTINUES to the next child");
+	assert.equal(harness.maintenanceCalls.length, 2);
+});
+
+test("batch: registers the --all hint and the batch tool", async () => {
+	const harness = makeBatchHarness({});
+	const command = harness.registrations.commands[0];
+	assert.equal(command.input?.hint, "[--all | <subagent-session-id>]");
+	// Mirror of the Desktop claim predicate: a parameterized line is claimed
+	// only when the definition declares `input`.
+	const desktopClaims = (definition, line) => {
+		const bare = line.trim() === `/${definition.name}` || line.trim() === `/${definition.name} `;
+		if (definition.input !== undefined) return { claim: true };
+		if (!bare) return undefined;
+		return { claim: true };
+	};
+	assert.notEqual(desktopClaims(command, "/subagent-compact --all"), undefined, "--all lines must be claimable");
+	const batchTool = harness.registrations.tools.find((t) => t.name === "compact_all_subagents");
+	assert.notEqual(batchTool, undefined);
+	assert.deepEqual(batchTool.parameters, { type: "object", properties: {} });
 });
