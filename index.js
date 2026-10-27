@@ -388,7 +388,7 @@ async function compactPersistedSubagent(ctx, active, config, caller, sessionId, 
 		active.begin(drainRestoredAgent(restored.agent, restored, strandedController.signal), strandedController);
 		return {
 			outcome: "pending-input",
-			text: `Session "${sessionId}" holds ${restored.agent.inbox.nextTurn.length + restored.agent.inbox.nextStep.length} pending message(s) in the loaded snapshot (input raced in while this operation was starting). Compaction was refused; the pending work is untouched and this restored session stays resident until that input is processed, so a continuation of the same id will be temporarily refused. Send the child another message (any public input completes the parked work), or retry after it drains. Public DSH APIs currently offer no way to release a restored handle while preserving accepted input; this residency is the documented workaround.`
+			text: `Session "${sessionId}" holds ${restored.agent.inbox.nextTurn.length + restored.agent.inbox.nextStep.length} pending message(s) in the loaded snapshot (input raced in while this operation was starting). Compaction was refused and the pending work is untouched. Honest limitation of the stock runtime: the restored session stays resident holding its writer, and while it does, normal continuation routes (sendMessage / addressed prompts) are refused with NOT_RESUMABLE — this residency is not a recovery path. It ends when the parked input is processed through the Agent's public input surface, on plugin unload (which currently cancels parked input), or on process exit. The manager-owned maintenance capability proposed in docs/HOST_MAINTENANCE_REQUIREMENTS.md removes this state entirely.`
 		};
 	}
 	let outcome;

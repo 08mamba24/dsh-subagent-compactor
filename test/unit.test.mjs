@@ -805,38 +805,8 @@ test("cold R1: pending in the loaded snapshot strands the handle instead of canc
 	assert.equal(harness.resumeCalls.length, 1);
 	await new Promise((resolve) => setTimeout(resolve, 10));
 	assert.equal(disposed, false, "the stranded handle must not be disposed while its input is pending");
-
-	// The stranding drain is registered as an unload-abortable operation:
-	// plugin unload terminates it through the ordinary dispose.
-	for (const disposer of [...harness.registrations.effectDisposers].reverse()) {
-		await (typeof disposer === "function" ? disposer() : disposer);
-	}
-	await new Promise((resolve) => setTimeout(resolve, 10));
-	assert.equal(disposed, true, "unload terminates the strand through dispose");
+	// What unload DOES to a parked strand is a host-capability question, not
+	// a green assertion here: the durable-preservation contract is asserted
+	// by the R2 dual-mode integration regressions (EXPECT_HOST_MAINTENANCE).
 });
 
-test("cold R1: unload during the release cutoff terminates through dispose", async () => {
-	const agent = drainAgentStub("cold-1");
-	agent.inbox.agent = agent;
-	// Accepted mid-window; unload arrives while the cutoff is still parked.
-	const engine = { compactNow: async () => {
-		agent.pendingFlag = true;
-		return { shadowedSeqs: [1], shadowedTokenCount: 5, summarySeq: 3 };
-	} };
-	let disposed = false;
-	const harness = makeColdHarness({
-		observationSpec: { events: [continuableDescriptorEvent()], values: { inbox: { "next-turn": [], "next-step": [] } } },
-		hostEngine: engine
-	});
-	harness.resumed.agent = agent;
-	harness.resumed.dispose = async () => { disposed = true; };
-	const operation = harness.tool.execute({ session_id: "cold-1" }, { agent: harness.caller, signal: new AbortController().signal });
-	await new Promise((resolve) => setTimeout(resolve, 10));
-	assert.equal(disposed, false, "cutoff holds while input is pending");
-	for (const disposer of [...harness.registrations.effectDisposers].reverse()) {
-		await (typeof disposer === "function" ? disposer() : disposer);
-	}
-	const result = await operation;
-	assert.equal(result.outcome, "compacted");
-	assert.equal(disposed, true, "unload terminates the cutoff through the ordinary dispose");
-});

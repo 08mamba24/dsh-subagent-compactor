@@ -4,6 +4,18 @@ Plugin version: **1.1.0** (cold compaction feature branch, review round 2). Test
 
 This is a summary of the implementation review and local automated runs. Raw conversations, screenshots, machine configuration, and session logs remain outside this public repository. Desktop acceptance for 1.1.0 has **not** been run yet — code review comes first; the 1.0.1 Desktop acceptance below remains the reference for the shared live-window behavior.
 
+## Review round 3 (R2: contract vs. stock gap)
+
+Review of `c2017f1` found the R1 fix incomplete (a check-then-dispose window still drops input accepted in that window; the strand blocks every normal continuation route with `NOT_RESUMABLE`; plugin unload cancels parked input) and redirected the work: stop stacking compensations, pin the lifecycle capability gap, and propose the host-side fix. All three reviewer proofs were reproduced on `c2017f1` before this round:
+
+- release-cutoff wrapper proof — sentinel accepted after the empty check, dropped by the release, compaction still reported success;
+- strand-normal proof — 3× `sendMessage` and the addressed `prompt({delivery:"queue"})` all `NOT_RESUMABLE` while the strand held the writer (`stillLive`, `stillPending`);
+- plugin-only unload proof — `ctx.compactorFiber.dispose()` left `removedCount:1, outcome:"canceled"` and an empty inbox.
+
+Deliverables of this round: **no new plugin mechanism**. The three proofs became self-inverting dual-mode regressions — green in *gap* mode (asserting today's documented loss), red in *contract* mode (`EXPECT_HOST_MAINTENANCE=1 node --test test/cold.integration.test.mjs`, asserting the acceptance contract) — plus `docs/HOST_MAINTENANCE_REQUIREMENTS.md`, the manager-owned `runMaintenance` proposal (gaps A+C) with a lossless-unload teardown option (gap D), an explicit "stock 0.2.1-rc.2 is insufficient" conclusion, and a real-route verification plan. The two unit tests that had celebrated the lossy unload dispose were removed; the stranding message in `index.js` now states plainly that it is not a recovery path.
+
+The R1 regressions (sentinel processed before release in the success/cancel/summary-failure windows; precheck-race work preserved and completed via the public input surface) remain green and unchanged — they are the parts of the contract the stock runtime can already honor.
+
 ## Review round 2 (R1/P2 fixes)
 
 The independent review of commit `2c9bc5e` returned REQUEST_CHANGES with one P1: the cold handle's unconditional dispose durably cancelled accepted input — the write lock does not fence the published Agent's public input surface (`followup`/`steer`/`inject` via `agents.get(id)`), and a legal second persistence writer can enqueue pending between the read precheck and the writer open. Both red proofs were reproduced against `2c9bc5e` before the fix:

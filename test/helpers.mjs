@@ -125,7 +125,10 @@ export async function bootComposition(baseURL, storageRoot, { extra = [], plugin
 		await ctx.plugin(module.default ?? module, config);
 	}
 	const plugin = await import("../index.js");
-	await ctx.plugin(plugin, pluginConfig);
+	/* Expose the plugin's own fiber so tests can unload ONLY the compactor
+	 * (Host, query, and children stay live) — the unload-loss proofs rely on
+	 * exactly that boundary. */
+	ctx.compactorFiber = await ctx.plugin(plugin, pluginConfig);
 	return ctx;
 }
 

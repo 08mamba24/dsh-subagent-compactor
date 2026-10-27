@@ -662,3 +662,182 @@ test("cold R1: pending injected between precheck and load strands without cancel
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// R2 regressions (review round 2): the acceptance contract for cold
+// compaction vs. the stock-API gap, in a self-inverting dual mode.
+//
+//   EXPECT_HOST_MAINTENANCE unset  → asserts the GAP IS STILL PRESENT
+//                                    (green today; turns red once the host
+//                                    capability lands, prompting removal).
+//   EXPECT_HOST_MAINTENANCE=1      → asserts the ACCEPTANCE CONTRACT holds
+//                                    (red today; the target state, see
+//                                    docs/HOST_MAINTENANCE_REQUIREMENTS.md).
+//
+// The interleavings are the reviewer's own proofs: a public
+// AgentHandle.dispose wrapper for the release cutoff, a second legal
+// persistence writer for the precheck race, and a plugin-only fiber unload.
+
+const CONTRACT = process.env.EXPECT_HOST_MAINTENANCE === "1";
+
+/** Contract mode expects the guarantee; gap mode expects today's loss. */
+function contractOrGap(value, contractExpectation, gapExpectation, label) {
+	const expected = CONTRACT ? contractExpectation : gapExpectation;
+	assert.equal(value, expected, `${label}: ${CONTRACT ? "contract" : "gap"} mode expected ${String(expected)}`);
+}
+
+test("cold R2: input accepted at the release cutoff (contract vs gap)", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r2-cutoff-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		const originalResume = ctx.agents.resume.bind(ctx.agents);
+		let injected = false;
+		ctx.agents.resume = async (options) => {
+			const handle = await originalResume(options);
+			if (options.resumeSessionId !== childId) return handle;
+			return {
+				...handle,
+				dispose: async () => {
+					if (!injected) {
+						injected = true;
+						handle.agent.followup(createUserMessage({ source: { kind: "review-release-cutoff" }, content: [{ type: "text", text: "RELEASE-CUTOFF-SENTINEL: preserve accepted work" }] }));
+					}
+					return handle.dispose();
+				}
+			};
+		};
+		try {
+			fake.state.mode = "summarize";
+			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+			const log = await readEvents(ctx, childId);
+			const sentinelProcessed = log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("RELEASE-CUTOFF-SENTINEL"));
+			contractOrGap(sentinelProcessed, true, false, "the cutoff-accepted sentinel reaches the model");
+			if (CONTRACT) {
+				const at = log.findIndex((event) => event.type === "user/message" && JSON.stringify(event.data).includes("RELEASE-CUTOFF-SENTINEL"));
+				assert.ok(log.slice(at).some((event) => event.type === "assistant/message"), "the sentinel must receive an answer");
+				await assertNoCancelledInboxSplices(ctx, childId, "release cutoff");
+				assert.notEqual(execution.result.kind, "success", "a compaction that drops accepted input must not report success");
+			}
+		} finally {
+			ctx.agents.resume = originalResume;
+		}
+	});
+});
+
+test("cold R2: normal-route continuation of a stranded child (contract vs gap)", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r2-strand-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		const originalResume = ctx.agents.resume.bind(ctx.agents);
+		let messageId;
+		ctx.agents.resume = async (options) => {
+			if (options.resumeSessionId === childId && messageId === undefined) {
+				const writer = await ctx.get("sessionPersistence").open(childId, "write");
+				try {
+					const snapshot = await writer.read(0);
+					const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: "PRECHECK-RACE-SENTINEL: preserve pending work" }] });
+					messageId = message.id;
+					await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
+				} finally {
+					await writer.close();
+				}
+			}
+			return originalResume(options);
+		};
+		try {
+			fake.state.mode = "summarize";
+			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+			assert.equal(execution.result.kind, "error");
+			assert.match(execution.result.text, /pending/i);
+
+			// Normal routes: model sendMessage + addressed UI queue prompt.
+			const attempts = [];
+			for (let index = 0; index < 2; index += 1) {
+				attempts.push(
+					ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: `Normal retry ${index}` }], { signal: signal() })
+						.then(() => ({ accepted: true }), (error) => ({ accepted: false, message: error.message }))
+				);
+			}
+			attempts.push(
+				ctx.subagents.prompt({ parentSessionId: parent.id, childSessionId: childId, mode: "continuable", delivery: "queue", requestId: "r2-strand-queue", content: [{ type: "text", text: "Normal addressed UI queue retry" }] }, signal())
+					.then(() => ({ route: "addressed-queue", accepted: true }), (error) => ({ route: "addressed-queue", accepted: false, message: error.message }))
+			);
+			const results = await Promise.all(attempts);
+			const anyAccepted = results.some((result) => result.accepted);
+			contractOrGap(anyAccepted, true, false, "a normal route accepts while the refused restoration is resident");
+			if (CONTRACT) {
+				await waitFor(async () => {
+					const log = await readEvents(ctx, childId);
+					return log.some((event) => event.type === "user/message" && JSON.stringify(event.data).includes("PRECHECK-RACE-SENTINEL"));
+				}, 8000);
+				await assertNoCancelledInboxSplices(ctx, childId, "strand normal route");
+			} else {
+				const stranded = ctx.agents.get(childId);
+				assert.ok(stranded !== undefined && stranded.inbox.hasPending, "gap mode: the strand holds the writer and the parked work");
+				for (const result of results) assert.equal(result.accepted, false, "gap mode: every normal route is refused today");
+			}
+		} finally {
+			ctx.agents.resume = originalResume;
+		}
+	});
+});
+
+test("cold R2: plugin unload with parked pending (contract vs gap)", async () => {
+	await withComposition(async (ctx, fake) => {
+		const { createUserMessage } = await import("@deepseek-ai/dsh-llm");
+		const parent = await makeParent(ctx, "r2-unload-parent");
+		const childId = await settleTwoTurnChild(ctx, parent, fake);
+
+		const originalResume = ctx.agents.resume.bind(ctx.agents);
+		let messageId;
+		ctx.agents.resume = async (options) => {
+			if (options.resumeSessionId === childId && messageId === undefined) {
+				const writer = await ctx.get("sessionPersistence").open(childId, "write");
+				try {
+					const snapshot = await writer.read(0);
+					const message = createUserMessage({ source: { kind: "review-persistent-producer" }, content: [{ type: "text", text: "PRECHECK-RACE-SENTINEL: preserve pending work" }] });
+					messageId = message.id;
+					await writer.append([{ seq: snapshot.events.length, time: Date.now(), type: "agent/inbox/spliced", data: { target: "next-turn", start: 0, inserted: [message] } }]);
+				} finally {
+					await writer.close();
+				}
+			}
+			return originalResume(options);
+		};
+		try {
+			fake.state.mode = "summarize";
+			const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+			assert.equal(execution.result.kind, "error");
+			assert.match(execution.result.text, /pending/i);
+
+			// Unload ONLY the compactor plugin; the Host, query, and store stay.
+			await ctx.compactorFiber.dispose();
+			const observation = await ctx.sessionQuery.observeSession(childId);
+			let pendingCount;
+			let cancelledSplices;
+			try {
+				const inbox = observation.projections?.values?.inbox;
+				pendingCount = (inbox?.["next-turn"]?.length ?? 0) + (inbox?.["next-step"]?.length ?? 0);
+				cancelledSplices = [...observation.events].filter((event) => event.type === "agent/inbox/spliced" && event.data.outcome === "canceled" && (event.data.removedCount ?? 0) > 0).length;
+			} finally {
+				observation[Symbol.dispose]();
+			}
+			contractOrGap(pendingCount > 0, true, false, "parked pending input survives the plugin unload");
+			contractOrGap(cancelledSplices === 0, true, false, "unload does not durably cancel parked input");
+			if (CONTRACT) {
+				fake.state.mode = "turn2";
+				await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Continue after unload." }], { signal: signal() });
+				await waitFor(async () => {
+					const log = await readEvents(ctx, childId);
+					return log.some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled"));
+				}, 8000);
+			}
+		} finally {
+			ctx.agents.resume = originalResume;
+		}
+	});
+});

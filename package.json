@@ -15,7 +15,8 @@
     "locale/*.json",
     "icon.svg",
     "TECHNICAL.md",
-    "docs/VALIDATION.md"
+    "docs/VALIDATION.md",
+    "docs/HOST_MAINTENANCE_REQUIREMENTS.md"
   ],
   "peerDependencies": {
     "@deepseek-ai/dsh-commands": "*",
