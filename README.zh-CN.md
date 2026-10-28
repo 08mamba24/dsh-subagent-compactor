@@ -46,13 +46,13 @@
    ```
 
    副本会带上两份已复审的运行时补丁（host-patch/0002 + 0003）、development 通道、独立 bundle id、更新的 ASAR 完整性记录、ad-hoc 签名，并**把独立的 profile 与端口对烧死为字面量**——`DSH_DEV_PROFILE` 等环境变量对副本无效（启动器同样清洗），即使直接双击副本，也绝不会落到日常 `dsh-desktop` profile 或任何其他开发会话库。全部哈希与身份记录在旁边的 `<副本>.app.manifest.json`。
-3. **启动**：`node host-patch/launch-desktop-copy.mjs --app "<副本路径>"`（或直接双击副本，两者都安全）。启动入口拒绝没有 sidecar manifest 的 app、不会对同一副本重复起第二个实例，只有显式传 `--debug-port` 才会开远程调试端口。
+3. **启动**：`node host-patch/launch-desktop-copy.mjs --app "<副本路径>"`（或直接双击副本，两者都安全）。启动入口拒绝没有 sidecar manifest 的 app、不会对同一副本重复起第二个实例，只有显式传 `--debug-port` 才会开远程调试端口。**首次启动会弹出“导入旧工作区”的选择（来源 `~/.dsh`）：做隔离验证必须选“从空白开始”**——选择导入会把 `~/.dsh` 的会话、凭证、工作区复制进这个独立 profile（profile 内 `.web-import-decision.json` 记录该决定），此后它不再是已确认的空白环境；日常使用想带旧数据同样应先知道这是复制、不是迁移。
 4. **随时体检**：`node host-patch/check-desktop-copy.mjs --app "<副本路径>"` 复核压缩包完整性、烧定的身份、补丁模块哈希、签名，并确认原版 app 仍是已验证基线。
 5. **在副本里安装本插件**：走 Desktop 自带界面——**插件 → 添加插件**，粘贴 `https://github.com/08mamba24/dsh-subagent-compactor.git`（可加 `#<commit>`），**安装 → 立即启用**。
 6. **使用**：在副本内的父会话中使用 `/subagent-compact`、`/subagent-compact --all`、`/subagent-compact report <batch-id>`，命令见下文。
 7. **回退**：退出副本，删除 `<副本>.app` 与 `<副本>.app.manifest.json` 即可。原版 Desktop、日常 profile 及其数据从未被修改；副本独立 profile 里新建的会话默认保留（想彻底清理就手动删除 `~/Library/Application Support/<manifest 里的 profile>`）。
 
-边界：仅声明并门禁校验 Desktop 0.12.1 / Harness 0.2.1-rc.2 / macOS arm64；Desktop 升级后需重新制作并复验副本；副本不会自动更新；日常会话/凭证不自动迁入副本。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
+边界：仅声明并门禁校验 Desktop 0.12.1 / Harness 0.2.1-rc.2 / macOS arm64；Desktop 升级后需重新制作并复验副本；副本不会自动更新；日常会话/凭证不自动迁入副本（但首启导入弹窗若选导入会**复制** `~/.dsh` 进副本 profile，见第 3 步）。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
 
 ## 使用
 

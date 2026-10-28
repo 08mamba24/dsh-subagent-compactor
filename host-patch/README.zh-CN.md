@@ -38,9 +38,11 @@ node host-patch/check-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compact
 
 `make-desktop-copy.mjs` 做的事：克隆源 app 到隔离 stage；解包 `app.asar`；对抽取出的**原版** `dsh-agent-loop`/`dsh-subagent` lib 应用 0002/0003（要求干净落上，出现 fuzz/offset 即失败）；把副本切到 development 通道、烧定按目标路径派生的独立 profile/端口对为**字面量**——`DSH_DEV_PROFILE`/`DSH_DEV_HARNESS_PORT`/`DSH_DEV_MOBILE_PORT` 环境变量对副本无效（启动器也会清洗这三个变量），裸双击与脚本启动身份一致；保留 unpacked 布局重打包；更新 Electron ASAR 完整性记录；改独立 bundle id；仅对副本做 ad-hoc 签名并校验；确认源 `app.asar` 前后哈希不变。全部证据写入 `<副本>.app.manifest.json`。失败只清理本次 stage；目标已存在、目标嵌套在源内、危险路径一律拒绝。
 
+首次启动副本时会弹出“导入旧工作区”选择（来源 `~/.dsh`，由 Desktop 自带的 maybeImportWebHome 流程发起）：**隔离验证必须选“从空白开始”**。选导入会把 `~/.dsh` 的会话、凭证、工作区**复制**进副本的独立 profile（profile 内 `.web-import-decision.json` 记录该决定）——独立 profile 从此不再是已确认的空白环境。本仓库不改动这一默认机制。
+
 启动后通过官方“**插件 → 添加插件**”安装本仓库插件，再在父会话里用 `/subagent-compact` 与 `--all`。回退 = 退出副本并删除副本及其 sidecar manifest；副本独立 profile 里的会话默认保留。完整用户链路（含回退细节）见[顶层中文说明](../README.zh-CN.md)。
 
-安全边界：绝不写入/覆盖源 app；绝不触碰日常 profile（副本 profile 独立派生）；调试端口仅在显式 `--debug-port` 时开启。
+安全边界：绝不写入/覆盖源 app；绝不触碰日常 profile（副本 profile 独立派生）；调试端口仅在显式 `--debug-port` 时开启；首启导入弹窗的选择权在你，隔离验证请选“从空白开始”。
 
 首次真实机制验收（独立副本 + 官方 UI 安装 + 真实模型的冷批量/续接/重启回执）见[真实 Desktop 批量验收报告](../docs/acceptance/2026-10-27-batch/acceptance.md)——当时用的是等效的本机脚本；本目录的脚本是它的可移植化。制作/启动/检查与门禁拒绝路径另有[回归测试](../test/desktop-copy.test.mjs)覆盖（错版本/hash/包 id、危险与已存在目标、失败清理、重复执行、启动隔离）。
 
