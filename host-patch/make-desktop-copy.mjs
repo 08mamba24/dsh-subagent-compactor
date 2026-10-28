@@ -21,7 +21,7 @@
 import * as asar from "@electron/asar";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -76,6 +76,26 @@ export function copyIdentity(targetPath, prefix = EXPECTED.copyBundleIdPrefix) {
 	return { profile, harnessPort, mobilePort, suffix: h8, bundleId: `${prefix}${h8}` };
 }
 
+/**
+ * Real path of a not-yet-existing path: realpath of the nearest existing
+ * ancestor with the remaining components re-attached. This is what makes
+ * symlinked parents (alias -> Source.app) visible to the containment checks
+ * before the first write happens.
+ */
+function realPathOfNearestExisting(path) {
+	const absolute = resolve(path);
+	let current = absolute;
+	const remainder = [];
+	while (!existsSync(current)) {
+		remainder.unshift(basename(current));
+		const parent = dirname(current);
+		if (parent === current) break;
+		current = parent;
+	}
+	const realBase = realpathSync(current);
+	return remainder.length === 0 ? realBase : join(realBase, ...remainder);
+}
+
 function assertPaths({ source, target }) {
 	if (!isAbsolute(source) || !isAbsolute(target)) fail("--source and --target must be absolute paths");
 	if (!source.endsWith(".app") || !target.endsWith(".app")) fail("both --source and --target must be .app bundles");
@@ -84,17 +104,23 @@ function assertPaths({ source, target }) {
 	const archive = join(source, "Contents/Resources/app.asar");
 	if (!existsSync(archive)) fail(`source has no Contents/Resources/app.asar: ${source}`);
 	if (source === target) fail("target must differ from source");
-	const relToSource = relative(source, target);
-	const relToTarget = relative(target, source);
-	if (relToSource === "" || (!relToSource.startsWith("..") && relToSource !== "")) fail("target must not be inside the source app");
-	if (!relToTarget.startsWith("..") && relToTarget !== "") fail("source must not be inside the target path");
 	if (existsSync(target)) fail(`target already exists — this script never overwrites; move it away first: ${target}`);
+	const sidecar = `${target}.manifest.json`;
+	if (existsSync(sidecar)) fail(`sidecar manifest already exists — this script never overwrites it; move it away first: ${sidecar}`);
 	const stage = `${target}.stage`;
 	if (existsSync(stage)) fail(`leftover stage from an earlier run exists — inspect and delete it first: ${stage}`);
 	const parent = dirname(target);
 	if (!existsSync(parent)) fail(`target parent directory does not exist: ${parent}`);
 	if (parent === "/" || parent === source) fail(`target parent must be a normal user directory, not ${parent}`);
-	return { archive, stage };
+	const realSource = realpathSync(source);
+	for (const [label, point] of [["target", target], ["stage", stage]]) {
+		const realPoint = realPathOfNearestExisting(point);
+		const rel = relative(realSource, realPoint);
+		if (rel === "" || !rel.startsWith("..")) fail(`${label} must not be inside the source app (directly or through symlinked paths)`);
+		const relBack = relative(realPoint, realSource);
+		if (relBack !== "" && !relBack.startsWith("..")) fail(`source must not be inside the ${label} path`);
+	}
+	return { archive, stage, sidecar };
 }
 
 function assertBaseline({ source, archive }, gate) {
@@ -125,9 +151,11 @@ function patchMainBundle(extracted, identity) {
 	let main = readFileSync(mainPath, "utf8");
 	if (main.includes(LOGS_LINE)) fail("main bundle already contains the logs patch; refusing to patch twice");
 	main = replaceOnce(main, MAIN_MARKERS.userData, `${MAIN_MARKERS.userData}\n    ${LOGS_LINE}`, "userData redirect");
-	main = replaceOnce(main, MAIN_MARKERS.profileDefault, `const profile = env.DSH_DEV_PROFILE || "${identity.profile}";`, "profile default");
-	main = replaceOnce(main, MAIN_MARKERS.harnessPortDefault, `const harnessPort = port(env.DSH_DEV_HARNESS_PORT, ${identity.harnessPort}, "DSH_DEV_HARNESS_PORT");`, "harness port default");
-	main = replaceOnce(main, MAIN_MARKERS.mobilePortDefault, `const mobilePort = port(env.DSH_DEV_MOBILE_PORT, ${identity.mobilePort}, "DSH_DEV_MOBILE_PORT");`, "mobile port default");
+	// The identity is baked as literals — env overrides are removed on purpose:
+	// one copy, one identity, identical for CLI launch and a bare double-click.
+	main = replaceOnce(main, MAIN_MARKERS.profileDefault, `const profile = "${identity.profile}";`, "baked profile (env override removed)");
+	main = replaceOnce(main, MAIN_MARKERS.harnessPortDefault, `const harnessPort = ${identity.harnessPort};`, "baked harness port (env override removed)");
+	main = replaceOnce(main, MAIN_MARKERS.mobilePortDefault, `const mobilePort = ${identity.mobilePort};`, "baked mobile port (env override removed)");
 	writeFileSync(mainPath, main);
 }
 
@@ -185,13 +213,18 @@ export async function makeDesktopCopy({ source, target, repoRoot, expected = {},
 	if (process.platform !== EXPECTED.platform) fail(`only ${EXPECTED.platform}/${EXPECTED.arch} is supported; this machine is ${process.platform}/${process.arch}`);
 	if (process.arch !== EXPECTED.arch) fail(`only ${EXPECTED.platform}/${EXPECTED.arch} is supported; this machine is ${process.platform}/${process.arch}`);
 	const gate = { ...EXPECTED, ...expected };
-	const { archive, stage } = assertPaths({ source, target });
+	const { archive, stage, sidecar } = assertPaths({ source, target });
 	const archiveHashBefore = assertBaseline({ source, archive }, gate);
 	const identity = copyIdentity(target, gate.copyBundleIdPrefix);
 	const bundleId = identity.bundleId;
 	mkdirSync(stage);
 	const extracted = join(stage, "extracted");
 	const builtApp = join(stage, "app");
+	// Outputs of THIS run that we may roll back. Everything else — the source
+	// app, a target someone else created meanwhile, any pre-existing file — is
+	// never touched by cleanup.
+	let publishedManifest = false;
+	let publishedApp = false;
 	let manifest;
 	try {
 		log(`Cloning ${source} into the stage directory (the source is never written).`);
@@ -214,7 +247,6 @@ export async function makeDesktopCopy({ source, target, repoRoot, expected = {},
 		execFileSync("/usr/bin/codesign", ["--force", "--deep", "--sign", "-", "--preserve-metadata=entitlements", builtApp], { stdio: "inherit" });
 		execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", builtApp], { stdio: "inherit" });
 		if (sha256File(archive) !== archiveHashBefore) fail("the source archive changed during the build; aborting");
-		renameSync(builtApp, target);
 		manifest = {
 			schema: 1,
 			madeBy: "host-patch/make-desktop-copy.mjs",
@@ -234,13 +266,20 @@ export async function makeDesktopCopy({ source, target, repoRoot, expected = {},
 			bundleId,
 			codesign: "ad-hoc",
 		};
+		// Publish app + manifest as one unit of this run: the sidecar first
+		// (its absence was guaranteed at precheck), then the app via a single
+		// rename. Any failure here rolls back only these two.
+		writeFileSync(sidecar, JSON.stringify(manifest, null, 2) + "\n");
+		publishedManifest = true;
+		renameSync(builtApp, target);
+		publishedApp = true;
 	} catch (error) {
 		rmSync(stage, { recursive: true, force: true });
-		if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+		if (publishedManifest) rmSync(sidecar, { force: true });
+		if (publishedApp) rmSync(target, { recursive: true, force: true });
 		throw error;
 	}
 	rmSync(stage, { recursive: true, force: true });
-	writeFileSync(`${target}.manifest.json`, JSON.stringify(manifest, null, 2) + "\n");
 	log(`Copy ready: ${target}`);
 	log(`Profile: ${identity.profile}  harnessPort: ${identity.harnessPort}  mobilePort: ${identity.mobilePort}  bundleId: ${bundleId}`);
 	return manifest;

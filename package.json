@@ -31,7 +31,6 @@
     "@deepseek-ai/schemastery": "*"
   },
   "dependencies": {
-    "@electron/asar": "4.3.1",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -59,7 +58,8 @@
     "@deepseek-ai/dsh-token-meter": "0.2.1-rc.2",
     "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-working-directory": "0.2.1-rc.2",
-    "@deepseek-ai/schemastery": "3.18.5"
+    "@deepseek-ai/schemastery": "3.18.5",
+    "@electron/asar": "4.3.1"
   },
   "dsh": {
     "bundle": {

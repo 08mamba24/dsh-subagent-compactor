@@ -35,7 +35,7 @@ For the patched lane, follow the exact copy, absolute-symlink, and patch steps i
 
 ## Make a patched Desktop copy (executable commands)
 
-Declared and gate-checked baseline: **macOS arm64 + official Desktop 0.12.1 / Harness 0.2.1-rc.2** (`app.asar` SHA256 `366bef41…fefaaa`). Anything else is refused explicitly — no fuzzy adaptation. After `npm ci` in the repository root:
+Declared and gate-checked baseline: **macOS arm64 + official Desktop 0.12.1 / Harness 0.2.1-rc.2** (`app.asar` SHA256 `366bef41…fefaaa`). Anything else is refused explicitly — no fuzzy adaptation. After `npm ci --include=dev` in the repository root (the `@electron/asar` packing tool is a devDependency, used only for making copies — the plugin never imports it):
 
 ```sh
 # Make (verifies source version/bundle id/hash first; builds inside a stage,
@@ -51,7 +51,7 @@ node host-patch/launch-desktop-copy.mjs --app "<your dir>/DSH Desktop Compactor.
 node host-patch/check-desktop-copy.mjs --app "<your dir>/DSH Desktop Compactor.app"
 ```
 
-`make-desktop-copy.mjs` clones the source app into an isolated stage, extracts `app.asar`, applies 0002/0003 to the **stock** extracted `dsh-agent-loop`/`dsh-subagent` libs (any fuzz/offset fails the build), switches the copy to the development channel with a target-derived profile/port pair baked into the app (a bare double-click can never land on the everyday `dsh-desktop` profile), repacks the archive preserving the unpacked layout, refreshes Electron ASAR integrity, sets a unique bundle id, ad-hoc signs and verifies only the copy, and re-confirms the source archive hash. Every identity and hash lands in `<copy>.app.manifest.json`. Existing targets, nested/dangerous paths, and leftover stages are refused.
+`make-desktop-copy.mjs` clones the source app into an isolated stage, extracts `app.asar`, applies 0002/0003 to the **stock** extracted `dsh-agent-loop`/`dsh-subagent` libs (any fuzz/offset fails the build), switches the copy to the development channel with a target-derived profile/port pair baked into the app as **literals** — the `DSH_DEV_PROFILE`/`DSH_DEV_HARNESS_PORT`/`DSH_DEV_MOBILE_PORT` environment variables have no effect on a copy (the launcher strips them too), so a bare double-click and the launcher share one identity, repacks the archive preserving the unpacked layout, refreshes Electron ASAR integrity, sets a unique bundle id, ad-hoc signs and verifies only the copy, and re-confirms the source archive hash. Every identity and hash lands in `<copy>.app.manifest.json`. Existing targets, nested/dangerous paths, and leftover stages are refused.
 
 After launching, install this repository's plugin through the copy's official **Plugins → Add plugin** UI and use `/subagent-compact` / `--all` in a parent session. Rollback = quit the copy and delete it plus its sidecar manifest; sessions created in the copy's own profile are preserved by default. The full user path (including rollback details) is in the [top-level README](../README.md).
 

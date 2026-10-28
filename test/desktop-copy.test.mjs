@@ -12,7 +12,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import * as asar from "@electron/asar";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
@@ -32,6 +32,14 @@ const STOCK_MAIN = `function developmentEnvironment(development, defaultHarnessP
   if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(profile) || profile === "dsh-desktop") {
     throw new Error("DSH_DEV_PROFILE must be a separate development directory name.");
   }
+  const port = (value, fallback, name) => {
+    if (!value) return fallback;
+    const parsed = Number(value);
+    if (!/^\\d+$/.test(value) || !Number.isInteger(parsed) || parsed < 1024 || parsed > 65535) {
+      throw new Error(name + " must be an integer from 1024 to 65535.");
+    }
+    return parsed;
+  };
   const harnessPort = port(env.DSH_DEV_HARNESS_PORT, defaultHarnessPort + 1, "DSH_DEV_HARNESS_PORT");
   const mobilePort = port(env.DSH_DEV_MOBILE_PORT, 43128, "DSH_DEV_MOBILE_PORT");
   if (harnessPort === mobilePort) throw new Error("Development Harness and mobile ports must differ.");
@@ -201,9 +209,67 @@ test("darwin gates and full build", { skip: !isDarwin }, async (t) => {
 			const bad = await buildFixtureApp(badRoot, { withMarkers: false });
 			mkdirSync(join(badRoot, "out"));
 			const badTarget = join(badRoot, "out", "T.app");
-			await expectRefusal(makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 } }), "marker for profile default occurs 0x");
+			await expectRefusal(makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 } }), "occurs 0x (expected 1)");
 			assert.equal(existsSync(badTarget), false);
 			assert.equal(existsSync(`${badTarget}.stage`), false);
+		} finally {
+			rmSync(badRoot, { recursive: true, force: true });
+		}
+	});
+
+	await t.test("refuses when the sidecar manifest already exists instead of overwriting it", async () => {
+		const badRoot = mkdtempSync(join(tmpdir(), "dsh-copy-sidecar-"));
+		try {
+			const bad = await buildFixtureApp(badRoot);
+			mkdirSync(join(badRoot, "out"));
+			const badTarget = join(badRoot, "out", "T.app");
+			const sidecar = `${badTarget}.manifest.json`;
+			writeFileSync(sidecar, "PREEXISTING-SIDECAR-SENTINEL");
+			await expectRefusal(makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 } }), "sidecar manifest already exists");
+			assert.equal(readFileSync(sidecar, "utf8"), "PREEXISTING-SIDECAR-SENTINEL");
+			assert.equal(existsSync(badTarget), false);
+			assert.equal(existsSync(`${badTarget}.stage`), false);
+		} finally {
+			rmSync(badRoot, { recursive: true, force: true });
+		}
+	});
+
+	await t.test("a foreign target created during the build is never deleted and our own outputs roll back", async () => {
+		const badRoot = mkdtempSync(join(tmpdir(), "dsh-copy-race-"));
+		try {
+			const bad = await buildFixtureApp(badRoot);
+			mkdirSync(join(badRoot, "out"));
+			const badTarget = join(badRoot, "out", "T.app");
+			let injected = false;
+			const injectForeignTarget = () => {
+				if (injected) return;
+				injected = true;
+				mkdirSync(badTarget);
+				writeFileSync(join(badTarget, "USER-SENTINEL.txt"), "not ours");
+			};
+			await assert.rejects(
+				makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 }, log: injectForeignTarget }),
+				() => true,
+			);
+			assert.equal(readFileSync(join(badTarget, "USER-SENTINEL.txt"), "utf8"), "not ours");
+			assert.equal(existsSync(`${badTarget}.stage`), false);
+			assert.equal(existsSync(`${badTarget}.manifest.json`), false);
+		} finally {
+			rmSync(badRoot, { recursive: true, force: true });
+		}
+	});
+
+	await t.test("symlinked paths cannot smuggle the stage or target inside the source", async () => {
+		const badRoot = mkdtempSync(join(tmpdir(), "dsh-copy-alias-"));
+		try {
+			const bad = await buildFixtureApp(badRoot);
+			mkdirSync(join(badRoot, "out"));
+			symlinkSync(bad.appPath, join(badRoot, "source-alias"));
+			await expectRefusal(makeDesktopCopy({ source: bad.appPath, target: join(badRoot, "source-alias", "Hidden.app"), repoRoot, expected: { archiveSha256: bad.archiveSha256 } }), "must not be inside the source app");
+			symlinkSync(join(bad.appPath, "Contents"), join(badRoot, "linkdir"));
+			await expectRefusal(makeDesktopCopy({ source: bad.appPath, target: join(badRoot, "linkdir", "Hidden.app"), repoRoot, expected: { archiveSha256: bad.archiveSha256 } }), "must not be inside the source app");
+			assert.equal(existsSync(join(bad.appPath, "Hidden.app.stage")), false);
+			assert.equal(existsSync(join(bad.appPath, "Contents", "Hidden.app.stage")), false);
 		} finally {
 			rmSync(badRoot, { recursive: true, force: true });
 		}
@@ -217,10 +283,10 @@ test("darwin gates and full build", { skip: !isDarwin }, async (t) => {
 		const inner = JSON.parse(asar.extractFile(archive, "package.json").toString("utf8"));
 		assert.equal(inner.dshDesktopChannel, "development");
 		const main = asar.extractFile(archive, "out/main/index.js").toString("utf8");
-		assert.ok(main.includes(`env.DSH_DEV_PROFILE || "${manifest.profile}"`));
-		assert.ok(!main.includes('"dsh-desktop-dev"'));
-		assert.ok(main.includes(`port(env.DSH_DEV_HARNESS_PORT, ${manifest.harnessPort},`));
-		assert.ok(main.includes(`port(env.DSH_DEV_MOBILE_PORT, ${manifest.mobilePort},`));
+		assert.ok(main.includes(`const profile = "${manifest.profile}";`));
+		assert.ok(!main.includes("env.DSH_DEV_PROFILE"));
+		assert.ok(main.includes(`const harnessPort = ${manifest.harnessPort};`));
+		assert.ok(main.includes(`const mobilePort = ${manifest.mobilePort};`));
 		assert.ok(main.includes("app.setAppLogsPath"));
 		for (const name of EXPECTED.harnessModules) {
 			const lib = asar.extractFile(archive, `node_modules/@deepseek-ai/${name}/lib/index.js`).toString("utf8");
@@ -244,6 +310,19 @@ test("darwin gates and full build", { skip: !isDarwin }, async (t) => {
 			assert.throws(() => checkDesktopCopy({ app: target, log: () => {} }), /problem/);
 			writeFileSync(manifestPath, original);
 			checkDesktopCopy({ app: target, log: () => {} });
+		});
+
+		await t.test("the baked identity ignores polluted DSH_* environment variables", () => {
+			const mainFromCopy = asar.extractFile(archive, "out/main/index.js").toString("utf8");
+			assert.ok(!mainFromCopy.includes("env.DSH_DEV_PROFILE"));
+			const start = mainFromCopy.indexOf("function developmentEnvironment");
+			const end = mainFromCopy.indexOf("function configureAppIdentity");
+			assert.ok(start !== -1 && end !== -1 && start < end);
+			const factory = new Function(`${mainFromCopy.slice(start, end)}; return developmentEnvironment;`);
+			const polluted = factory()(true, 43129, { DSH_DEV_PROFILE: "already-existing-development-profile", DSH_DEV_HARNESS_PORT: "45000", DSH_DEV_MOBILE_PORT: "45001" });
+			assert.equal(polluted.profile, manifest.profile);
+			assert.equal(polluted.harnessPort, manifest.harnessPort);
+			assert.equal(polluted.mobilePort, manifest.mobilePort);
 		});
 
 		await t.test("launcher refuses foreign apps and never double-starts a copy", () => {

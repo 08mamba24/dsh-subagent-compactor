@@ -38,6 +38,11 @@ export function checkDesktopCopy({ app, log = console.log }) {
 			const lib = asar.extractFile(archive, `node_modules/@deepseek-ai/${name}/lib/index.js`).toString("utf8");
 			if (sha256(lib) !== expectedHash) problems.push(`patched module ${name} hash differs from the manifest`);
 		}
+		const main = asar.extractFile(archive, "out/main/index.js").toString("utf8");
+		if (main.includes("env.DSH_DEV_PROFILE")) problems.push("copy main still honors DSH_DEV_PROFILE; the baked identity is not env-proof");
+		if (!main.includes(`const profile = "${manifest.profile}";`)) problems.push("baked profile literal missing from the copy main");
+		if (!main.includes(`const harnessPort = ${manifest.harnessPort};`)) problems.push("baked harness port literal missing from the copy main");
+		if (!main.includes(`const mobilePort = ${manifest.mobilePort};`)) problems.push("baked mobile port literal missing from the copy main");
 		try {
 			execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", app], { stdio: "pipe" });
 		} catch {

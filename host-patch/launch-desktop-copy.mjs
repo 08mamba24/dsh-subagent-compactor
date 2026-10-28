@@ -69,7 +69,14 @@ export function launchDesktopCopy({ app, debugPort, log = console.log, env = pro
 		return { alreadyRunning: true, pids };
 	}
 	const args = debugPort ? ["--remote-debugging-port", String(debugPort)] : [];
-	const child = spawn(execPath, args, { detached: true, stdio: "ignore", env });
+	// The copy's identity is baked into its app bundle; identity-shaped env
+	// vars are stripped so an inherited shell can never redirect this copy to
+	// some other development profile.
+	const childEnv = { ...env };
+	delete childEnv.DSH_DEV_PROFILE;
+	delete childEnv.DSH_DEV_HARNESS_PORT;
+	delete childEnv.DSH_DEV_MOBILE_PORT;
+	const child = spawn(execPath, args, { detached: true, stdio: "ignore", env: childEnv });
 	child.unref();
 	log(`Launched ${app}`);
 	log(`Profile: ${manifest.profile}  harnessPort: ${manifest.harnessPort}  mobilePort: ${manifest.mobilePort}`);

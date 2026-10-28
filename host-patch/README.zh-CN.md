@@ -21,7 +21,7 @@
 
 ## 如何制作补丁版 Desktop 副本（可执行命令）
 
-适用并门禁校验的对象：**macOS arm64 + 官方 Desktop 0.12.1 / Harness 0.2.1-rc.2**（`app.asar` SHA256 `366bef41…fefaaa`）。其他版本会被明确拒绝，不做强行适配。在仓库根目录 `npm ci` 之后：
+适用并门禁校验的对象：**macOS arm64 + 官方 Desktop 0.12.1 / Harness 0.2.1-rc.2**（`app.asar` SHA256 `366bef41…fefaaa`）。其他版本会被明确拒绝，不做强行适配。在仓库根目录 `npm ci --include=dev` 之后（打包工具 `@electron/asar` 在 devDependencies，仅制作时使用，插件运行不依赖）：
 
 ```sh
 # 制作（先校验源版本/包 id/哈希；只在 stage 里构建，最后一次性落到目标位）
@@ -36,7 +36,7 @@ node host-patch/launch-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compac
 node host-patch/check-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compactor.app"
 ```
 
-`make-desktop-copy.mjs` 做的事：克隆源 app 到隔离 stage；解包 `app.asar`；对抽取出的**原版** `dsh-agent-loop`/`dsh-subagent` lib 应用 0002/0003（要求干净落上，出现 fuzz/offset 即失败）；把副本切到 development 通道、烧定按目标路径派生的独立 profile/端口对（因此裸双击也绝不会落到日常 `dsh-desktop` profile）；保留 unpacked 布局重打包；更新 Electron ASAR 完整性记录；改独立 bundle id；仅对副本做 ad-hoc 签名并校验；确认源 `app.asar` 前后哈希不变。全部证据写入 `<副本>.app.manifest.json`。失败只清理本次 stage；目标已存在、目标嵌套在源内、危险路径一律拒绝。
+`make-desktop-copy.mjs` 做的事：克隆源 app 到隔离 stage；解包 `app.asar`；对抽取出的**原版** `dsh-agent-loop`/`dsh-subagent` lib 应用 0002/0003（要求干净落上，出现 fuzz/offset 即失败）；把副本切到 development 通道、烧定按目标路径派生的独立 profile/端口对为**字面量**——`DSH_DEV_PROFILE`/`DSH_DEV_HARNESS_PORT`/`DSH_DEV_MOBILE_PORT` 环境变量对副本无效（启动器也会清洗这三个变量），裸双击与脚本启动身份一致；保留 unpacked 布局重打包；更新 Electron ASAR 完整性记录；改独立 bundle id；仅对副本做 ad-hoc 签名并校验；确认源 `app.asar` 前后哈希不变。全部证据写入 `<副本>.app.manifest.json`。失败只清理本次 stage；目标已存在、目标嵌套在源内、危险路径一律拒绝。
 
 启动后通过官方“**插件 → 添加插件**”安装本仓库插件，再在父会话里用 `/subagent-compact` 与 `--all`。回退 = 退出副本并删除副本及其 sidecar manifest；副本独立 profile 里的会话默认保留。完整用户链路（含回退细节）见[顶层中文说明](../README.zh-CN.md)。
 

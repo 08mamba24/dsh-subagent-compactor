@@ -38,7 +38,7 @@ The 1.1.0 candidate source and CI are merged into this repository's `main`, but 
 
 The host patch changes Desktop's bundled runtime and is never applied by the plugin installer. On macOS (Apple silicon) you can now prepare a **patched, independent Desktop copy** from this repository alone — the original app and your daily profile are never touched. See [host-patch/README.md](host-patch/README.md) for the patch itself; the full user path is:
 
-1. **Prerequisites**: an Apple-silicon Mac with the official DSH Desktop **0.12.1** installed (verify with the steps below — other versions are refused, not adapted), Node.js 24, and a clone of this repository with `npm ci` run once.
+1. **Prerequisites**: an Apple-silicon Mac with the official DSH Desktop **0.12.1** installed (verify with the steps below — other versions are refused, not adapted), Node.js 24, and a clone of this repository with `npm ci --include=dev` run once (the packing tool is a devDependency).
 2. **Make the copy** (version, bundle id, and archive-hash gates run first; a failed build cleans only its own staging directory and never overwrites an existing target):
 
    ```sh
@@ -47,7 +47,7 @@ The host patch changes Desktop's bundled runtime and is never applied by the plu
      --target "$HOME/Desktop/DSH Desktop Compactor.app"
    ```
 
-   The copy gets the two reviewed runtime patches (host-patch/0002 + 0003), the development channel, its own bundle id, refreshed ASAR integrity, an ad-hoc signature, and a **baked-in isolated profile and port pair** — so even a bare double-click can never land on your daily `dsh-desktop` profile. A `*.app.manifest.json` sidecar records every hash and identity.
+   The copy gets the two reviewed runtime patches (host-patch/0002 + 0003), the development channel, its own bundle id, refreshed ASAR integrity, an ad-hoc signature, and a **baked-in isolated profile and port pair written as literals** — `DSH_DEV_PROFILE`-style environment variables have no effect on a copy (the launcher strips them too), so even a bare double-click can never land on your daily `dsh-desktop` profile or any other development session store. A `*.app.manifest.json` sidecar records every hash and identity.
 3. **Launch**: `node host-patch/launch-desktop-copy.mjs --app "<copy path>"` (or double-click the copy; both are safe). The launcher refuses apps without our sidecar manifest, never starts a second instance of the same copy, and only enables a remote-debugging port when you explicitly pass `--debug-port`.
 4. **Check anytime**: `node host-patch/check-desktop-copy.mjs --app "<copy path>"` re-verifies archive integrity, baked identity, patched-module hashes, signature, and that your original app still matches the verified baseline.
 5. **Install this plugin into the copy** through Desktop's own UI: **Plugins → Add plugin**, paste `https://github.com/08mamba24/dsh-subagent-compactor.git` (optionally `#<commit>`), **Install → Enable now**.
