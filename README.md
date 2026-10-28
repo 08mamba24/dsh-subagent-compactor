@@ -36,6 +36,14 @@ Desktop's plugin manager handles installation and the bundle patch. Keep the hos
 
 The 1.1.0 candidate source and CI are merged into this repository's `main`, but there is **no 1.1.0 tag or release**. On stock Harness 0.2.1-rc.2, installing the plugin alone cannot compact a finished child; the complete feature requires the candidate host patch too. Cite an exact commit instead of a nonexistent `v1.1.0` tag.
 
+To reproduce the accepted installer candidate, explicitly select its branch (there is no `v1.1.0` release tag):
+
+```sh
+git clone --branch feature/portable-desktop-copy https://github.com/08mamba24/dsh-subagent-compactor.git
+cd dsh-subagent-compactor
+npm ci --include=dev
+```
+
 The host patch changes Desktop's bundled runtime and is never applied by the plugin installer. On macOS (Apple silicon) you can now prepare a **patched, independent Desktop copy** from this repository alone — the original app and your daily profile are never touched. See [host-patch/README.md](host-patch/README.md) for the patch itself; the full user path is:
 
 1. **Prerequisites**: an Apple-silicon Mac with the official DSH Desktop **0.12.1** installed (verify with the steps below — other versions are refused, not adapted), Node.js 24, and a clone of this repository with `npm ci --include=dev` run once (the packing tool is a devDependency).
@@ -50,11 +58,21 @@ The host patch changes Desktop's bundled runtime and is never applied by the plu
    The copy gets the two reviewed runtime patches (host-patch/0002 + 0003), the development channel, its own bundle id, refreshed ASAR integrity, an ad-hoc signature, and a **baked-in isolated profile and port pair written as literals** — `DSH_DEV_PROFILE`-style environment variables have no effect on a copy (the launcher strips them too), so even a bare double-click can never land on your daily `dsh-desktop` profile or any other development session store. A `*.app.manifest.json` sidecar records every hash and identity.
 3. **Launch**: `node host-patch/launch-desktop-copy.mjs --app "<copy path>"` (or double-click the copy; both are safe). The launcher refuses apps without our sidecar manifest, never starts a second instance of the same copy, and only enables a remote-debugging port when you explicitly pass `--debug-port`. **The copy's first launch shows an "import previous workspace" choice (source: `~/.dsh`): for isolated verification always pick "start from blank"** — choosing import copies sessions, credentials, and workspaces from `~/.dsh` into the isolated profile (recorded in `.web-import-decision.json` inside the profile), after which it is no longer a confirmed-blank environment. Importing is a copy, not a migration.
 4. **Check anytime**: `node host-patch/check-desktop-copy.mjs --app "<copy path>"` re-verifies archive integrity, baked identity, patched-module hashes, signature, and that your original app still matches the verified baseline.
-5. **Install this plugin into the copy** through Desktop's own UI: **Plugins → Add plugin**, paste `https://github.com/08mamba24/dsh-subagent-compactor.git` (optionally `#<commit>`), **Install → Enable now**.
+5. **Install this plugin into the copy** through Desktop's own UI: **Plugins → Add plugin**, enter the cloned repository’s **absolute local path** (the route exercised in acceptance), **Install → Enable now**. A Git source pinned as `https://github.com/08mamba24/dsh-subagent-compactor.git#<commit>` is another option.
 6. **Use it** in a parent session inside the copy: `/subagent-compact`, `/subagent-compact --all`, `/subagent-compact report <batch-id>` — same commands as below.
 7. **Roll back**: quit the copy, delete the `<copy>.app` and its `<copy>.app.manifest.json`. Your original Desktop, daily profile, and their data were never modified. Sessions you created in the copy's own profile are kept by default (delete `~/Library/Application Support/<profile from the manifest>` yourself if you want them gone).
 
 Boundaries: only Desktop 0.12.1 / Harness 0.2.1-rc.2 / macOS arm64 is declared and gate-checked; after any Desktop update, re-make and re-verify the copy; the copy does not auto-update; daily sessions/credentials are not migrated into the copy (but the first-launch import prompt, if you choose import, **copies** `~/.dsh` into the copy's profile — see step 3).
+
+### Workspace and model setup in an empty copy
+
+For isolated verification, use Add workspace to select a new empty directory. Desktop’s default workspace may live in a shared Documents directory; an independent profile does not make the selected code directory independent.
+
+Open Settings → Models → DeepSeek → Edit and configure a valid API key, then select a model. This Desktop baseline uses the Messages API: if overriding its endpoint, use `https://api.deepseek.com/anthropic` under Custom settings. Other DSH CLI versions may use the Chat Completions root `https://api.deepseek.com`; do not copy that root unchanged into this baseline. Environment access uses `DEEPSEEK_API_KEY` and `DEEPSEEK_BASE_URL`; a key saved through the Models page takes precedence.
+
+If model access requires a proxy, pass `NODE_USE_ENV_PROXY=1`, `HTTP_PROXY` and `HTTPS_PROXY` in the copy’s launching process, and keep localhost/127.0.0.1/::1 in `NO_PROXY`. The launcher inherits those variables; a double-click need not inherit terminal environment. This repository neither stores API keys nor changes global proxy settings.
+
+The [portable installation acceptance record](docs/acceptance/2026-10-28-portable-installation/acceptance.md) covers creation, explicit empty first start, official UI installation, two real cold children, same-ID continuation and receipt retrieval after restart.
 
 ## Use it
 

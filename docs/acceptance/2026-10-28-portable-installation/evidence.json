@@ -1,0 +1,238 @@
+{
+  "status": "passed_on_isolated_patched_desktop",
+  "pluginCandidateSha": "cba93e56b1a1dab211e4996dee74c602608a55fa",
+  "parentSessionId": "session-91aa6b57-c38e-4c4b-a994-497cc14a7bf4",
+  "workspace": "<acceptance-workspace>",
+  "hostBaseline": "dsh-v0.2.1-rc.2 / 687f282e8625c6b8d11ff58211a90524be2e4317",
+  "patchedModules": {
+    "dsh-agent-loop": "e462e972d7ad1e2cb9f4ceda94bd681df2d2562f0cf0dea5c647db56faf9cf21",
+    "dsh-subagent": "1985966774cb9073b6a00057e8ff49b30dfc92e3690e14dfe25ae8eac780ee28"
+  },
+  "manualCommand": {
+    "runSeq": 102,
+    "doneSeq": 103,
+    "commandId": "cmd-b662d648-2",
+    "kind": "success",
+    "batchId": "br-f17176522564"
+  },
+  "modelTool": {
+    "callSeq": 145,
+    "resultSeq": 146,
+    "name": "compact_all_subagents",
+    "isError": false,
+    "batchId": "br-478093e497de"
+  },
+  "children": [
+    {
+      "id": "b0b74cbf-0e59-437c-9284-f3beeff3d721",
+      "label": "alpha",
+      "manualCompaction": {
+        "startSeq": 37,
+        "summarySeq": 39,
+        "endSeq": 41,
+        "startTime": 1793164067842,
+        "endTime": 1793164074902,
+        "sourceCommandId": "cmd-b662d648-2",
+        "replacedItems": 8,
+        "replacedHistoryEstimatedTokens": 7850,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "toolCompaction": {
+        "startSeq": 56,
+        "summarySeq": 58,
+        "endSeq": 60,
+        "startTime": 1793164134463,
+        "endTime": 1793164139260,
+        "sourceCommandId": null,
+        "replacedItems": 5,
+        "replacedHistoryEstimatedTokens": 3785,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "continuation": {
+        "eventSeq": 52,
+        "turn": 3,
+        "anchors": [
+          "ALPHA-ORCHID-731",
+          "128",
+          "2026-11-11"
+        ],
+        "anchorsRetained": true,
+        "toolCalls": 0,
+        "answersSuppliedInFollowup": false
+      },
+      "inputUsage": {
+        "beforeEventSeq": 33,
+        "afterEventSeq": 52,
+        "before": {
+          "inputTokens": 513,
+          "cacheReadTokens": 19456,
+          "cacheWriteTokens": 0,
+          "outputTokens": 710,
+          "totalTokens": 20679
+        },
+        "after": {
+          "inputTokens": 4761,
+          "cacheReadTokens": 11776,
+          "cacheWriteTokens": 0,
+          "outputTokens": 80,
+          "totalTokens": 16617
+        },
+        "totalBefore": 19969,
+        "totalAfter": 16537,
+        "difference": 3432,
+        "decreasePercent": 17.19
+      },
+      "fixtureSha256": "57c906e72d1594ed05f60b98460ac473aa6bfebab5ae5d5c34133eb9af10be9a",
+      "fixtureBaselineChecked": true
+    },
+    {
+      "id": "5e166dff-07f1-43be-8305-7535035972db",
+      "label": "beta",
+      "manualCompaction": {
+        "startSeq": 37,
+        "summarySeq": 39,
+        "endSeq": 41,
+        "startTime": 1793164074941,
+        "endTime": 1793164081038,
+        "sourceCommandId": "cmd-b662d648-2",
+        "replacedItems": 8,
+        "replacedHistoryEstimatedTokens": 8355,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "toolCompaction": {
+        "startSeq": 56,
+        "summarySeq": 58,
+        "endSeq": 60,
+        "startTime": 1793164139285,
+        "endTime": 1793164145943,
+        "sourceCommandId": null,
+        "replacedItems": 5,
+        "replacedHistoryEstimatedTokens": 3702,
+        "provider": "deepseek-official",
+        "model": "deepseek-flash"
+      },
+      "continuation": {
+        "eventSeq": 52,
+        "turn": 3,
+        "anchors": [
+          "BETA-MAPLE-482",
+          "256",
+          "2026-11-11"
+        ],
+        "anchorsRetained": true,
+        "toolCalls": 0,
+        "answersSuppliedInFollowup": false
+      },
+      "inputUsage": {
+        "beforeEventSeq": 33,
+        "afterEventSeq": 52,
+        "before": {
+          "inputTokens": 1550,
+          "cacheReadTokens": 19328,
+          "cacheWriteTokens": 0,
+          "outputTokens": 665,
+          "totalTokens": 21543
+        },
+        "after": {
+          "inputTokens": 4649,
+          "cacheReadTokens": 11776,
+          "cacheWriteTokens": 0,
+          "outputTokens": 105,
+          "totalTokens": 16530
+        },
+        "totalBefore": 20878,
+        "totalAfter": 16425,
+        "difference": 4453,
+        "decreasePercent": 21.33
+      },
+      "fixtureSha256": "0b6ca2f19b9a6ef1b033530567e549fd9c3fbeb406a932ac2e7b162462841606",
+      "fixtureBaselineChecked": true
+    }
+  ],
+  "receiptStorage": {
+    "domain": "subagent_compactor_batch_receipts",
+    "physicalFile": "<isolated-profile>/harness/storages/subagent_compactor_batch_receipts.json",
+    "physicalFileSha256": "4fa812bb0bf695a9ed232295f28d9447aa71c0abc38f15d8dc5e87745d751650",
+    "manual": {
+      "batchId": "br-f17176522564",
+      "parentSessionId": "session-91aa6b57-c38e-4c4b-a994-497cc14a7bf4",
+      "outcome": "completed",
+      "total": 2,
+      "counts": {
+        "compacted": 2,
+        "nothing-to-compact": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "not-started": 0
+      },
+      "finishedAt": "2026-10-28T05:08:01.045Z"
+    },
+    "tool": {
+      "batchId": "br-478093e497de",
+      "parentSessionId": "session-91aa6b57-c38e-4c4b-a994-497cc14a7bf4",
+      "outcome": "completed",
+      "total": 2,
+      "counts": {
+        "compacted": 2,
+        "nothing-to-compact": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "not-started": 0
+      },
+      "finishedAt": "2026-10-28T05:09:05.951Z"
+    },
+    "postRestartQueries": [
+      {
+        "batchId": "br-f17176522564",
+        "runSeq": 154,
+        "doneSeq": 155
+      },
+      {
+        "batchId": "br-478093e497de",
+        "runSeq": 156,
+        "doneSeq": 157
+      }
+    ],
+    "sessionPluginRecords": 0
+  },
+  "installedGenerationId": "local+dsh-subagent-compactor+1.1.0+c81ccf443e5e",
+  "installedPluginSha256": "209f47fc1950b09099ae70dd3ce1b04edd600fb8d7bcfe58f126d7c2337ebddf",
+  "originalInstalledArchiveUnchanged": true,
+  "coldPreconditionSnapshotSha256": "b8d2884dae37efdbbcf782f720be580bf855d6f7aafb939637fc4e35f0ca7559",
+  "restart": {
+    "oldPid": 68626,
+    "newPid": 73089,
+    "oldProcessExitedAtVerification": true,
+    "newProcessRunningAtVerification": true,
+    "restartAfterParentSeq": 152,
+    "sourceSha256": "ba51c0780f6f71df24a1b6be86d47ae252a36bdcd7c0eff30bd88418b0fbb62b"
+  },
+  "boundaries": [
+    "Stock Desktop lacks the candidate runMaintenance host API.",
+    "Only the independent patched Desktop copy was used; original app is unchanged.",
+    "Request input differences include summary and continuation input; not pure compression savings.",
+    "Complete host monorepo source build was not performed.",
+    "This synthetic read-only fixture checks this journey, not general summary quality.",
+    "Post-restart boundary is supplied by the UI driver; the verifier checks later persisted command results."
+  ],
+  "installation": {
+    "reviewedInstallerSha": "cba93e56b1a1dab211e4996dee74c602608a55fa",
+    "desktopVersion": "0.12.1",
+    "harnessVersion": "0.2.1-rc.2",
+    "firstStartDecision": "skipped",
+    "officialPluginUiInstall": true,
+    "zodVersion": "4.4.3",
+    "zodInsideOwnGeneration": true,
+    "installerTests": {
+      "total": 22,
+      "passed": 21,
+      "skipped": 1,
+      "failed": 0
+    },
+    "modelAuthenticationVerified": true,
+    "appCreatedByPortableRepositoryScript": true
+  }
+}

@@ -35,6 +35,8 @@ For the patched lane, follow the exact copy, absolute-symlink, and patch steps i
 
 ## Make a patched Desktop copy (executable commands)
 
+Use the [candidate checkout command](../README.md#installation) before running these scripts; they are shipped on `feature/portable-desktop-copy`.
+
 Declared and gate-checked baseline: **macOS arm64 + official Desktop 0.12.1 / Harness 0.2.1-rc.2** (`app.asar` SHA256 `366bef41…fefaaa`). Anything else is refused explicitly — no fuzzy adaptation. After `npm ci --include=dev` in the repository root (the `@electron/asar` packing tool is a devDependency, used only for making copies — the plugin never imports it):
 
 ```sh
@@ -106,3 +108,5 @@ also closes the agent's input surface at the same instant (post-close
 public input is rejected instead of being accepted-then-cancelled), and
 (b) the manager's drain-stop preserves parked input instead of cancelling
 it — both are the contract review round 3 required.
+
+The [portable installation acceptance](../docs/acceptance/2026-10-28-portable-installation/acceptance.md) exercises these repository scripts through real cold batches and restart. See [workspace and model setup](../README.md#workspace-and-model-setup-in-an-empty-copy) before using a blank profile; this Desktop uses a Messages endpoint, which can differ from another CLI’s protocol root.

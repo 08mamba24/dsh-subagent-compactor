@@ -21,6 +21,8 @@
 
 ## 如何制作补丁版 Desktop 副本（可执行命令）
 
+先按[顶层候选安装说明](../README.zh-CN.md#安装)检出 `feature/portable-desktop-copy`，再运行本节脚本。
+
 适用并门禁校验的对象：**macOS arm64 + 官方 Desktop 0.12.1 / Harness 0.2.1-rc.2**（`app.asar` SHA256 `366bef41…fefaaa`）。其他版本会被明确拒绝，不做强行适配。在仓库根目录 `npm ci --include=dev` 之后（打包工具 `@electron/asar` 在 devDependencies，仅制作时使用，插件运行不依赖）：
 
 ```sh
@@ -45,6 +47,8 @@ node host-patch/check-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compact
 安全边界：绝不写入/覆盖源 app；绝不触碰日常 profile（副本 profile 独立派生）；调试端口仅在显式 `--debug-port` 时开启；首启导入弹窗的选择权在你，隔离验证请选“从空白开始”。
 
 首次真实机制验收（独立副本 + 官方 UI 安装 + 真实模型的冷批量/续接/重启回执）见[真实 Desktop 批量验收报告](../docs/acceptance/2026-10-27-batch/acceptance.md)——当时用的是等效的本机脚本；本目录的脚本是它的可移植化。制作/启动/检查与门禁拒绝路径另有[回归测试](../test/desktop-copy.test.mjs)覆盖（错版本/hash/包 id、危险与已存在目标、失败清理、重复执行、启动隔离）。
+
+本次仓库脚本的完整真机验证见[可移植安装验收记录](../docs/acceptance/2026-10-28-portable-installation/acceptance.md)。首次使用还需[配置空白副本的工作区与模型](../README.zh-CN.md#空白副本的工作区与模型配置)：此 Desktop 使用 Messages 地址，环境变量与其他 CLI 的协议地址不能直接混用。
 
 ## 怎么复现自动测试
 
