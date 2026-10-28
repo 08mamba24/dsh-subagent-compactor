@@ -35,7 +35,7 @@ For the patched lane, follow the exact copy, absolute-symlink, and patch steps i
 
 ## Make a patched Desktop copy (executable commands)
 
-Use the [candidate checkout command](../README.md#installation) before running these scripts; they are shipped on `feature/portable-desktop-copy`.
+Use the [candidate checkout command](../README.md#install-in-dsh-desktop) before running these scripts; they are shipped on `feature/portable-desktop-copy`.
 
 Declared and gate-checked baseline: **macOS arm64 + official Desktop 0.12.1 / Harness 0.2.1-rc.2** (`app.asar` SHA256 `366bef41…fefaaa`). Anything else is refused explicitly — no fuzzy adaptation. After `npm ci --include=dev` in the repository root (the `@electron/asar` packing tool is a devDependency, used only for making copies — the plugin never imports it):
 
