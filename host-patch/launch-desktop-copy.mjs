@@ -15,6 +15,7 @@
  *   node host-patch/launch-desktop-copy.mjs --app "/path/Copy.app" [--debug-port 9222]
  */
 import { execFileSync } from "node:child_process";
+import http from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,6 +31,32 @@ export function readManifest(appPath) {
 		throw new Error(`unrecognized manifest schema at ${manifestPath}`);
 	}
 	return manifest;
+}
+
+/**
+ * Chromium parses `--switch value` as a bare switch plus a positional, NOT as
+ * a switch with a value — Electron then binds a random debug port instead of
+ * the requested one. Debug switches must be single argv tokens: `--switch=value`.
+ */
+export function debugArgs(debugPort) {
+	if (debugPort === undefined) return [];
+	return [`--remote-debugging-port=${debugPort}`, "--remote-debugging-address=127.0.0.1"];
+}
+
+/** Resolve once the DevTools endpoint actually answers on the requested port. */
+function confirmDebugPort(debugPort, timeoutMs = 10000, log = console.log) {
+	const startedAt = Date.now();
+	const attempt = () => {
+		const request = http.get(`http://127.0.0.1:${debugPort}/json/version`, (response) => {
+			response.resume();
+			log(response.statusCode === 200 ? `Remote debugging: 127.0.0.1:${debugPort} (endpoint verified)` : `Remote debugging endpoint answered with HTTP ${response.statusCode} on 127.0.0.1:${debugPort}`);
+		});
+		request.on("error", () => {
+			if (Date.now() - startedAt > timeoutMs) log(`Remote debugging: 127.0.0.1:${debugPort} requested, but the endpoint did not respond within ${Math.round(timeoutMs / 1000)}s`);
+			else setTimeout(attempt, 300);
+		});
+	};
+	attempt();
 }
 
 function runningPids(execPath) {
@@ -68,7 +95,7 @@ export function launchDesktopCopy({ app, debugPort, log = console.log, env = pro
 		log(`Already running (pid ${pids.join(", ")}) — profile ${manifest.profile} keeps a single instance; not starting another.`);
 		return { alreadyRunning: true, pids };
 	}
-	const args = debugPort ? ["--remote-debugging-port", String(debugPort)] : [];
+	const args = debugArgs(debugPort);
 	// The copy's identity is baked into its app bundle; identity-shaped env
 	// vars are stripped so an inherited shell can never redirect this copy to
 	// some other development profile.
@@ -81,8 +108,11 @@ export function launchDesktopCopy({ app, debugPort, log = console.log, env = pro
 	log(`Launched ${app}`);
 	log(`Profile: ${manifest.profile}  harnessPort: ${manifest.harnessPort}  mobilePort: ${manifest.mobilePort}`);
 	log(`User data: ~/Library/Application Support/${manifest.profile}`);
-	if (debugPort) log(`Remote debugging: 127.0.0.1:${debugPort} (explicitly enabled)`);
-	return { alreadyRunning: false, childPid: child.pid };
+	if (debugPort) {
+		log(`Remote debugging requested: 127.0.0.1:${debugPort} — confirming the endpoint...`);
+		confirmDebugPort(debugPort, 10000, log);
+	}
+	return { alreadyRunning: false, childPid: child.pid, args };
 }
 
 function parseArgs(argv) {

@@ -19,7 +19,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { copyIdentity, EXPECTED, makeDesktopCopy } from "../host-patch/make-desktop-copy.mjs";
-import { launchDesktopCopy, readManifest } from "../host-patch/launch-desktop-copy.mjs";
+import { debugArgs, launchDesktopCopy, readManifest } from "../host-patch/launch-desktop-copy.mjs";
 import { checkDesktopCopy } from "../host-patch/check-desktop-copy.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -119,6 +119,14 @@ test("copy identity is deterministic, valid, and never the production profile", 
 	assert.notEqual(a.harnessPort, a.mobilePort);
 	assert.ok(a.harnessPort >= 44000 && a.harnessPort <= 48998);
 	assert.notEqual(a.profile, copyIdentity("/Users/x/Different Copy.app").profile);
+});
+
+test("debug args are single-token switches Chromium parses with an explicit value", () => {
+	assert.deepEqual(debugArgs(43335), ["--remote-debugging-port=43335", "--remote-debugging-address=127.0.0.1"]);
+	for (const argument of debugArgs(43335)) {
+		assert.match(argument, /^--remote-debugging-(port|address)=/);
+	}
+	assert.deepEqual(debugArgs(undefined), []);
 });
 
 test("readManifest refuses apps without our sidecar manifest", () => {
