@@ -2,7 +2,7 @@
 
 **完整冷压缩能力需要插件与宿主补丁一起使用。** 在原版 Harness 0.2.1-rc.2 上，仅安装插件不能压缩已结束的子会话；插件会明确返回 `host-capability-missing`。
 
-插件源码、宿主补丁文件与 CI 已合入本仓库 `main`。这不等于补丁已进入官方 Desktop，也不等于用户安装插件时会自动应用补丁。当前有经过验收的本机副本，尚无通用的一键宿主补丁安装器或补丁版 Desktop 发布包。
+插件源码、宿主补丁文件与 CI 已合入本仓库 `main`。这不等于补丁已进入官方 Desktop，也不等于用户安装插件时会自动应用补丁。仓库提供**可移植的副本制作/启动/检查脚本**（macOS arm64，见下文），但没有补丁版 Desktop 的正式发布包。
 
 ## 补丁改了什么
 
@@ -19,20 +19,30 @@
 
 完整 Harness monorepo 源码构建尚未完成。源码审查、类型基线比较、JS 等价补丁执行和完整源码构建是不同证据，不能互相替代。
 
-## 已验收的 Desktop 副本怎么制作
+## 如何制作补丁版 Desktop 副本（可执行命令）
 
-以下记录已经执行的制作方式，适用对象是 **macOS Desktop 0.12.1 / Harness 0.2.1-rc.2**，不是对任意 Desktop 版本通用的安装教程。
+适用并门禁校验的对象：**macOS arm64 + 官方 Desktop 0.12.1 / Harness 0.2.1-rc.2**（`app.asar` SHA256 `366bef41…fefaaa`）。其他版本会被明确拒绝，不做强行适配。在仓库根目录 `npm ci` 之后：
 
-1. 复制原来的 `DSH Desktop.app`，只在独立副本上工作。
-2. 解包副本的 `Contents/Resources/app.asar`，放入上述两个已审查的 JS 运行时模块。
-3. 为副本启用独立 development profile、日志、应用标识和端口，使验收数据与日常数据分开。
-4. 重新打包 ASAR，保留原有 unpacked 资源布局，更新 Electron ASAR 完整性记录，并只对副本做本地 ad-hoc 签名。
-5. 启动副本，通过官方“插件 → 添加插件”界面安装并启用本插件。
-6. 在专用合成工作区验证：两个已结束成员的手动批量、模型工具批量、原 ID 续接，以及完整重启后的持久回执查询。
+```sh
+# 制作（先校验源版本/包 id/哈希；只在 stage 里构建，最后一次性落到目标位）
+node host-patch/make-desktop-copy.mjs \
+  --source "/Applications/DSH Desktop.app" \
+  --target "<你的目录>/DSH Desktop Compactor.app"
 
-原安装包的 ASAR 哈希在验收前后相同；正式 Desktop 和日常 profile 没有被当作试验目标。实际制作脚本 `prepare.mjs` 仍只在本机，它包含本机路径和版本假设，尚未作为仓库的可移植安装命令发布。
+# 启动（或直接双击副本——profile/端口已烧定，双击也安全）
+node host-patch/launch-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compactor.app"
 
-截图、事件序号、请求输入长度和结果见[真实 Desktop 批量验收报告](../docs/acceptance/2026-10-27-batch/acceptance.md)。报告保留验收当时的状态；后来合入 main 与 CI 跑通，不会自动把候选变成正式发布版。
+# 随时体检（副本完整性 + 签名 + 原版仍是基线）
+node host-patch/check-desktop-copy.mjs --app "<你的目录>/DSH Desktop Compactor.app"
+```
+
+`make-desktop-copy.mjs` 做的事：克隆源 app 到隔离 stage；解包 `app.asar`；对抽取出的**原版** `dsh-agent-loop`/`dsh-subagent` lib 应用 0002/0003（要求干净落上，出现 fuzz/offset 即失败）；把副本切到 development 通道、烧定按目标路径派生的独立 profile/端口对（因此裸双击也绝不会落到日常 `dsh-desktop` profile）；保留 unpacked 布局重打包；更新 Electron ASAR 完整性记录；改独立 bundle id；仅对副本做 ad-hoc 签名并校验；确认源 `app.asar` 前后哈希不变。全部证据写入 `<副本>.app.manifest.json`。失败只清理本次 stage；目标已存在、目标嵌套在源内、危险路径一律拒绝。
+
+启动后通过官方“**插件 → 添加插件**”安装本仓库插件，再在父会话里用 `/subagent-compact` 与 `--all`。回退 = 退出副本并删除副本及其 sidecar manifest；副本独立 profile 里的会话默认保留。完整用户链路（含回退细节）见[顶层中文说明](../README.zh-CN.md)。
+
+安全边界：绝不写入/覆盖源 app；绝不触碰日常 profile（副本 profile 独立派生）；调试端口仅在显式 `--debug-port` 时开启。
+
+首次真实机制验收（独立副本 + 官方 UI 安装 + 真实模型的冷批量/续接/重启回执）见[真实 Desktop 批量验收报告](../docs/acceptance/2026-10-27-batch/acceptance.md)——当时用的是等效的本机脚本；本目录的脚本是它的可移植化。制作/启动/检查与门禁拒绝路径另有[回归测试](../test/desktop-copy.test.mjs)覆盖（错版本/hash/包 id、危险与已存在目标、失败清理、重复执行、启动隔离）。
 
 ## 怎么复现自动测试
 
@@ -50,6 +60,8 @@ npm run test:gap-diag
 
 ## 正式使用还缺什么
 
-要交付给日常 Desktop 使用，还需要版本与原文件校验、备份和回退、更新后的重新适配，以及可维护的安装或分发流程；或者由上游正式提供所需宿主接口。本仓库目前没有一步完成这些工作的安装器。
+已交付：只靠公开仓库即可完成“制作补丁版副本 → 启动 → 官方 UI 安装插件 → 冷/批量压缩 → 体检 → 回退”的完整链路（macOS arm64 + Desktop 0.12.1 基线，全部带门禁与回归测试）。
 
-因此，**“源码已合入”“CI 已通过”“补丁副本已验收”和“原版 Desktop 安装插件即可用”是四件不同的事**。本项目已完成前三项，尚未交付最后一项。
+仍开放：Desktop 升级到 0.12.1 之外需更新基线常量并重新全链验证；副本不自动更新也不自动迁移日常会话/凭证；Harness monorepo 完整源码构建未做；更长期的正路是上游官方提供 `runMaintenance` 宿主接口，让补丁整个退役。
+
+因此，**“源码已合入”“CI 已通过”“副本链路可复现”和“原版 Desktop 安装插件即得冷压缩”仍是四件不同的事**——最后一件依赖上游，前三件已在本仓库闭环。

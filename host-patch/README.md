@@ -2,7 +2,7 @@
 
 [中文：补丁原理、Desktop 副本制作方式与安装边界](README.zh-CN.md)
 
-**Installing the plugin does not apply these host patches.** Candidate source and CI are merged into this repository's `main`; that does not add the maintenance API to an installed stock Desktop. The patched Desktop copy passed real-model acceptance, but there is no portable host patch installer or released patched Desktop in this repository.
+**Installing the plugin does not apply these host patches.** Candidate source and CI are merged into this repository's `main`; that does not add the maintenance API to an installed stock Desktop. On macOS (Apple silicon) this directory now ships **portable make/launch/check scripts** for an independent patched Desktop copy (gated to Desktop 0.12.1 / Harness 0.2.1-rc.2); there is no released patched Desktop distribution.
 
 These diffs are the **isolated candidate host change** behind review round 3's
 direction ("prepare a minimal host patch + thin plugin call"). They are NOT a
@@ -33,13 +33,31 @@ npm run test:gap-diag
 
 For the patched lane, follow the exact copy, absolute-symlink, and patch steps in [.github/workflows/ci.yml](../.github/workflows/ci.yml), then run `npm run test:patched`. That workflow keeps two real package copies and links the remaining packages to a separate stock tree. It does not modify an installed Desktop. Both lanes passed on real Ubuntu GitHub runners: stock 46 tests plus 3 gap diagnostics, patched 83 tests.
 
-## How the Desktop acceptance copy was prepared
+## Make a patched Desktop copy (executable commands)
 
-On macOS Desktop 0.12.1 / Harness 0.2.1-rc.2, the acceptance driver copied the app, extracted its ASAR, replaced the two reviewed runtime modules, repacked the archive while retaining unpacked assets, updated ASAR integrity metadata, and ad-hoc signed only the copy. The copy used a separate development profile, logs, bundle identifier, and ports. The plugin was then installed through that copy's official plugin UI.
+Declared and gate-checked baseline: **macOS arm64 + official Desktop 0.12.1 / Harness 0.2.1-rc.2** (`app.asar` SHA256 `366bef41…fefaaa`). Anything else is refused explicitly — no fuzzy adaptation. After `npm ci` in the repository root:
 
-This was a version-specific local preparation procedure, not a complete host source build or a portable installation command. Its `prepare.mjs` uses machine-specific paths and is not shipped in this repository. The original installed app and everyday profile were outside the test boundary. See the [acceptance report](../docs/acceptance/2026-10-27-batch/acceptance.md) for the actual command/tool, same-ID continuation, usage, and restart-receipt evidence.
+```sh
+# Make (verifies source version/bundle id/hash first; builds inside a stage,
+# lands at the target with one final rename; a failure cleans only its stage)
+node host-patch/make-desktop-copy.mjs \
+  --source "/Applications/DSH Desktop.app" \
+  --target "<your dir>/DSH Desktop Compactor.app"
 
-Production installation still needs a maintained version/hash check, a supported backup/rollback flow, and an update-compatibility procedure, or an upstream host release providing the API. No step here silently patches the user's normal Desktop.
+# Launch (or double-click the copy — profile/ports are baked in, so both are safe)
+node host-patch/launch-desktop-copy.mjs --app "<your dir>/DSH Desktop Compactor.app"
+
+# Check anytime (copy integrity + signature + original still the baseline)
+node host-patch/check-desktop-copy.mjs --app "<your dir>/DSH Desktop Compactor.app"
+```
+
+`make-desktop-copy.mjs` clones the source app into an isolated stage, extracts `app.asar`, applies 0002/0003 to the **stock** extracted `dsh-agent-loop`/`dsh-subagent` libs (any fuzz/offset fails the build), switches the copy to the development channel with a target-derived profile/port pair baked into the app (a bare double-click can never land on the everyday `dsh-desktop` profile), repacks the archive preserving the unpacked layout, refreshes Electron ASAR integrity, sets a unique bundle id, ad-hoc signs and verifies only the copy, and re-confirms the source archive hash. Every identity and hash lands in `<copy>.app.manifest.json`. Existing targets, nested/dangerous paths, and leftover stages are refused.
+
+After launching, install this repository's plugin through the copy's official **Plugins → Add plugin** UI and use `/subagent-compact` / `--all` in a parent session. Rollback = quit the copy and delete it plus its sidecar manifest; sessions created in the copy's own profile are preserved by default. The full user path (including rollback details) is in the [top-level README](../README.md).
+
+Safety boundaries: the source app is never written or overwritten; the everyday profile is never touched; the debug port exists only with an explicit `--debug-port`.
+
+The first real-machine acceptance (independent copy + official-UI plugin install + real-model cold batch, continuation, and restart receipts) is recorded in the [acceptance report](../docs/acceptance/2026-10-27-batch/acceptance.md) — it used the equivalent local predecessor script; the scripts here are its portable form. The make/launch/check flow and its refusal paths are covered by [regression tests](../test/desktop-copy.test.mjs) (wrong version/hash/bundle id, dangerous or existing targets, failure cleanup, repeat runs, launch isolation).
 
 ## What the patch changes
 

@@ -10,7 +10,7 @@
     "./icon": "./icon.svg"
   },
   "scripts": {
-    "test:stock": "node --test test/unit.test.mjs test/integration.test.mjs",
+    "test:stock": "node --test test/unit.test.mjs test/integration.test.mjs test/desktop-copy.test.mjs",
     "test:gap-diag": "GAP_DIAG=1 node --test --test-name-pattern \"cold R2\" test/cold.integration.test.mjs",
     "test:patched": "node --test test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs"
   },
@@ -31,6 +31,7 @@
     "@deepseek-ai/schemastery": "*"
   },
   "dependencies": {
+    "@electron/asar": "4.3.1",
     "zod": "4.4.3"
   },
   "devDependencies": {

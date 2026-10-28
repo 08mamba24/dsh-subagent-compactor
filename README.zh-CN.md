@@ -34,7 +34,25 @@
 
 1.1.0 候选源码和 CI 已合入本仓库 `main`，但**没有 1.1.0 tag 或发布包**。在原版 Harness 0.2.1-rc.2 上，仅安装插件仍不能压缩已结束的子会话；完整能力需要插件与候选宿主补丁一起使用。
 
-宿主补丁修改的是 Desktop 内置运行时，插件安装器不会自动应用它。现有验收通过的是独立制作的补丁版 Desktop 副本；本仓库尚未提供通用的一键补丁安装器。具体改动、验收副本如何制作，以及正式安装还缺什么，见[宿主补丁中文说明](host-patch/README.zh-CN.md)。自动测试的隔离树见 [host-patch/README.md](host-patch/README.md)。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
+宿主补丁修改的是 Desktop 内置运行时，插件安装器不会自动应用它。在 macOS（Apple 芯片）上，现在**只靠本仓库**就能制作一个**打过补丁的独立 Desktop 副本**——原版 app 和日常 profile 全程不被改动。补丁本身的说明见[宿主补丁中文说明](host-patch/README.zh-CN.md)；完整使用链路：
+
+1. **前置**：Apple 芯片 Mac，已安装官方 DSH Desktop **0.12.1**（下方命令会先校验版本/包标识/压缩包哈希，其他版本会被明确拒绝而不是强行适配）、Node.js 24、clone 本仓库并执行一次 `npm ci`。
+2. **制作副本**（先过版本/包 id/哈希门禁；失败只清理本次暂存目录，绝不覆盖已存在的目标）：
+
+   ```sh
+   node host-patch/make-desktop-copy.mjs \
+     --source "/Applications/DSH Desktop.app" \
+     --target "$HOME/Desktop/DSH Desktop Compactor.app"
+   ```
+
+   副本会带上两份已复审的运行时补丁（host-patch/0002 + 0003）、development 通道、独立 bundle id、更新的 ASAR 完整性记录、ad-hoc 签名，并**烧定独立的 profile 与端口对**——即使直接双击副本，也绝不会落到日常 `dsh-desktop` profile。全部哈希与身份记录在旁边的 `<副本>.app.manifest.json`。
+3. **启动**：`node host-patch/launch-desktop-copy.mjs --app "<副本路径>"`（或直接双击副本，两者都安全）。启动入口拒绝没有 sidecar manifest 的 app、不会对同一副本重复起第二个实例，只有显式传 `--debug-port` 才会开远程调试端口。
+4. **随时体检**：`node host-patch/check-desktop-copy.mjs --app "<副本路径>"` 复核压缩包完整性、烧定的身份、补丁模块哈希、签名，并确认原版 app 仍是已验证基线。
+5. **在副本里安装本插件**：走 Desktop 自带界面——**插件 → 添加插件**，粘贴 `https://github.com/08mamba24/dsh-subagent-compactor.git`（可加 `#<commit>`），**安装 → 立即启用**。
+6. **使用**：在副本内的父会话中使用 `/subagent-compact`、`/subagent-compact --all`、`/subagent-compact report <batch-id>`，命令见下文。
+7. **回退**：退出副本，删除 `<副本>.app` 与 `<副本>.app.manifest.json` 即可。原版 Desktop、日常 profile 及其数据从未被修改；副本独立 profile 里新建的会话默认保留（想彻底清理就手动删除 `~/Library/Application Support/<manifest 里的 profile>`）。
+
+边界：仅声明并门禁校验 Desktop 0.12.1 / Harness 0.2.1-rc.2 / macOS arm64；Desktop 升级后需重新制作并复验副本；副本不会自动更新；日常会话/凭证不自动迁入副本。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
 
 ## 使用
 

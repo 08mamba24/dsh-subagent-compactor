@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   stock:
-    name: stock runtime — 46 tests + 3 gap diagnostics
+    name: stock runtime suites + gap diagnostics
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -40,7 +40,7 @@ jobs:
         run: npm run test:gap-diag
 
   patched:
-    name: patched runtime — 83 tests after host-patch 0002+0003
+    name: patched runtime — full suites after host-patch 0002+0003
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

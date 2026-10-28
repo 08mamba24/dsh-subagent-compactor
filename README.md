@@ -32,11 +32,29 @@ If this package is already installed from a local directory, uninstall that sour
 
 Desktop's plugin manager handles installation and the bundle patch. Keep the host-provided peer modules; no manual profile edits or npm publication are required. `private: true` prevents npm publication and permits this Git installation path.
 
-### 1.1.0 candidate (NOT installable as a released tag)
+### 1.1.0 candidate (no release tag; full feature needs the host patch)
 
-The 1.1.0 candidate source and CI are merged into this repository's `main`, but there is **no 1.1.0 tag or release**. On stock Harness 0.2.1-rc.2, installing the plugin alone cannot compact a finished child; the complete feature requires the candidate host patch too.
+The 1.1.0 candidate source and CI are merged into this repository's `main`, but there is **no 1.1.0 tag or release**. On stock Harness 0.2.1-rc.2, installing the plugin alone cannot compact a finished child; the complete feature requires the candidate host patch too. Cite an exact commit instead of a nonexistent `v1.1.0` tag.
 
-That patch changes Desktop's bundled runtime and is not applied by the plugin installer. Acceptance used a separately prepared Desktop copy; this repository does not yet provide a portable one-step host patch installer. See the [host patch documentation](host-patch/README.md) and [Chinese preparation and installation-boundary guide](host-patch/README.zh-CN.md). Cite an exact commit instead of a nonexistent `v1.1.0` tag.
+The host patch changes Desktop's bundled runtime and is never applied by the plugin installer. On macOS (Apple silicon) you can now prepare a **patched, independent Desktop copy** from this repository alone — the original app and your daily profile are never touched. See [host-patch/README.md](host-patch/README.md) for the patch itself; the full user path is:
+
+1. **Prerequisites**: an Apple-silicon Mac with the official DSH Desktop **0.12.1** installed (verify with the steps below — other versions are refused, not adapted), Node.js 24, and a clone of this repository with `npm ci` run once.
+2. **Make the copy** (version, bundle id, and archive-hash gates run first; a failed build cleans only its own staging directory and never overwrites an existing target):
+
+   ```sh
+   node host-patch/make-desktop-copy.mjs \
+     --source "/Applications/DSH Desktop.app" \
+     --target "$HOME/Desktop/DSH Desktop Compactor.app"
+   ```
+
+   The copy gets the two reviewed runtime patches (host-patch/0002 + 0003), the development channel, its own bundle id, refreshed ASAR integrity, an ad-hoc signature, and a **baked-in isolated profile and port pair** — so even a bare double-click can never land on your daily `dsh-desktop` profile. A `*.app.manifest.json` sidecar records every hash and identity.
+3. **Launch**: `node host-patch/launch-desktop-copy.mjs --app "<copy path>"` (or double-click the copy; both are safe). The launcher refuses apps without our sidecar manifest, never starts a second instance of the same copy, and only enables a remote-debugging port when you explicitly pass `--debug-port`.
+4. **Check anytime**: `node host-patch/check-desktop-copy.mjs --app "<copy path>"` re-verifies archive integrity, baked identity, patched-module hashes, signature, and that your original app still matches the verified baseline.
+5. **Install this plugin into the copy** through Desktop's own UI: **Plugins → Add plugin**, paste `https://github.com/08mamba24/dsh-subagent-compactor.git` (optionally `#<commit>`), **Install → Enable now**.
+6. **Use it** in a parent session inside the copy: `/subagent-compact`, `/subagent-compact --all`, `/subagent-compact report <batch-id>` — same commands as below.
+7. **Roll back**: quit the copy, delete the `<copy>.app` and its `<copy>.app.manifest.json`. Your original Desktop, daily profile, and their data were never modified. Sessions you created in the copy's own profile are kept by default (delete `~/Library/Application Support/<profile from the manifest>` yourself if you want them gone).
+
+Boundaries: only Desktop 0.12.1 / Harness 0.2.1-rc.2 / macOS arm64 is declared and gate-checked; after any Desktop update, re-make and re-verify the copy; the copy does not auto-update; daily sessions/credentials are not migrated into the copy.
 
 ## Use it
 
