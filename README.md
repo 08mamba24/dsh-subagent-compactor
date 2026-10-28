@@ -34,7 +34,9 @@ Desktop's plugin manager handles installation and the bundle patch. Keep the hos
 
 ### 1.1.0 candidate (NOT installable as a released tag)
 
-The 1.1.0 candidate has **no tag and no release**: it exists as the `feature/cold-session-compaction` branch plus the candidate host patch. Do not install it into a real Desktop expecting cold compaction — the stock runtime lacks the required capability, and the plugin will refuse cold compaction explicitly. To evaluate the candidate, use the isolated verification tree described in [host-patch/README.md](host-patch/README.md). For an immutable reference, cite the exact 40-character commit of the branch head instead of a tag.
+The 1.1.0 candidate source and CI are merged into this repository's `main`, but there is **no 1.1.0 tag or release**. On stock Harness 0.2.1-rc.2, installing the plugin alone cannot compact a finished child; the complete feature requires the candidate host patch too.
+
+That patch changes Desktop's bundled runtime and is not applied by the plugin installer. Acceptance used a separately prepared Desktop copy; this repository does not yet provide a portable one-step host patch installer. See the [host patch documentation](host-patch/README.md) and [Chinese preparation and installation-boundary guide](host-patch/README.zh-CN.md). Cite an exact commit instead of a nonexistent `v1.1.0` tag.
 
 ## Use it
 

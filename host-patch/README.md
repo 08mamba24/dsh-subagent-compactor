@@ -1,5 +1,9 @@
 # Host maintenance capability — minimal candidate patch
 
+[中文：补丁原理、Desktop 副本制作方式与安装边界](README.zh-CN.md)
+
+**Installing the plugin does not apply these host patches.** Candidate source and CI are merged into this repository's `main`; that does not add the maintenance API to an installed stock Desktop. The patched Desktop copy passed real-model acceptance, but there is no portable host patch installer or released patched Desktop in this repository.
+
 These diffs are the **isolated candidate host change** behind review round 3's
 direction ("prepare a minimal host patch + thin plugin call"). They are NOT a
 dependency of the published plugin: on a stock runtime the plugin detects the
@@ -17,24 +21,25 @@ missing capability and refuses cold compaction explicitly
   and `@deepseek-ai/dsh-subagent`, which carry the patch). One-to-one with
   the source diff; no other package is touched.
 
-Rebuild the verification tree:
+## Reproduce automated verification
+
+Use the committed lockfile and the same commands as CI:
 
 ```sh
-mkdir -p host-patched/node_modules/@deepseek-ai
-for entry in /path/to/stock/node_modules/@deepseek-ai/*; do
-  name=$(basename "$entry")
-  case "$name" in
-    dsh-subagent|dsh-agent-loop) cp -R "$entry" "host-patched/node_modules/@deepseek-ai/$name" ;;
-    *) ln -s "$entry" "host-patched/node_modules/@deepseek-ai/$name" ;;
-  esac
-done
-# then apply 0002 and 0003 to the two copies (or copy from a patched tree)
-ln -s "$PWD/host-patched/node_modules" node_modules
-node --test test/unit.test.mjs test/integration.test.mjs test/cold.integration.test.mjs
-# stock diagnosis:
-ln -s /path/to/stock/node_modules node_modules
-GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.mjs
+npm ci
+npm run test:stock
+npm run test:gap-diag
 ```
+
+For the patched lane, follow the exact copy, absolute-symlink, and patch steps in [.github/workflows/ci.yml](../.github/workflows/ci.yml), then run `npm run test:patched`. That workflow keeps two real package copies and links the remaining packages to a separate stock tree. It does not modify an installed Desktop. Both lanes passed on real Ubuntu GitHub runners: stock 46 tests plus 3 gap diagnostics, patched 83 tests.
+
+## How the Desktop acceptance copy was prepared
+
+On macOS Desktop 0.12.1 / Harness 0.2.1-rc.2, the acceptance driver copied the app, extracted its ASAR, replaced the two reviewed runtime modules, repacked the archive while retaining unpacked assets, updated ASAR integrity metadata, and ad-hoc signed only the copy. The copy used a separate development profile, logs, bundle identifier, and ports. The plugin was then installed through that copy's official plugin UI.
+
+This was a version-specific local preparation procedure, not a complete host source build or a portable installation command. Its `prepare.mjs` uses machine-specific paths and is not shipped in this repository. The original installed app and everyday profile were outside the test boundary. See the [acceptance report](../docs/acceptance/2026-10-27-batch/acceptance.md) for the actual command/tool, same-ID continuation, usage, and restart-receipt evidence.
+
+Production installation still needs a maintained version/hash check, a supported backup/rollback flow, and an update-compatibility procedure, or an upstream host release providing the API. No step here silently patches the user's normal Desktop.
 
 ## What the patch changes
 
@@ -65,7 +70,7 @@ GAP_DIAG=1 node --test --test-name-pattern "cold R2" test/cold.integration.test.
 - Source baseline: `deepseek-ai/deepseek-harness` tag `dsh-v0.2.1-rc.2`, commit `687f282e8625c6b8d11ff58211a90524be2e4317` (clean worktree; `0001` is its full diff).
 - Affected host packages: **three** — `@deepseek-ai/dsh-agent-loop` (cutoff, claimed-batch restore, keepInbox teardown), `@deepseek-ai/dsh-subagent` (`resumeActivation`, `runMaintenance`, lossless stop), and `@deepseek-ai/dsh-agent` (public type declarations only: `Agent.closeInput`, `AgentHandle.dispose(options)`; no runtime change).
 - Type checking: targeted tsc program over all six affected files compared against the clean baseline (`/tmp/dsh-r4-full-type-review.cjs` method): baseline 6 = patched 6, zero NEW diagnostics (the six are external-dependency diagnostics shared with the clean tree). A **complete monorepo build has not been run**; that remains open for the upstream route.
-- Runtime validation is the isolated patched tree only (fake LLM, temp storage). Real-Desktop cold-compaction acceptance has not been run; the 1.0.1 Desktop acceptance covered the live-window behavior only.
+- Runtime verification includes the isolated fake-model suites and real-model acceptance on an independently patched Desktop copy. The [batch acceptance report](../docs/acceptance/2026-10-27-batch/acceptance.md) proves two settled children compacted through both entries, continued under the same IDs with remembered facts, and retained their receipts through a full app restart. This does not establish stock Desktop support.
 
 ## Upstream PR draft
 
@@ -75,11 +80,7 @@ See [UPSTREAM_PR_NOTES.md](UPSTREAM_PR_NOTES.md) — problem, candidate API, reg
 
 Stock runtime: the plugin reports `host-capability-missing` for cold
 compaction and live-window compaction is unaffected (the pre-existing
-suites pass unchanged on the stock tree). Patched runtime: **59/59**
-tests pass across the full suites, including the acceptance-contract
-regressions; the type-only follow-up round (`d7dc960`) additionally ran a
-targeted 7/7 (R4 regressions, claim evidence, live-window integration)
-with no behavior change. The patch adds
+suites pass unchanged on the stock tree). Current CI passes **46 stock tests + 3 gap diagnostics** and **83 patched tests**; the [merged-main runner result](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/40554288771) records that verification. Earlier host-review evidence was 59/59, followed by targeted 7/7 for the type-only `d7dc960` changes; those are historical subsets, not the current suite count. The patch adds
 capability; it does not change existing paths except (a) a `close()` now
 also closes the agent's input surface at the same instant (post-close
 public input is rejected instead of being accepted-then-cancelled), and

@@ -32,7 +32,9 @@
 
 ### 1.1.0 候选（没有可安装的发布 tag）
 
-1.1.0 候选**没有 tag、没有发布**：它以 `feature/cold-session-compaction` 分支加候选宿主补丁的形式存在。不要把它装进真实 Desktop 并期待冷压缩——原版运行时缺少所需能力，插件会明确拒绝冷压缩。评估候选请按 [host-patch/README.md](host-patch/README.md) 的隔离验证树进行。引用时请使用分支头部的完整 40 位 commit，而不是不存在的 tag。
+1.1.0 候选源码和 CI 已合入本仓库 `main`，但**没有 1.1.0 tag 或发布包**。在原版 Harness 0.2.1-rc.2 上，仅安装插件仍不能压缩已结束的子会话；完整能力需要插件与候选宿主补丁一起使用。
+
+宿主补丁修改的是 Desktop 内置运行时，插件安装器不会自动应用它。现有验收通过的是独立制作的补丁版 Desktop 副本；本仓库尚未提供通用的一键补丁安装器。具体改动、验收副本如何制作，以及正式安装还缺什么，见[宿主补丁中文说明](host-patch/README.zh-CN.md)。自动测试的隔离树见 [host-patch/README.md](host-patch/README.md)。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
 
 ## 使用
 
