@@ -21,7 +21,7 @@
 import * as asar from "@electron/asar";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -266,10 +266,19 @@ export async function makeDesktopCopy({ source, target, repoRoot, expected = {},
 			bundleId,
 			codesign: "ad-hoc",
 		};
-		// Publish app + manifest as one unit of this run: the sidecar first
-		// (its absence was guaranteed at precheck), then the app via a single
-		// rename. Any failure here rolls back only these two.
-		writeFileSync(sidecar, JSON.stringify(manifest, null, 2) + "\n");
+		// Publish app + manifest as one unit of this run. The manifest is
+		// written completely inside the stage first, then published with a
+		// hard link: the link is atomic and fails with EEXIST if a sidecar
+		// appeared since precheck — a foreign file is never overwritten, and
+		// the sidecar path never holds a half-written manifest. Only the two
+		// names this run actually created (link + rename succeeded) roll back.
+		const stagedManifest = join(stage, "manifest.json");
+		writeFileSync(stagedManifest, JSON.stringify(manifest, null, 2) + "\n");
+		try {
+			linkSync(stagedManifest, sidecar);
+		} catch {
+			fail(`sidecar manifest appeared at ${sidecar} after precheck — refusing to overwrite another file; nothing was published`);
+		}
 		publishedManifest = true;
 		renameSync(builtApp, target);
 		publishedApp = true;

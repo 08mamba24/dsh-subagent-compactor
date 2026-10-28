@@ -275,6 +275,54 @@ test("darwin gates and full build", { skip: !isDarwin }, async (t) => {
 		}
 	});
 
+	await t.test("a sidecar created by another actor after precheck is preserved and nothing is published", async () => {
+		const badRoot = mkdtempSync(join(tmpdir(), "dsh-copy-latesidecar-"));
+		try {
+			const bad = await buildFixtureApp(badRoot);
+			mkdirSync(join(badRoot, "out"));
+			const badTarget = join(badRoot, "out", "T.app");
+			const sidecar = `${badTarget}.manifest.json`;
+			let injected = false;
+			const injectForeignSidecar = () => {
+				if (injected) return;
+				injected = true;
+				writeFileSync(sidecar, "FOREIGN-LATE-SIDECAR");
+			};
+			await expectRefusal(
+				makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 }, log: injectForeignSidecar }),
+				"sidecar manifest appeared",
+			);
+			assert.equal(readFileSync(sidecar, "utf8"), "FOREIGN-LATE-SIDECAR");
+			assert.equal(existsSync(badTarget), false);
+			assert.equal(existsSync(`${badTarget}.stage`), false);
+		} finally {
+			rmSync(badRoot, { recursive: true, force: true });
+		}
+	});
+
+	await t.test("a manifest write failure publishes nothing and leaves no half-written sidecar", async () => {
+		const badRoot = mkdtempSync(join(tmpdir(), "dsh-copy-manifestfail-"));
+		try {
+			const bad = await buildFixtureApp(badRoot);
+			mkdirSync(join(badRoot, "out"));
+			const badTarget = join(badRoot, "out", "T.app");
+			let logs = 0;
+			const obstructManifestWrite = () => {
+				logs += 1;
+				if (logs === 3) mkdirSync(join(`${badTarget}.stage`, "manifest.json"), { recursive: true });
+			};
+			await assert.rejects(
+				makeDesktopCopy({ source: bad.appPath, target: badTarget, repoRoot, expected: { archiveSha256: bad.archiveSha256 }, log: obstructManifestWrite }),
+				() => true,
+			);
+			assert.equal(existsSync(`${badTarget}.manifest.json`), false);
+			assert.equal(existsSync(badTarget), false);
+			assert.equal(existsSync(`${badTarget}.stage`), false);
+		} finally {
+			rmSync(badRoot, { recursive: true, force: true });
+		}
+	});
+
 	await t.test("a successful build applies everything and never writes the source", async (t) => {
 		const manifest = await run();
 		assert.equal(existsSync(`${target}.manifest.json`), true);
