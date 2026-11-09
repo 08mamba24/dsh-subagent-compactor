@@ -3,12 +3,12 @@
  * installed Harness tree (session persistence in a temp dir, token meter,
  * compaction-basic, agent loop, subagent + in-process spawn provider,
  * commands/tools services) with a local Anthropic-Messages-compatible fake
- * LLM server, and prove the LIVE-window journey end to end:
+ * LLM server, and prove end to end:
  *
  *  1. a real continuable subagent spawned through ctx.subagents runs its
- *     activation to TRUE settlement; the settlement watcher reclaims the
- *     child (asserted, not assumed). The follow-up invocation of a settled
- *     child id is covered by the cold suite (cold.integration.test.mjs).
+ *     activation to TRUE settlement; once the settlement watcher reclaims it,
+ *     the child is no longer live and the command fails explicitly
+ *     (not-resident) — the settled/cold boundary is asserted, not assumed;
  *  2. re-waking the same child by id (sendMessage cold-resumes it from
  *     persistence as a fresh live agent) and invoking /subagent-compact while
  *     that real request is RUNNING takes the deterministic live window: the
@@ -19,14 +19,146 @@
  *     cold resume may have replaced the Agent object;
  *  4. a different parent cannot compact someone else's child.
  *
- * Modules resolve from a DSH 0.2.1-rc.2 tree linked at ./node_modules.
+ * Modules resolve from a DSH 0.2.2-rc.1 tree linked at ./node_modules.
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import http from "node:http";
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bootComposition, createFakeMessagesServer, waitFor, PROVIDER, MODEL } from "./helpers.mjs";
+import { Context } from "@deepseek-ai/cordis";
+
+process.env.DEEPSEEK_API_KEY = "test-key-used-by-fake-server";
+
+const PROVIDER = "deepseek-official";
+const MODEL = "deepseek-flash";
+
+/**
+ * Minimal Anthropic Messages SSE responder scripted by the tests. Each
+ * request captures its mode AT ARRIVAL. Explicit gates hold selected child
+ * requests open until the command is waiting; no timing guess creates the live window.
+ */
+function createFakeMessagesServer() {
+	const state = { mode: "turn", requests: [] };
+	const heldRequests = [];
+	const server = http.createServer((request, response) => {
+		const chunks = [];
+		request.on("data", (chunk) => chunks.push(chunk));
+		request.on("end", () => {
+			const body = Buffer.concat(chunks).toString("utf8");
+			const held = heldRequests.find((entry) => entry.request === undefined && body.includes(entry.marker));
+			const mode = held?.mode ?? state.mode;
+			const received = { url: request.url, mode };
+			state.requests.push(received);
+			const filler = "The worker examined the corpus, recorded structured findings, and kept the log verbose enough to build a compactable history span. ".repeat(40);
+			const textByMode = {
+				turn: `Turn complete. ${filler}`,
+				"turn-short": "Round two done.",
+				summarize: "Checkpoint summary: the worker completed its assigned turns; details condensed.",
+				turn2: "Follow-up handled after compaction."
+			};
+			const respond = () => {
+				if (response.destroyed) return;
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				const send = (event) => response.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+				send({ type: "message_start", message: { id: "msg_fake", usage: { input_tokens: 12, output_tokens: 4 } } });
+				send({ type: "content_block_start", index: 0, content_block: { type: "text", text: "" } });
+				send({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: textByMode[mode] ?? textByMode.turn } });
+				send({ type: "content_block_stop", index: 0 });
+				send({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 4 } });
+				send({ type: "message_stop" });
+				response.end();
+			};
+			if (held) {
+				held.request = received;
+				held.release = () => {
+					held.release = undefined;
+					respond();
+				};
+			} else respond();
+		});
+	});
+	return {
+		state,
+		hold: (marker, mode) => {
+			const held = { marker, mode, request: undefined, release: undefined };
+			heldRequests.push(held);
+			return held;
+		},
+		start: () => new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${server.address().port}`))),
+		close: () => new Promise((resolve) => {
+			for (const held of heldRequests) held.release?.();
+			server.close(() => resolve());
+		})
+	};
+}
+
+/** Boot the full Host-plane composition plus the plugin under test. */
+async function bootComposition(baseURL, storageRoot) {
+	const modules = {};
+	for (const moduleName of [
+		"@deepseek-ai/cordis-plugin-timer",
+		"@deepseek-ai/dsh-llm",
+		"@deepseek-ai/dsh-llm-deepseek-api-key",
+		"@deepseek-ai/dsh-system-prompt",
+		"@deepseek-ai/dsh-tools",
+		"@deepseek-ai/dsh-tool-executor-native",
+		"@deepseek-ai/dsh-commands",
+		"@deepseek-ai/dsh-fs-local",
+		"@deepseek-ai/dsh-session",
+		"@deepseek-ai/dsh-session-projection",
+		"@deepseek-ai/dsh-session-persistence-jsonl",
+		"@deepseek-ai/dsh-session-query",
+		"@deepseek-ai/dsh-token-meter",
+		"@deepseek-ai/dsh-compaction-basic",
+		"@deepseek-ai/dsh-agent",
+		"@deepseek-ai/dsh-agent-loop",
+		"@deepseek-ai/dsh-working-directory",
+		"@deepseek-ai/dsh-subagent",
+		"@deepseek-ai/dsh-subagent-spawn-in-process"
+	]) modules[moduleName] = await import(moduleName);
+	const ctx = new Context();
+	const rows = [
+		["@deepseek-ai/cordis-plugin-timer", {}],
+		["@deepseek-ai/dsh-llm", {}],
+		["@deepseek-ai/dsh-llm-deepseek-api-key", { baseURL, defaultContextWindow: 200000 }],
+		["@deepseek-ai/dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are the integration test worker." }],
+		["@deepseek-ai/dsh-tools", {}],
+		["@deepseek-ai/dsh-tool-executor-native", {}],
+		["@deepseek-ai/dsh-commands", {}],
+		["@deepseek-ai/dsh-fs-local", {}],
+		["@deepseek-ai/dsh-session", {}],
+		["@deepseek-ai/dsh-session-projection", {}],
+		["@deepseek-ai/dsh-session-persistence-jsonl", { root: storageRoot, compression: "none" }],
+		["@deepseek-ai/dsh-session-query", {}],
+		["@deepseek-ai/dsh-token-meter", {}],
+		["@deepseek-ai/dsh-compaction-basic", { auto: false }],
+		["@deepseek-ai/dsh-agent", {}],
+		["@deepseek-ai/dsh-agent-loop", { agents: [] }],
+		["@deepseek-ai/dsh-working-directory", {}],
+		["@deepseek-ai/dsh-subagent", {}],
+		["@deepseek-ai/dsh-subagent-spawn-in-process", {}]
+	];
+	for (const [moduleName, config] of rows) {
+		const module = modules[moduleName];
+		await ctx.plugin(module.default ?? module, config);
+	}
+	const plugin = await import("../index.js");
+	await ctx.plugin(plugin, { waitForIdle: true });
+	return ctx;
+}
+
+/** Instance-independent bounded poll; cold resumes swap Agent objects. */
+async function waitFor(probe, timeoutMs = 5000) {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		const value = await probe();
+		if (value) return value;
+		if (Date.now() > deadline) throw new Error("waitFor deadline exceeded");
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+}
 
 test("integration: live-window compaction of a real continuable subagent", async () => {
 	const fake = createFakeMessagesServer();
@@ -55,26 +187,35 @@ test("integration: live-window compaction of a real continuable subagent", async
 			delivery: "parent"
 		});
 		const childId = activation.childId;
-		await activation.result;
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		const originalChild = ctx.agents.get(childId);
+		assert.notEqual(originalChild, undefined, "the first activation starts as a live child");
+		const firstResult = await activation.result;
+		assert.notEqual(firstResult.stopReason, "error", `first turn failed: ${JSON.stringify(firstResult)}`);
+		assert.match(JSON.stringify(firstResult.output), /Turn complete\./, "the first activation must actually run the model");
+		await waitFor(() => ctx.agents.get(childId) === undefined);
 		assert.equal(ctx.agents.get(childId), undefined, "a truly settled continuable child is reclaimed by the settlement watcher");
+		const lateExecution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		assert.equal(lateExecution.result.kind, "error");
+		assert.match(lateExecution.result.text, /No live agent with session id/);
 
-		// 2. Re-wake the same child id: cold resume as a fresh live agent running a slow, SHORT turn.
-		fake.state.mode = "turn-short";
-		fake.state.delayMs = 400;
+		// 2. Hold the resumed child's actual HTTP request, not an assumed delay.
+		const round2 = fake.hold("Working round 2: please continue and report.", "turn-short");
 		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Working round 2: please continue and report." }], { signal: signal() });
-		const liveChild = await waitFor(() => ctx.agents.get(childId));
+		await waitFor(() => round2.request);
+		const liveChild = ctx.agents.get(childId);
 		assert.notEqual(liveChild, undefined, "cold resume brings the child id back live");
-		await new Promise((resolve) => setTimeout(resolve, 80));
+		assert.notEqual(liveChild, originalChild, "cold resume must create a fresh Agent for the same child id");
 		const listing = await ctx.commands.execute(parent, "/subagent-compact", [], signal());
 		assert.equal(listing.result.kind, "success");
 		assert.match(listing.result.text, new RegExp(childId));
 
 		// 3. Compact DURING the running request: wait-for-idle bridges turn end into the engine.
 		const tokensBefore = ctx.tokenMeter.measure(liveChild.session).totalTokens;
-		fake.state.delayMs = 0;
 		fake.state.mode = "summarize";
-		const compactExecution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		// No attachments: execute enters the handler synchronously before its first await.
+		const compaction = ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		round2.release();
+		const compactExecution = await compaction;
 		assert.equal(compactExecution.result.kind, "success", `compact failed: ${compactExecution.result.text}`);
 		assert.match(compactExecution.result.text, /Compacted subagent/);
 		assert.match(compactExecution.result.text, /replaced [1-9]\d* history items/, "the replaced span must be non-empty");
@@ -127,15 +268,14 @@ test("integration: live-window compaction of a real continuable subagent", async
 			sessionId: "it-parent-2",
 			agentOptions: { provider: PROVIDER, model: MODEL }
 		})).agent;
-		fake.state.mode = "turn";
-		fake.state.delayMs = 400;
+		const round3 = fake.hold("Working round 3: please continue.", "turn");
 		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Working round 3: please continue." }], { signal: signal() });
-		await waitFor(() => ctx.agents.get(childId) !== undefined);
-		await new Promise((resolve) => setTimeout(resolve, 60));
+		await waitFor(() => round3.request);
+		assert.notEqual(ctx.agents.get(childId), undefined, "ownership is checked against a live child");
 		const foreignExecution = await ctx.commands.execute(parent2, `/subagent-compact ${childId}`, [], signal());
 		assert.equal(foreignExecution.result.kind, "error");
-		assert.match(foreignExecution.result.text, /not one of your (live )?runtime-created direct subagents|belongs to another parent session/);
-		fake.state.delayMs = 0;
+		assert.match(foreignExecution.result.text, /not one of your live runtime-created direct subagents/);
+		round3.release();
 
 		console.log(`integration ok: child=${childId} tokens ${tokensBefore} -> ${tokensAfter}, llm requests=${fake.state.requests.length}`);
 	} finally {

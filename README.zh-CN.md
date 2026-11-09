@@ -2,39 +2,24 @@
 
 [English](README.md)
 
-**状态：1.1.0 为未发布候选。** 下文的冷压缩能力已通过代码复审但**尚未发布**：它依赖候选宿主维护能力（`ctx.subagents.runMaintenance`，见 [host-patch/](host-patch/README.md)）。在原版 DSH 0.2.1-rc.2 运行时上，插件会明确拒绝冷压缩（`host-capability-missing`），只有 live 窗口压缩可用。当前已发布版本为 **1.0.1**（仅 live 窗口）。
+在 DSH Desktop 的父会话中，手动压缩 **live（仍驻留）的直接子智能体**的历史。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
-在 DSH Desktop 的父会话中，手动压缩直接子智能体的历史——子智能体仍在运行时可以压缩，**已经结束的 continuable 子智能体也可以按 session id 直接压缩**。插件复用子智能体自己的压缩引擎，提供斜杠命令和模型工具。
-
-**候选版本：** `1.1.0`（未发布）· **包名：** `@local/dsh-subagent-compactor` · **验证环境：** Desktop `0.12.1` / Harness `0.2.1-rc.2`（live 窗口为发布版运行时验证；冷路径与批量入口已在独立补丁版 Desktop 副本验收）。
-
-[真实 Desktop 批量验收记录](docs/acceptance/2026-10-27-batch/acceptance.md)：命令与模型工具均成功压缩两个已结束成员；原 ID 续接保留事实，完整重启后两份回执仍可查询。此结论验证候选宿主补丁，原版 Desktop 仍缺少冷维护能力。
-
-## 1.1.0 变化
-
-在候选补丁宿主上，结束后的 continuable 子智能体可以按 session id 压缩，无需再派任务或抢 live 窗口。插件调用 `ctx.subagents.runMaintenance`，由管理器恢复子成员组合、执行压缩，并负责结算和释放写入句柄；插件不持有恢复句柄。鉴权、pending 输入与并发规则见 [TECHNICAL.md](TECHNICAL.md)。
+**状态：1.2.0 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
 
 ## 安装
 
-### 已发布版本（1.0.1，live 窗口压缩）
+打开 **插件 → 添加插件**，粘贴 Git 来源，再点击 **安装 → 立即启用**：
 
-1. 打开 DSH Desktop → **插件 → 添加插件**。
-2. 在“包名或地址”中粘贴：
+| 版本 | Git 来源 |
+| --- | --- |
+| 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
+| 本次 1.2.0 预览分支，含 live 批量压缩 | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/live-only-1.2.0` |
 
-   ```text
-   https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1
-   ```
+分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.2.0` 发布 tag。
 
-3. 点击 **安装 → 立即启用**，确认 `@local/dsh-subagent-compactor` `1.0.1` 正在运行。
-4. 替换已有安装后，完整退出并重新打开 Desktop。实测版本中，仅刷新界面可能保留旧命令定义。
+确认 `@local/dsh-subagent-compactor` 已启用且版本正确。替换已有安装后，完整退出并重新打开 Desktop，让新命令定义生效。如果此前从本地目录安装过同名包，先移除旧安装来源，再添加 Git 来源。
 
-如果之前从本地目录安装过同名包，先卸载旧来源，再安装 GitHub 版本。安装由 Desktop 插件管理器处理，无需手动修改 profile，也无需发布 npm 包。`private: true` 限制的是 npm 发布，不影响 Git 来源安装。
-
-### 1.1.0 候选（没有可安装的发布 tag）
-
-1.1.0 候选源码和 CI 已合入本仓库 `main`，但**没有 1.1.0 tag 或发布包**。在原版 Harness 0.2.1-rc.2 上，仅安装插件仍不能压缩已结束的子会话；完整能力需要插件与候选宿主补丁一起使用。
-
-宿主补丁修改的是 Desktop 内置运行时，插件安装器不会自动应用它。现有验收通过的是独立制作的补丁版 Desktop 副本；本仓库尚未提供通用的一键补丁安装器。具体改动、验收副本如何制作，以及正式安装还缺什么，见[宿主补丁中文说明](host-patch/README.zh-CN.md)。自动测试的隔离树见 [host-patch/README.md](host-patch/README.md)。引用源码请使用完整 commit，不要引用不存在的 `v1.1.0` tag。
+Desktop 插件管理器负责应用插件的 bundle 配置。无需手改 profile、应用宿主补丁或发布 npm 包。`private: true` 限制的是 npm 发布，不影响 Git 安装。
 
 ## 使用
 
@@ -42,63 +27,78 @@
 
 ```text
 /subagent-compact
-```
-
-命令列出持久化的直接子成员目录。每行结尾标注 `— live`（已加载的 agent）或 `— persisted (not loaded)`（仅持久化记录；列表是即时观察，不是预留）。复制完整 session ID，再执行：
-
-```text
 /subagent-compact <子智能体的session-id>
+/subagent-compact all
 ```
 
-两种合法情形：
+- **不带参数：**列出父会话的持久化直接子成员目录，标注 `live` 或 `persisted (not loaded)`。列表是即时观察，不会预留目标。
+- **一个 session ID：**压缩该 live 直接子成员。请在它仍运行时发起；默认 `waitForIdle: true` 会等本轮结束再压缩。已经结算并被回收的目标返回 `not-resident`。
+- **`all` 或 `--all`：**读取一次目录快照，同时启动所有目标的压缩尝试，按目录顺序返回结果。已不再 live 的成员记为 `skipped`；单项失败不会吞掉其他结果。快照之后创建的成员属于下一次运行。
 
-- **子智能体仍 live** —— 在它运行时发起即可；默认 `waitForIdle: true` 会等本轮结束再压缩。
-- **子智能体已结束**（已结算、被回收的 continuable 子智能体）—— 之后任意时刻按 id 调用。插件恢复子会话、压缩一次、释放句柄；不会发送新任务。压缩后同一 id 仍可正常续接。
-
-### 批量：一次压缩全部直接子成员
+两个子成员均成功时，回执类似：
 
 ```text
-/subagent-compact --all
+<child-1>: compacted — replaced 3 items (...)
+<child-2>: compacted — replaced 3 items (...)
+Summary (completed) — total 2: compacted 2, nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0.
 ```
 
-对调用父会话**启动时刻的持久化目录快照**中的每个直接子成员逐个压缩（快照之后新增的成员属于下一次运行；不递归孙成员、不涉及其他父会话的成员）。各项**串行**执行并沿用同一 per-target 锁——并发的单项压缩同一目标会得到 `busy-target`。每一项都单独报告结果与原因（压缩成功含 summary seq / 替换条目数 / 被替换历史 token 估算、无可压历史、one-shot 或 pending 被拒、引擎失败等）；单项失败不会吞掉其余项。批量结果只有在每个子成员都压缩成功或无可压历史时才是 `completed`；全部未成功为 `all-failed`，部分失败为 `partial-failure`，被取消为 `batch-cancelled`——包括取消落在目录读取尚未结束时的情形；这些非干净结果都会让命令报错，绝不报成功。取消（或卸载插件）会停止尚未开始的项（记为 `not-started`）并保留已完成的结果；取消落地时目录已读出的，已知的全部目标都会逐项记为 `not-started`，目录真未读出的则明确报告快照未知。每个被压缩的子成员仍会在自己的模型路由上多一次摘要请求。原版运行时上冷路径项会被拒（`host-capability-missing` 计入 failed），live 项照常压缩。
+`completed` 允许包含被跳过的成员；请结合逐项结果和 `compacted` 数量判断实际完成量。批量只覆盖当前父会话的直接子成员，不递归孙成员。
 
-每个完成的批量都会持久化一条**回执**——插件自有版本化**存储域**（`subagent_compactor_batch_receipts`，经组合的 `storageDomain` 设施打开）中一条经 schema 校验的记录。回执显式携带所属父会话 id，该 id 即授权边界：其他父会话读不到也覆盖不了，fork 继承的历史不会冒充本会话自己创建的回执。写入在后端确认落盘的那一刻即持久（每批次一条、绝不覆盖），插件重载、宿主重启后仍在。宿主的 abort 语义会丢弃被取消命令自身的结果——回执必须持久化正是为此。裸 `/subagent-compact` 列表会附上本父最近一条**未干净完成**的回执（干净批次的结果当时已正常送达）；任意回执（干净与否）都可按 id 取回：
-
-```text
-/subagent-compact report <batch-id>
-```
-
-回执写入失败会在返回文本中如实写明（`NOT persisted: …`），绝不谎称已持久化；记录形状由域的 zod schema 在打开时强制校验——外来载荷根本进不了域。
-
-父智能体也可以在回合内调用工具：
+父模型只有一个工具：
 
 ```text
 compact_subagent({ "session_id": "<子智能体的session-id>" })
-compact_all_subagents({})   // 上述批量入口，附结构化计数
 ```
 
-例如告诉父智能体：“调用 `compact_subagent` 压缩子会话 X，并报告工具返回结果。”工具执行遵循宿主权限设置。批量工具的计数——`total`、`compacted`、`nothing_to_compact`、`failed`、`cancelled`、`not_started`——是批量结果的结构化数值，绝不从报告文本反向解析（错误行里可能出现任意数字）。
+它复用单项压缩路径，执行遵循宿主权限设置。批量压缩由命令提供，本版本没有批量模型工具。
 
-## 怎么确认压缩成功
+## 确认结果
 
-带参命令应显示为真正的命令卡片。成功结果会给出子会话 ID、摘要序号和被替换的历史条目数；工具返回 `outcome`、`target_session_id`、`summary_seq`、`replaced_items`、`replaced_tokens`。
+斜杠命令应显示为命令卡片。成功项包含子会话 ID、替换的历史条目数，以及摘要在该子会话日志中的序号。模型工具成功时返回 `outcome`、`target_session_id`、`summary_seq`、`replaced_items` 和 `replaced_tokens`。
 
-`replaced_tokens` 是被替换旧历史的估算量，不是加入摘要后的净节省量。要衡量上下文下降，应比较压缩前后的上下文估算或实际请求总输入。生成摘要会在子智能体自己的路由上多用一次模型请求。
+`replaced_tokens` 估算的是被替换的旧历史跨度，不是加入摘要后的净节省量。每次实际压缩都会在子成员自己的模型路由上增加一次摘要请求。
 
-拒绝都是显式 outcome，不会静默失败：`unknown-session`（无此会话）、`not-authorized`（他人子成员 / 孙成员 / 自身）、`unsupported-target`（one-shot、external、缺失或不受支持的 descriptor）、`pending-input`（存在持久化未处理输入——应先续接子智能体）、`busy-target`（并发压缩或他人持有写入句柄；稍后重试）、`restore-failed`、`query-unavailable`，以及引擎的六个手动压缩错误码（`busy`、`cancelled`、`changed`、`summary`、`commit`、`persistence`）。
+压缩摘要通过宿主会话存储持久化。批量回执只存在于命令结果中：本版本没有独立回执库或 `report` 命令，宿主可能丢弃已取消命令的结果。
 
-## 环境与边界
+## 要求与边界
 
-- 组合需要 `commands`、`tools`、`agents`、`subagents` 服务，以及子成员对应的压缩引擎；冷压缩另需 `sessionQuery` 与会话持久化（同类组合中通常已具备）。批量回执存放在插件自有的存储域（`@deepseek-ai/dsh-storage-domain`，新增必需 peer；域内记录经 schema 校验、不进模型可见面），经组合的 `storageDomain` 设施打开；设施缺失或写入失败时，批量文本会如实写 `NOT persisted`，绝不谎称已持久化。
-- 只允许运行时直接父级操作。live 目标按运行时所有权拒绝他人；已结束目标按子会话持久化 header 的父级血缘与其持久 descriptor 拒绝他人子成员、自身和孙成员。
-- preset 组合通过 `agentPresets.serviceFor` 解析子成员引擎（绝不回退 Host 平面）；无该注册表的组合使用 Host 引擎。
-- 冷压缩依赖宿主的管理器侧维护能力（`ctx.subagents.runMaintenance`）。在原版 0.2.1-rc.2 运行时上，插件会明确拒绝冷压缩（`host-capability-missing`）；[host-patch/](host-patch/README.md) 中的隔离候选宿主补丁提供该能力：已接受输入不丢失、正常续接全程可用、仅卸载插件不损滞留输入。live 窗口压缩在两种运行时上都可用。
-- 支持列目录和手动压缩；删除、handoff、自动触发不在此版本范围内。
-- 已验证 Desktop `0.12.1` / Harness `0.2.1-rc.2`；其他版本需要另行验证。
+- 组合需要提供 `commands`、`tools`、`agents`、`subagents` 和子成员的压缩引擎。列表及批量发现目标还需要宿主的持久化子成员目录。
+- 只有精确的 live runtime 父成员能压缩其直接子成员；自己、孙成员和其他父会话的子成员都会被拒绝。
+- 已结算的子成员不在本版本范围内。正常续接可以让同一 ID 再次 live，但插件不会只为压缩而恢复子会话。
+- 批量全并发、不设并发上限，让各项都能等待自己的 live 窗口。模型限流可能造成单项失败，回执会如实报告。
+- 缺少引擎、目标被回收、同目标争用、取消和引擎失败均有明确结果，详见 [TECHNICAL.md](TECHNICAL.md)。
+- 本插件提供手动命令与一个模型工具，不增加自动触发、成员删除或交接操作。
 
-技术说明见 [TECHNICAL.md](TECHNICAL.md)，验证口径见 [docs/VALIDATION.md](docs/VALIDATION.md)。测试依赖与命令见 [英文说明](README.md#run-the-tests)。
+## 与未发布 1.1.0 候选的区别
 
-## 源码与许可
+旧候选把冷压缩与宿主维护补丁配套使用。本次 1.2.0 使用原版运行时能力，恢复为仅 live 压缩：
 
-本仓库提供插件源码和安装说明，尚未指定许可证。本次通过 GitHub 分发，包保留 `private: true`，未发布 npm。
+| 能力 | 未发布 1.1.0 候选 | 1.2.0 预览 |
+| --- | --- | --- |
+| 已结束、未加载的子会话 | 通过候选宿主补丁冷恢复 | 单项拒绝，批量跳过 |
+| 批量执行 | 串行 | 并发，按目录顺序回填结果 |
+| 模型工具 | `compact_subagent`、`compact_all_subagents` | 只有 `compact_subagent` |
+| 批量回执 | 插件存储域及 `report <batch-id>` | 仅命令结果 |
+| 宿主改动 | 冷压缩需要 | 在已验证原版运行时上不需要 |
+
+[host-patch/](host-patch/README.zh-CN.md)、[冷压缩计划](docs/COLD_COMPACTION_PLAN.md)、[宿主能力要求](docs/HOST_MAINTENANCE_REQUIREMENTS.md) 和旧验收记录保留为**未发布候选的历史资料**，不属于 1.2.0 的安装步骤或受支持 API。从该候选升级会移除冷路径、批量模型工具、report 语法和持久化批量回执。
+
+## 验证与测试
+
+1.2.0 的安装包运行时验证及干净 npm 依赖树验证，均在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**：unit 25、batch 15、integration 1、preset integration 5。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+
+Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
+
+使用 Node **24.9.0 或更新版本**：
+
+```sh
+npm ci --include=dev
+npm test
+```
+
+四份受跟踪测试使用固定版本的原版运行时包、隔离临时存储和本地模拟模型服务，不发送外部模型请求。
+
+## 源码与许可证
+
+本仓库提供插件源码和安装说明，尚未指定许可证。通过 Git 安装分发，不发布 npm 包。

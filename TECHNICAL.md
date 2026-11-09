@@ -1,85 +1,88 @@
-# @local/dsh-subagent-compactor
+# Technical contract: 1.2.0 live-only compaction
 
-Manual history compaction for one of the caller's **direct subagents** — live, or a continuable child restored by id after it finished — reusing the composition's own compaction engine (e.g. `@deepseek-ai/dsh-compaction-basic`). Built and reviewed against DSH Harness 0.2.1-rc.2 (DSH Desktop 0.12.1).
+This branch compacts the caller's **live runtime-owned direct children** through the child's existing compaction engine. Its tested runtime is stock Harness `0.2.2-rc.1`. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
 
-## What you get
+## Entry points
 
-- **`/subagent-compact`** (chat command)
-  - No arguments: lists the calling session's durable direct-subagent catalog (`session id [mode] label — live|persisted (not loaded)`), via `ctx.subagents.listChildren` plus a live-registry lookup. A listing is an observation, not a reservation.
-  - One session id: compacts that direct child — live, or persisted continuable.
-- **`compact_subagent`** (model tool) — the same operation from inside a model turn; takes `session_id` and returns `{ outcome, target_session_id, summary_seq, replaced_items, replaced_tokens }` with a text render.
+| Entry point | Operation |
+| --- | --- |
+| `/subagent-compact` | Read the caller's durable direct-child catalog and mark each entry `live` or `persisted (not loaded)` |
+| `/subagent-compact <id>` | Compact one live direct child |
+| `/subagent-compact all` or `--all` | Compact live direct children from one catalog snapshot concurrently |
+| `compact_subagent({session_id})` | Run the single-child operation from a model turn |
 
-Both surfaces serialize per target: one compaction per session id at a time inside this plugin (`busy-target` on contention).
+The model tool returns `text` and `outcome`; success also includes `target_session_id`, `summary_seq`, `replaced_items`, and `replaced_tokens`. There is no batch model tool, report command, cold restore path, or plugin batch-receipt domain in this version.
 
-## Two paths, one operation
+## Single-child path and authorization
 
-**Live target** (`agents.get(id)` present): authorization stays runtime ownership (`agents.isOwnedBy(id, caller)`), `waitForIdle` (default `true`) bridges a running turn into the engine, and the registry identity is re-checked after the wait (a same-id replacement agent is a different object).
+1. Acquire the plugin's per-target lock. A competing single or batch operation on the same ID returns `busy-target`.
+2. Resolve the live agent through `agents.get(id)`. An unloaded or reclaimed target returns `not-resident`.
+3. Require `agents.isOwnedBy(id, caller)`. The runtime registry checks the exact parent Agent object; a persisted catalog entry alone grants no authority. Self, foreign children, and grandchildren return `not-authorized`.
+4. Resolve the child's compaction engine as described below.
+5. With `waitForIdle: true` (the default), wait for `agent.whenIdle()` with the request's cancellation signal.
+6. Recheck that `agents.get(id)` is still the same Agent object after the wait. Disposal or same-ID replacement returns `not-resident`.
+7. Call `engine.compactNow(agent, signal, sourceCommandId)` and render its result. A null result means `nothing-to-compact`.
+8. Release the per-target lock in `finally`.
 
-**Persisted target** (no live agent): the cold path, mirroring the subagent manager's own continuation reconstruction (`coldResume`) step for step through public APIs only:
+The plugin never restores a persisted session. A normal message may make a previously settled child live again; compaction can then use that new live instance. Calling while a request is still running lets the idle wait bridge the turn end into compaction, before settlement reclaims the child.
 
-1. `sessionQuery.observeSession(id)` reads the persisted snapshot; absence is `unknown-session`, never a guess.
-2. The exact calling Agent must still be live; the target's authoritative persisted header must name the caller as `parentSession` (`not-authorized` otherwise — this is what refuses foreign parents and grandchildren; a catalog record alone is never authorization).
-3. The child's **own** events (`events.slice(inheritedEventCount)` — a fork's inherited prefix is not the child's) must fold to a supported `subagent/descriptor` (`foldSubagentDescriptor`, version 3, mode `continuable`); one-shot records, external sessions, missing/malformed/unsupported descriptors are `unsupported-target`.
-4. An independent preset selection (`agent-preset/selected` before the descriptor) must resolve to a current preset id through the session's `agentPreset` projection, or restoration fails explicitly (`restore-failed`).
-5. **Durable pending input is checked before anything is materialized** (`inbox` projection: `next-turn` + `next-step`). A restored handle's disposal durably cancels parked inbox input, so a child with pending work is refused (`pending-input`) and that work survives for a normal continuation. An unverifiable inbox (no projection) also refuses.
-6. The child is restored through public `agents.resume({ resumeSessionId, parentAgent: caller, agentOptions, setup })` with exactly the descriptor's optional route fields (`agentProvider`/`agentModel`/`agentReasoningEffort`; the resumed route's defaults apply where the descriptor omitted them — never the parent's current route, never activation-only knobs like `outputSchema`/`maxTokens`). The setup applies the official `applyChildComposition(childCtx, caller, { agentPreset, persona, toolFilter })` and returns void (no preset mount receipt leaks as a setup commit object).
-7. `compactNow(agent, signal, commandId)` runs in the idle maintenance window; the six-code error contract is unchanged; the observation lease and the restored handle are always released (`release-failed` reports a committed compaction whose release did not converge).
+## Engine resolution
 
-## Engine resolution (two lawful planes, no fallback)
+There are two composition modes:
 
-- With an `agentPresets` registry (Desktop/Web presets): the engine is published inside the preset's **isolated** group, so it is resolved strictly via `agentPresets.serviceFor(target, 'compaction')` — for a cold-restored child, after its composition is applied in resume setup. A plain context lookup (including `agent.ctx`) would resolve the Host realm instance, which is not the engine that owns the target's session — this plugin never does that fallback. A missing preset engine fails with an explicit message.
-- Without a registry (headless/ACP-style compositions): the engine, when composed, is the Host-plane `compaction` service — the same source official `/compact` injects.
+- **Preset registry present (Desktop/Web):** use `agentPresets.serviceFor(target, "compaction")`. The engine belongs to the child's isolated preset group. A missing preset engine is `engine-missing`; the plugin does not fall back to a different engine in the Host realm.
+- **No preset registry:** use the composed Host-plane `compaction` service, as the official `/compact` command does. A missing service is `engine-missing`.
 
-## Concurrency, message admission, and the release cutoff
+This is service lookup into the stock runtime, not a replacement compaction implementation or a host patch. Summary requests follow the child's own model route.
 
-Cold compaction runs through the host's manager-owned maintenance capability (`ctx.subagents.runMaintenance`, provided by the candidate patch in `host-patch/`; on a stock runtime the plugin refuses cold compaction with `host-capability-missing` and live-window compaction is unaffected):
+## Batch scheduling and outcomes
 
-- The child is restored exactly like a continuation and becomes **resident**, so every normal route (`sendMessage`, addressed `prompt({delivery:"queue"})`) delivers through the manager instead of colliding on the session writer — including while pending input keeps the activation resident, and including a close in flight (the delivery loop waits out a closing activation and retries).
-- The engine's `compactNow` is the only maintenance window; the manager holds the settlement watcher back for the job's duration, so nothing reclaims the child mid-job.
-- Afterwards the ordinary settlement takes over under a **loop-level admission cutoff**: `Agent.closeInput()` is checked synchronously at the single enqueue chokepoint (`send`), and the manager's `close()` sets `activation.closing` and the agent cutoff in one synchronous section. Input accepted before the cutoff is processed or durably preserved (the watcher refuses to settle while the inbox is non-empty; a `keepInbox` abort restores even a claimed-but-uncommitted batch); input after the cutoff is rejected before acceptance.
-- Unloading only the plugin aborts the job; the host-side settlement still owns the activation, so parked input survives and the same id continues normally afterwards.
+The batch reads `subagents.listChildren(caller.id, signal)` once and de-duplicates IDs, retaining catalog order. The catalog is durable and can include settled children; residency and runtime ownership are checked independently for every attempt. Children created after the snapshot are excluded.
 
-The plugin itself holds no restored handle at all — it cannot drop accepted input because it never owns the release. A per-target lock still serializes the plugin's own entry points (`busy-target`).## Error contract
+Every item starts concurrently and immediately enters the same single-child path. This matters because one child's summary can take longer than another child's remaining live window. Serial scheduling or a concurrency queue could arrive after a later child has already been reclaimed. There is no concurrency cap; model rate-limit failures are reported per item.
 
-All six `ManualCompactionError` codes map to distinct messages: `busy`, `cancelled`, `changed`, `summary`, `commit`, `persistence`; an unknown runtime code stays diagnosable (code + engine diagnostic) instead of throwing. Cancellation is decided by the request **signal first**, then the code — `compactNow` folds its own caught aborts into `busy`, so "the caller cancelled" is only decidable from the signal. Errors are matched by `name + code` (and, for peer errors like `SessionAlreadyOwnedError`, by chained `name`), never `instanceof`, because the plugin and the engine are not guaranteed to share a module tree. Cold-specific outcomes: `unknown-session`, `unsupported-target`, `pending-input`, `busy-target`, `restore-failed`, `query-unavailable`, `release-failed`. Unloading aborts in-flight operations and awaits them for at most 10 seconds; the restored handle is disposed in the operation's `finally`.
+Results are assigned by catalog index, so completion order does not reorder the output. Each child contributes `compacted`, `nothing-to-compact`, `skipped` for `not-resident`, `cancelled`, or `failed`. Unexpected errors become that item's failure and do not hide other results.
 
-## Known boundaries
+| Batch outcome | Meaning | Command kind |
+| --- | --- | --- |
+| `completed` | No item failed, was cancelled, or remained not-started; skips are allowed, including an all-skipped run | Success |
+| `empty-catalog` | The snapshot contained no children | Success |
+| `partial-failure` | At least one item compacted or had nothing to compact, and another failed | Error |
+| `all-failed` | Failures occurred and no item compacted or had nothing to compact | Error |
+| `listing-failed` | Catalog discovery failed | Error |
+| `batch-cancelled` | The request signal was aborted | Error |
 
-1. **Reported tokens are the replaced history's estimate.** `replaced_tokens`/`~N tokens` is the old shadowed span's estimated size — not net context savings. Measure before/after surface budget if you need savings. (The persisted event log itself only ever grows; shadowing is a surface operation.)
-2. **No `sourceEventSeq` on the command result.** It would be written into the *parent* session's `command/done` event, where a bare child-session seq points at the wrong event; child session id + summary seq travel explicitly in the text and tool result instead.
-3. **Listing needs `sessionQuery` + the `subagentCatalog` projection** (present in normal subagent-capable compositions); otherwise the no-arg command reports listing unavailable. Cold compaction needs `sessionQuery` and session persistence; live compaction does not.
-4. **Each compaction costs one extra LLM call** for the summary, on the child's own restored route.
-5. **Pending work is preserved.** A finished child whose durable pending is visible to the read precheck is refused (`pending-input`) so a normal continuation processes that work first; pending that only the loaded snapshot sees is preserved losslessly by the host lifecycle (the maintenance may proceed — its job never touches the inbox).
-6. **No auto-compact-on-end.** Deliberately absent: in 0.2.1-rc.2 the subagent manager disposes the child's AgentHandle *before* emitting `subagent/end`, so an end-hook listener sees no live agent. The 1.1.0 cold path covers the same need by id after settlement.
-7. **Hard injections** `commands`, `tools`, `agents`, `subagents`: in compositions without these services the row stays inactive instead of half-working. `agentPresets`/`compaction`/`sessionQuery` are resolved dynamically on purpose (see Engine resolution).
-8. **Cold compaction needs the host maintenance capability.** On a stock 0.2.1-rc.2 runtime the plugin refuses cold compaction explicitly (`host-capability-missing`, see docs/HOST_MAINTENANCE_REQUIREMENTS.md); the isolated candidate patch in `host-patch/` provides it. Live-window compaction works on both.
+If cancellation happens before the catalog resolves and its read rejects, the snapshot is unknown. If the read resolves after cancellation, known targets are reported `not-started` and no item begins. After fan-out, started operations observe the shared cancellation signal and report their own outcomes.
 
-## Install
+Batch output is only the command result. The plugin writes no separate receipt store and exposes no `report` operation. The host may discard the command result on abort, including per-item details. This limitation concerns the batch output; successfully committed child summaries use the host's ordinary session persistence.
 
-Official flow only — no manual profile edits:
+## Error and cancellation contract
 
+The six `ManualCompactionError` codes remain distinct: `busy`, `cancelled`, `changed`, `summary`, `commit`, and `persistence`. Unknown runtime codes return `unknown-code` with the original code and diagnostic. Errors match `name` and `code`, avoiding cross-package `instanceof` assumptions.
+
+The request signal is authoritative for cancellation. The engine can fold a caught abort into `busy`, so the plugin checks `signal.aborted` before interpreting an engine error. Single-child command success is limited to `compacted` and `nothing-to-compact`; other outcomes return an error result.
+
+Each listing or compaction operation has a controller combined with the caller's signal. During plugin unload, registrations go offline, all active operations are aborted, and cleanup waits for settlement for at most 10 seconds. The plugin owns no restored handle and performs no cold-session disposal.
+
+## Persistence and measurements
+
+The child engine owns summary commits and history shadowing. `replaced_items` counts the old history items shadowed by the summary, and `replaced_tokens` estimates that old span. Neither field measures net context savings. The persisted event log can grow while the model-facing context shrinks.
+
+Command results identify the child session and its summary sequence explicitly. They omit `sourceEventSeq`: a child sequence written as the source of the parent's `command/done` event would refer to the wrong session.
+
+## Composition requirements and scope
+
+`commands`, `tools`, `agents`, and `subagents` are required injections. `agentPresets` and `compaction` are resolved dynamically to select the correct engine. Catalog listing also relies on `sessionQuery` and the `subagentCatalog` projection provided by normal subagent-capable compositions; a missing catalog produces an explicit listing error. Single-child live compaction does not require catalog discovery.
+
+Scope is manual live-child compaction. Automatic end hooks, member deletion, handoff, and direct compaction of settled sessions are absent. The files in [host-patch/](host-patch/README.md), [COLD_COMPACTION_PLAN.md](docs/COLD_COMPACTION_PLAN.md), and [HOST_MAINTENANCE_REQUIREMENTS.md](docs/HOST_MAINTENANCE_REQUIREMENTS.md) describe only the older unreleased 1.1.0 candidate. Its cold APIs, `compact_all_subagents` tool, report syntax, and durable batch receipts do not apply to this branch.
+
+## Verification
+
+The four tracked suites cover the single-child contract, concurrent batches, real runtime integration, and preset engine lookup. Run them with Node 24.9.0 or newer:
+
+```sh
+npm ci --include=dev
+npm test
 ```
-plugin_manager install_bundle  (target: this package directory)
-```
 
-Then confirm `application: applied` and the `subagent-compactor` row via `cordis_inspect_query Config.listConfigs`.
-
-## Tests
-
-`test/unit.test.mjs` drives this real module against stub contexts: six-code mapping, signal-first cancellation, both engine planes (incl. preset-missing and no-registry), ownership rejections, TOCTOU identity re-check, usage parsing, unload abort + bounded settle, the cold decision table (unknown-session, descriptor classes, lineage, pending refusal, preset projection failure and mount, `SessionAlreadyOwnedError` → `busy-target`, per-target lock, release-failure demotion, aborted restore), and the live/persisted listing split.
-
-`test/integration.test.mjs` composes **real DSH modules** from the installed tree and proves the live-window journey end to end (settlement/reclaim; cold resume by message; compact during a running request; surface shrink; persistence; follow-up; foreign-parent denial in a live window).
-
-`test/cold.integration.test.mjs` proves the 1.1.0 cold journeys against real modules: cold-by-id success and release; concurrent sends failing before acceptance with retry delivered once; real foreign/grandchild denial; synthetic descriptor/lineage fixtures; persisted-pending refusal with the work preserved and later processed; same-id contention; cancellation and summary failure with release and continuation; a preset-registry composition restoring an independent child preset and child model with no Host fallback.
-
-Run from this directory with `node_modules` linked to a DSH 0.2.1-rc.2 module tree:
-
-```
-node --test test/unit.test.mjs
-node --test test/integration.test.mjs   # boots real compositions; ~seconds
-node --test test/cold.integration.test.mjs
-```
-
-## Scope (v1.1)
-
-List + manual compact of direct children (live or finished continuable), by command or tool. Not included: UI, member deletion/handoff, auto-compact triggers, one-shot/external cold compaction.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for the 46-test installed-runtime and clean npm runs, isolated bundled Web UI journey, and limits on that evidence.
