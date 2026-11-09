@@ -1,0 +1,82 @@
+{
+  "date": "2026-11-10",
+  "app": "DeepSeek Harness 0.2.2-rc.1",
+  "runtime": "installed Electron Node 24.21.0 and app.asar runProfile",
+  "surface": "bundled Web UI in a fresh isolated web profile; not the daily Electron shell",
+  "browser": "Playwright Chromium headless fresh browser context",
+  "model": "loopback synthetic Messages SSE; no real-model summary-quality claim",
+  "pluginVersion": "1.2.0",
+  "pluginSha256": "efe60e9060d91e74783ca015719bbf555894570fe4544f863eeede86906dc8e0",
+  "batchCommandId": "cmd-d700eb25-2",
+  "assertions": {
+    "actualInputBoxCommand": "/subagent-compact all",
+    "userCommandSource": true,
+    "compacted": 2,
+    "skipped": 0,
+    "failed": 0,
+    "sameCommandId": true,
+    "persistedSummariesReadBack": 2,
+    "sameChildIdContinuations": 2,
+    "bothNextRequestsContainCommittedCheckpoint": true
+  },
+  "sourceCut": "ce18fe10f7f9be029c9ed7c5e3f55039f1ab2c65",
+  "publicBase": "703ecb70e0fdff32727c3e04fbd9b36f701d6c30",
+  "batchCommand": [
+    {
+      "type": "command/run",
+      "seq": 8,
+      "kind": null,
+      "args": " all",
+      "sourceKind": "user"
+    },
+    {
+      "type": "command/done",
+      "seq": 12,
+      "kind": "success",
+      "args": null,
+      "sourceKind": null
+    }
+  ],
+  "children": [
+    {
+      "summarySeq": 20,
+      "summarySourceCommandId": "cmd-d700eb25-2",
+      "replacedItems": 3,
+      "continuationTurns": [
+        2,
+        3,
+        4
+      ],
+      "nextRequestHasCheckpoint": true
+    },
+    {
+      "summarySeq": 20,
+      "summarySourceCommandId": "cmd-d700eb25-2",
+      "replacedItems": 3,
+      "continuationTurns": [
+        2,
+        3,
+        4
+      ],
+      "nextRequestHasCheckpoint": true
+    }
+  ],
+  "regression": {
+    "files": [
+      "unit.test.mjs",
+      "batch.test.mjs",
+      "integration.test.mjs",
+      "preset-integration.test.mjs"
+    ],
+    "passed": 46,
+    "failed": 0,
+    "node": "24.18.0",
+    "runtimeTree": "unmodified installed Harness 0.2.2-rc.1 modules"
+  },
+  "boundaries": [
+    "All sessions, prompts and replies were synthetic in fresh isolated storage.",
+    "No external model calls, ordinary profile edits or ordinary Desktop restart.",
+    "Bundled Web UI validation does not prove the native Electron shell or real-model summary quality.",
+    "Cold compaction and durable batch receipt/report APIs are not provided by this version."
+  ]
+}
