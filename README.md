@@ -1,6 +1,6 @@
 # DSH Subagent Compactor
 
-[简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md)
 
 Manually compact the history of **live direct subagents** from their parent session in DSH Desktop. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
 

@@ -1,6 +1,6 @@
 # DSH 子智能体上下文压缩插件
 
-[English](README.md)
+[English](README.md) · [变更日志](CHANGELOG.md)
 
 在 DSH Desktop 的父会话中，手动压缩 **live（仍驻留）的直接子智能体**的历史。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
