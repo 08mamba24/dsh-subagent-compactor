@@ -39,12 +39,16 @@
  *
  * @module @local/dsh-subagent-compactor
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import z from "@deepseek-ai/schemastery";
 import { CommandDefinitionId } from "@deepseek-ai/dsh-commands/brand";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 
 const name = "subagent-compactor";
 const inject = ["commands", "tools", "agents", "subagents"];
+// The host serializes deliveries asynchronously. A start edge must belong to
+// this send's async chain, rather than another sender ahead of it in that lock.
+const resumeAttempts = new AsyncLocalStorage();
 
 const Config = z.object({
 	waitForIdle: z.boolean().default(true),
@@ -429,13 +433,32 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 			state.failure = { outcome: "error", text: `resume listener failed: ${error instanceof Error ? error.message : String(error)}` };
 		}
 	};
-	let messageId;
+	let admission;
 	try {
-		messageId = await sendWhenCapacityAvailable(ctx, config, sessionId, signal, async () => {
+		admission = await sendWhenCapacityAvailable(ctx, config, sessionId, signal, async () => {
+			const live = ctx.agents.get(sessionId);
+			if (live !== undefined) return { kind: "live", agent: live };
+			const token = Symbol();
+			const guard = new AbortController();
+			const sendSignal = signal === undefined ? guard.signal : AbortSignal.any([signal, guard.signal]);
+			let foreignStart;
 			// Listen only during admission, never while parked for capacity:
 			// another actor's resume during that wait is not our start edge.
-			const offStart = ctx.on("subagent/start", onStart);
-			try { return await ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal }); }
+			const offStart = ctx.on("subagent/start", (info) => {
+				if (info?.id !== sessionId || state.fired) return;
+				if (resumeAttempts.getStore() === token) { onStart(info); return; }
+				foreignStart = { kind: "live", agent: ctx.agents.get(sessionId) };
+				// Cancel only our queued delivery. The host checks this signal
+				// before accepting the wake; the external user's task stays live.
+				guard.abort(new Error("Another sender restored the child before maintenance admission."));
+			});
+			try {
+				const messageId = await resumeAttempts.run(token, () => ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal: sendSignal }));
+				return { kind: "sent", messageId };
+			} catch (error) {
+				if (!signal?.aborted && foreignStart !== undefined && guard.signal.aborted && error === sendSignal.reason) return foreignStart;
+				throw error;
+			}
 			finally { offStart(); }
 		}, () => state.fired);
 	} catch (error) {
@@ -447,6 +470,13 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
 		return resumeRefusal(sessionId, error);
 	}
+	if (admission.kind === "live") {
+		if (admission.agent === undefined || ctx.agents.get(sessionId) !== admission.agent) {
+			return { outcome: "not-resident", text: `Subagent "${sessionId}" changed before live compaction could begin; no maintenance wake was accepted.` };
+		}
+		return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+	}
+	const messageId = admission.messageId;
 	if (!state.fired) {
 		/* No start edge: the target raced back live through another
 		 * continuation, and the wake was delivered to that instance — the

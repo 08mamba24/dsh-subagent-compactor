@@ -1,5 +1,14 @@
 # Changelog / 变更日志
 
+## 1.3.2 — Unreleased / 未发布
+
+- Recheck residency before every resume attempt. A target restored by another message while waiting for capacity uses live compaction, without an extra maintenance wake. Runtime ownership and Agent identity checks still apply.
+  每次恢复尝试前重查 live 状态；容量等待期间由其他消息恢复的目标转入 live 压缩，不插入维护唤醒，保留运行时归属与 Agent 实例检查。
+- Distinguish the initiating send's start edge with Node AsyncLocalStorage. If another cold resume is ahead in the host's child lock, cancel only this attempt's unaccepted wake, join delivery, then wait for the external task's idle window. Caller cancellation and unrelated host errors remain visible; no host patch or new external dependency is required.
+  通过 Node AsyncLocalStorage 区分本次发送的恢复事件。若其他冷恢复排在宿主 child lock 前面，仅取消本次尚未接纳的维护投递，收敛后等待外部任务的空闲窗口；调用方取消与其他宿主错误仍如实报告，无需宿主补丁或新增外部依赖。
+- Regression: **92/92** tracked tests pass (unit 35, batch 40, integration 3, preset 14). Five new cases fail on 1.3.1. The stock queued-resume case keeps a fixed one-slot pool, proves the external reply persists before its summary, and accepts no maintenance wake.
+  回归 **92/92**（unit 35、batch 40、integration 3、preset 14）；五条新增用例在 1.3.1 上失败。真实宿主排队恢复用例始终固定一个槽位，证明外部回复先落盘、随后压缩，且无维护唤醒被接纳。
+
 ## 1.3.1 — Unreleased / 未发布
 
 - Fix capacity backpressure across batch, single-ID command, and model tool. Pre-start `ACTIVATION_LIMIT_REACHED` waits for public global `subagent/end` hints and retries host admission; a one-second probe covers rollback or capacity changes without an event. Live idle waits remain concurrent. No host limit is raised and no working child is terminated.

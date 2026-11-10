@@ -327,6 +327,89 @@ test("preset capacity: one batch resumes 16 settled children over default 8 slot
 	assert.equal(lifecycle.active.size, 0);
 });
 
+test("preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake", { timeout: 60_000 }, async (t) => {
+	const { ctx, fake, parent, start, seed, journal, lifecycle, storageRoot } = await capacityRuntime(t, { subagentConfig: { maxActiveSubagents: 1 } });
+	const id = await seed("RACE_TARGET");
+	const occupantGate = fake.hold("RACE_OCCUPANT");
+	const occupant = await start("RACE_OCCUPANT");
+	await occupantGate.arrived();
+	const externalGate = fake.hold("RACE_EXTERNAL_CONTINUATION");
+	const observationEntered = Promise.withResolvers();
+	const allowObservation = Promise.withResolvers();
+	const retryEntered = Promise.withResolvers();
+	const liveWaitEntered = Promise.withResolvers();
+	const externalDelivery = Promise.withResolvers();
+	const observe = ctx.sessionQuery.observeSession.bind(ctx.sessionQuery);
+	let holdExternalObservation = false;
+	ctx.sessionQuery.observeSession = async (sessionId, options) => {
+		if (sessionId === id && holdExternalObservation) {
+			holdExternalObservation = false;
+			observationEntered.resolve();
+			await allowObservation.promise;
+		}
+		return observe(sessionId, options);
+	};
+	let attempts = 0;
+	const send = ctx.subagents.sendMessage.bind(ctx.subagents);
+	ctx.subagents.sendMessage = (...args) => {
+		if (args[1] === id && JSON.stringify(args[2]).includes("history-compaction maintenance") && ++attempts === 2) retryEntered.resolve();
+		return send(...args);
+	};
+	// Subscribe before the plugin parks: the external sender wins the released
+	// slot and child lock, but its live Agent is not published until observation.
+	const offEnd = ctx.on("subagent/end", ({ id: endedId }) => {
+		if (endedId !== occupant.childId) return;
+		holdExternalObservation = true;
+		ctx.subagents.sendMessage(parent, id, [{ type: "text", text: "RACE_EXTERNAL_CONTINUATION: continue the user's task." }], { signal: AbortSignal.timeout(20_000) })
+			.then(externalDelivery.resolve, externalDelivery.reject);
+	}, { global: true });
+	externalDelivery.promise.catch(() => {});
+	const offStart = ctx.on("subagent/start", ({ id: startedId }) => {
+		if (startedId !== id) return;
+		const agent = ctx.agents.get(id);
+		const whenIdle = agent.whenIdle.bind(agent);
+		agent.whenIdle = () => { liveWaitEntered.resolve(); return whenIdle(); };
+	}, { global: true });
+	t.after(() => { offStart(); offEnd(); allowObservation.resolve(); });
+	const denied = observeCapacityDenial(ctx);
+	const commandSignal = AbortSignal.timeout(30_000);
+	const command = ctx.commands.execute(parent, `/subagent-compact ${id}`, [], commandSignal);
+	command.catch(() => {});
+	await deadline(denied, "first real capacity refusal");
+	occupantGate.release();
+	await deadline(observationEntered.promise, "external cold resume owns child lock");
+	await deadline(retryEntered.promise, "maintenance send queues behind external restoration");
+	assert.equal(ctx.agents.get(id), undefined, "a live-only precheck cannot see the in-flight restoration");
+	allowObservation.resolve();
+	await deadline(externalDelivery.promise, "external message accepted");
+	await externalGate.arrived();
+	assert.ok(ctx.agents.get(id), "the externally resumed task remains live");
+	assert.equal(commandSignal.aborted, false, "local admission cancellation does not cancel the caller");
+	const first = await deadline(Promise.race([
+		liveWaitEntered.promise.then(() => "live-wait"),
+		command.then(() => "command-returned")
+	]), "compactor switches to the external child's live idle wait");
+	assert.equal(first, "live-wait", "an external start must not be claimed as our resume edge");
+	assert.equal(fake.requests.filter((request) => request.summarizing).length, 0, "the user's existing turn runs before compaction");
+	assert.ok(!journal.entries.some(({ sessionId, event }) => sessionId === id && ["user/message", "agent/inbox/spliced"].includes(event.type) && JSON.stringify(event.data).includes("history-compaction maintenance")), "no maintenance message enters the external task");
+	externalGate.release();
+	const execution = await deadline(command, "live compaction after external turn");
+	assert.equal(execution.result.kind, "success", execution.result.text);
+	assert.match(execution.result.text, /^Compacted subagent/);
+	await lifecycle.ended(id, 2);
+	assert.equal(attempts, 2, "first send rejected; second send cancelled before admission");
+	assert.equal(fake.requests.filter((request) => !request.summarizing && JSON.stringify(request.body.messages.at(-1)).includes("history-compaction maintenance")).length, 0);
+	const events = persistedEvents(storageRoot, id);
+	const summaries = events.filter((event) => event.type === "compaction/summary");
+	assert.equal(summaries.length, 1);
+	assert.equal(summaries[0].data.sourceCommandId, execution.commandId);
+	const externalUser = events.find((event) => event.type === "user/message" && JSON.stringify(event.data).includes("RACE_EXTERNAL_CONTINUATION"));
+	assert.ok(externalUser);
+	assert.ok(events.some((event) => event.type === "assistant/message" && event.seq > externalUser.seq && event.seq < summaries[0].seq), "the user's reply is durable before its history is compacted");
+	assert.equal(lifecycle.peak, 1, "host capacity is never raised or bypassed");
+	assert.equal(lifecycle.active.size, 0);
+});
+
 test("preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work", { timeout: 60_000 }, async (t) => {
 	const { ctx, fake, parent, start, seed, lifecycle } = await capacityRuntime(t, { subagentConfig: { maxActiveSubagents: 3 } });
 	const id = await seed("WAITING_SETTLED");
