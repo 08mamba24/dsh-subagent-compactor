@@ -355,6 +355,11 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 				return;
 			}
 			state.compaction = resolvedEngine.engine.compactNow(agent, signal, sourceCommandId);
+			/* Observe the rejection the moment the promise exists: the wake
+			 * delivery below can still fail (or be cancelled inside the
+			 * admission gap, after this job already launched), and an
+			 * unobserved engine rejection would take down the process. */
+			state.compaction.catch(() => {});
 		} catch (error) {
 			state.failure = { outcome: "error", text: `resume listener failed: ${error instanceof Error ? error.message : String(error)}` };
 		}
@@ -364,11 +369,15 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		messageId = await ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal });
 	} catch (error) {
 		off();
+		/* The start edge may already have launched the engine job (a failure
+		 * or cancellation inside the admission gap); converge it — its
+		 * rejection is observed from the moment it existed — before this
+		 * operation reports, so no engine promise outlives the call. */
+		if (state.compaction !== undefined) await state.compaction.catch(() => {});
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
 		return resumeRefusal(sessionId, error);
 	}
 	off();
-	if (state.compaction !== undefined) state.compaction.catch(() => {});
 	if (!state.fired) {
 		/* No start edge: the target raced back live through another
 		 * continuation, and the wake was delivered to that instance — the
@@ -498,7 +507,10 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 		else if (result.outcome === "not-resident" || result.outcome === "not-resumable") counts.skipped += 1;
 		else if (result.outcome === "cancelled") counts.cancelled += 1;
 		else counts.failed += 1;
-		if (result.resumed === true) counts.resumed += 1;
+		/* resumed counts only children that compacted after a resume, so the
+		 * summary's "compacted N (R after resume)" stays a true subset; a
+		 * resumed child with nothing to compact is visible in its own line. */
+		if (result.outcome === "compacted" && result.resumed === true) counts.resumed += 1;
 		if (result.outcome === "compacted") {
 			lines[index] = `${item.id}: ${result.resumed === true ? "resumed from settled state and " : ""}compacted — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`;
 		} else if (result.outcome === "not-resident") {

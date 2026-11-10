@@ -15,7 +15,7 @@
 | 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
 | 本次 1.3.0 预览分支，批量压缩含结算恢复 | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/resume-inactive-1.3.0` |
 
-分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.2.0` 发布 tag。
+分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.3.0` 发布 tag。
 
 确认 `@local/dsh-subagent-compactor` 已启用且版本正确。替换已有安装后，完整退出并重新打开 Desktop，让新命令定义生效。如果此前从本地目录安装过同名包，先移除旧安装来源，再添加 Git 来源。
 
@@ -74,9 +74,9 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 与未发布 1.1.0 候选的区别
 
-旧候选把冷压缩与宿主维护补丁配套使用。本次 1.2.0 使用原版运行时能力，恢复为仅 live 压缩：
+旧候选把冷压缩与宿主维护补丁配套使用。1.2.0 预览改用原版运行时能力、仅 live 压缩；本 1.3.0 分支保留该基础并新增可续接成员的结算恢复（下表为 1.2.0 的历史快照）：
 
-| 能力 | 未发布 1.1.0 候选 | 1.2.0 预览 |
+| 能力 | 未发布 1.1.0 候选 | 1.2.0 预览（历史） |
 | --- | --- | --- |
 | 已结束、未加载的子会话 | 通过候选宿主补丁冷恢复 | 单项拒绝，批量跳过 |
 | 批量执行 | 串行 | 并发，按目录顺序回填结果 |
@@ -84,11 +84,11 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 | 批量回执 | 插件存储域及 `report <batch-id>` | 仅命令结果 |
 | 宿主改动 | 冷压缩需要 | 在已验证原版运行时上不需要 |
 
-[host-patch/](host-patch/README.zh-CN.md)、[冷压缩计划](docs/COLD_COMPACTION_PLAN.md)、[宿主能力要求](docs/HOST_MAINTENANCE_REQUIREMENTS.md) 和旧验收记录保留为**未发布候选的历史资料**，不属于 1.2.0 的安装步骤或受支持 API。从该候选升级会移除冷路径、批量模型工具、report 语法和持久化批量回执。
+[host-patch/](host-patch/README.zh-CN.md)、[冷压缩计划](docs/COLD_COMPACTION_PLAN.md)、[宿主能力要求](docs/HOST_MAINTENANCE_REQUIREMENTS.md) 和旧验收记录保留为**未发布候选的历史资料**，不属于当前分支的安装步骤或受支持 API。从该候选升级会移除冷路径、批量模型工具、report 语法和持久化批量回执。
 
 ## 验证与测试
 
-1.2.0 的安装包运行时验证及干净 npm 依赖树验证，均在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**：unit 25、batch 15、integration 1、preset integration 5。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；本 1.3.0 分支为 **69/69**（unit 35、batch 24、integration 3、preset 7）。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
 
 Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
 

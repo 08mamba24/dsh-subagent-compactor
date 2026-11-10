@@ -2,11 +2,11 @@
 
 ## Current branch: 1.3.0 settle-and-resume preview
 
-Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required for this live-only scope.
+Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle. The 46/46 record immediately below is the **1.2.0 preview point** (live-only scope); the current 1.3.0 record follows at the end.
 
 The records below distinguish automated runtime tests, an isolated bundled Web UI journey, and historical acceptance of the older candidate. Public evidence contains a summary, sanitized machine evidence, and synthetic screenshots; raw conversations, request bodies, session stores, credentials, and machine profiles are excluded.
 
-### Automated tests: 46/46
+### Automated tests: 46/46 (1.2.0 preview point)
 
 Both verification routes passed all four tracked suites:
 
@@ -21,7 +21,7 @@ Both verification routes passed all four tracked suites:
 1. **Installed-runtime route:** a scratch copy of the plugin and four tracked suites used the official `0.2.2-rc.1` module tree with isolated test homes and storage.
 2. **Clean npm route:** this public branch used Node `24.18.0`, a fresh dependency install through `npm ci --include=dev`, and `npm test`. All 46 passed with exit code 0, without a host patch, `--force`, or `--legacy-peer-deps`.
 
-These counts cover tracked suites only. Two older untracked probes are excluded; a previous 48-test figure is not the regression count for this branch. The old cold integration suite is outside the 1.2.0 implementation and is available in Git history.
+These counts cover tracked suites only. Two older untracked probes are excluded; a previous 48-test figure is not the regression count for this branch. The old cold integration suite is outside the current implementation and is available in Git history.
 
 Reproduce with Node 24.9.0 or newer:
 
@@ -65,7 +65,7 @@ Each successful item replaced three old history items. Its token figure estimate
 
 ## Legacy: unreleased 1.1.0 cold-compaction candidate
 
-The previous repository state described a different implementation: cold restore through a candidate manager-owned maintenance capability, serial batches, a `compact_all_subagents` model tool, a `report <batch-id>` command, and durable plugin-owned batch receipts. Those surfaces are removed from the current 1.2.0 branch.
+The previous repository state described a different implementation: cold restore through a candidate manager-owned maintenance capability, serial batches, a `compact_all_subagents` model tool, a `report <batch-id>` command, and durable plugin-owned batch receipts. Those surfaces were removed in the 1.2.0 branch and remain absent here.
 
 Its independent review and Desktop acceptance used Harness `0.2.1-rc.2` with an isolated patched Desktop copy. That historical result does not establish stock cold-compaction support and is not the installation procedure for 1.2.0. No 1.1.0 tag or release was created.
 
@@ -84,7 +84,7 @@ That record belongs to the released 1.0.1 code and runtime. The 1.2.0 compatibil
 
 ## 1.3.0 settle-and-resume evidence (2026-11-10)
 
-- Automated: four tracked suites, **67/67** on the clean pinned npm tree (`npm ci --include=dev`, Node 24). Baseline 46 unchanged; +11 unit resume-path cases, +8 batch cases (resume counting, mixed live+settled, mode pre-skip, abort during resume, nothing-compacted, ownership refusal, wake lock mutual exclusion), +1 Host-plane integration resume case, +2 preset cases.
+- Automated: four tracked suites, **69/69** on the clean pinned npm tree (`npm ci --include=dev`, Node 24). Baseline 46 unchanged; +11 unit resume-path cases, +9 batch cases (resume counting, mixed live+settled, mode pre-skip, abort during resume, nothing-compacted, ownership refusal, wake lock mutual exclusion, resumed-count subset), +2 Host-plane integration cases (resume path; admission-gap cancellation with an unhandled-rejection assertion), +2 preset cases.
 - Red-first: both new preset resume cases fail against the previous live-only HEAD `d079037` (no resume: receipts show only skips) and pass on this branch.
 - Timing probe (kept outside this repository with the working notes): `subagent/start` fires synchronously after resume and ownership complete and before message delivery; `compactNow` called inside the edge reserves maintenance before the listener returns; the wake stays parked in the inbox until the summary commits (summary → end → next turn ordering verified with a deliberately slow 200 ms summary); `agent/created` is unusable for this (initialization maintenance holds the phase; awaiting idle deadlocks, direct compaction reports busy).
 - Preset resume case: two truly settled-and-reclaimed children, one `/subagent-compact all`, two durable summaries with the same `sourceCommandId`, both wake messages answered by normal turns, and a later same-id continuation whose next model request carries the committed checkpoint. Mixed case: the live child is compacted directly with no wake; exactly one maintenance wake exists in the whole run.

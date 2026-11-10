@@ -15,7 +15,7 @@ Open **Plugins → Add plugin**, paste a Git source, and select **Install → En
 | Published 1.0.1, single live-child compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
 | This 1.3.0 preview branch, batch compaction with settle-and-resume | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/resume-inactive-1.3.0` |
 
-The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.2.0` release tag for this preview.
+The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.3.0` release tag for this preview.
 
 Confirm that `@local/dsh-subagent-compactor` is enabled and shows the intended version. After replacing an existing installation, fully quit and reopen Desktop to load the new command definition. If the same package was installed from a local directory, remove that installation source before adding the Git source.
 
@@ -74,9 +74,9 @@ Compaction summaries persist through the host's session storage. Batch output is
 
 ## Changes from the unreleased 1.1.0 candidate
 
-The old candidate combined cold compaction with a host maintenance patch. This 1.2.0 branch uses stock runtime capabilities and returns to live-only compaction:
+The old candidate combined cold compaction with a host maintenance patch. The 1.2.0 preview moved to stock runtime capabilities and live-only compaction; this 1.3.0 branch keeps that base and adds settle-and-resume for continuable children (the comparison below is the historical 1.2.0 snapshot):
 
-| Surface | Unreleased 1.1.0 candidate | 1.2.0 preview |
+| Surface | Unreleased 1.1.0 candidate | 1.2.0 preview (historical) |
 | --- | --- | --- |
 | Finished, unloaded child | Cold restore through a candidate host patch | Single command refuses; batch skips |
 | Batch execution | Serial | Concurrent, with output in catalog order |
@@ -84,11 +84,11 @@ The old candidate combined cold compaction with a host maintenance patch. This 1
 | Batch receipts | Plugin storage domain and `report <batch-id>` | Command result only |
 | Host changes | Required for cold compaction | None on the validated stock runtime |
 
-[host-patch/](host-patch/README.md), [the cold plan](docs/COLD_COMPACTION_PLAN.md), [host requirements](docs/HOST_MAINTENANCE_REQUIREMENTS.md), and the older acceptance records remain as **legacy documentation for that unreleased candidate**. They are not installation steps or supported APIs for 1.2.0. Upgrading from that candidate removes its cold path, batch tool, report syntax, and durable batch receipts.
+[host-patch/](host-patch/README.md), [the cold plan](docs/COLD_COMPACTION_PLAN.md), [host requirements](docs/HOST_MAINTENANCE_REQUIREMENTS.md), and the older acceptance records remain as **legacy documentation for that unreleased candidate**. They are not installation steps or supported APIs for the current branch. Upgrading from that candidate removes its cold path, batch tool, report syntax, and durable batch receipts.
 
 ## Validation and tests
 
-Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests** on stock Harness `0.2.2-rc.1`: unit 25, batch 15, integration 1, and preset integration 5. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
+Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); this 1.3.0 branch runs **69/69** (unit 35, batch 24, integration 3, preset 7) on stock Harness `0.2.2-rc.1`. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
 
 The Web UI run used a local synthetic model endpoint. It verifies the command and persistence path, not real-model summary quality or operation of the user's daily Electron window. See [docs/VALIDATION.md](docs/VALIDATION.md) and the [live-only acceptance summary](docs/acceptance/2026-11-10-live-only/acceptance.md).
 

@@ -527,3 +527,21 @@ test("a single-id command on a child being resumed by the batch reports busy-tar
 	const result = await batch;
 	assert.match(result.text, /child-a: resumed from settled state and compacted/);
 });
+
+test("a resumed child with nothing to compact does not inflate the resumed count", async () => {
+	const children = [
+		{ id: "child-empty", mode: "continuable" },
+		{ id: "child-full", mode: "continuable" }
+	];
+	const harness = withEngines(makeBatchHarness({
+		children: async () => children,
+		live: new Map(),
+		owned: new Set(["child-empty", "child-full"]),
+		resume: { materialize: new Set(["child-empty", "child-full"]) }
+	}), { "child-empty": { compact: null } });
+	const result = await harness.invoke("all");
+	assert.equal(result.kind, "success");
+	assert.match(result.text, /Summary \(completed\) — total 2: compacted 1 \(1 after resume\), nothing-to-compact 1/);
+	assert.match(result.text, /child-empty: resumed, nothing to compact/);
+	assert.match(result.text, /child-full: resumed from settled state and compacted/);
+});
