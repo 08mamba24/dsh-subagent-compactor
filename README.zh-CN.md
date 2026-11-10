@@ -4,7 +4,7 @@
 
 在 DSH Desktop 的父会话中，手动压缩**直接子智能体**的历史——仍 live 的直接压缩；已结算的*可续接*子智能体会先被唤醒恢复再压缩。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
-**状态：1.3.1 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
+**状态：1.3.2 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
 
 ## 安装
 
@@ -13,9 +13,9 @@
 | 版本 | Git 来源 |
 | --- | --- |
 | 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| 本次 1.3.1 预览分支，批量压缩含结算恢复 | `https://github.com/08mamba24/dsh-subagent-compactor.git#fix/resume-capacity-backpressure` |
+| 本次 1.3.2 预览分支，批量压缩含结算恢复 | `https://github.com/08mamba24/dsh-subagent-compactor.git#fix/recheck-live-before-resume` |
 
-分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.3.1` 发布 tag。
+分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.3.2` 发布 tag。
 
 确认 `@local/dsh-subagent-compactor` 已启用且版本正确。替换已有安装后，完整退出并重新打开 Desktop，让新命令定义生效。如果此前从本地目录安装过同名包，先移除旧安装来源，再添加 Git 来源。
 
@@ -67,6 +67,8 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 活跃成员占满宿主容量时，已结算目标会等待名额释放。批量、单 ID 命令和模型工具共用这套行为；live 成员仍立即并发等待各自的空闲窗口。插件不会提升宿主上限或停止正在进行的工作。
 
+等待期间若其他消息恢复了目标，压缩会转入 live 路径，不再发送维护唤醒；若该恢复仍在宿主内部排队，只取消本次尚未接纳的维护投递，外部任务继续运行。
+
 `resumeCapacityTimeoutMs` 默认 **120000**（两分钟），可在插件配置中设为 **1 至 600000** 毫秒。从首次容量拒绝起计时，到获准恢复结束；这个预算不限制已接纳的摘要或唤醒确认轮次。到期仍在等待的目标返回 `capacity-timeout`，保留宿主的容量诊断。取消和插件卸载也会结束等待。因容量被拒绝的尝试不会成功投递唤醒消息，也不会发起模型请求。
 
 ## 要求与边界
@@ -80,7 +82,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 与未发布 1.1.0 候选的区别
 
-旧候选把冷压缩与宿主维护补丁配套使用。1.2.0 预览改用原版运行时能力、仅 live 压缩；本 1.3.1 分支保留该基础并新增可续接成员的结算恢复（下表为 1.2.0 的历史快照）：
+旧候选把冷压缩与宿主维护补丁配套使用。1.2.0 预览改用原版运行时能力、仅 live 压缩；本 1.3.2 分支保留该基础并新增可续接成员的结算恢复（下表为 1.2.0 的历史快照）：
 
 | 能力 | 未发布 1.1.0 候选 | 1.2.0 预览（历史） |
 | --- | --- | --- |
@@ -94,7 +96,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 验证与测试
 
-1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；本 1.3.1 分支为 **87/87**（unit 35、batch 36、integration 3、preset 13）。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；本 1.3.2 分支为 **92/92**（unit 35、batch 40、integration 3、preset 14）。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
 
 Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
 

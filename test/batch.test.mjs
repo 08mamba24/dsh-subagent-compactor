@@ -284,6 +284,59 @@ test("capacity: another actor's start while parked cannot launch an orphan summa
 	assert.equal(h.compactCalls.length, 1);
 });
 
+for (const owned of [true, false]) test(`capacity: an externally restored live child is rechecked before sending (owned=${owned})`, async (t) => {
+	const h = capacityHarness();
+	const idle = Promise.withResolvers();
+	const child = makeChild("waiting-child", { idle: () => idle.promise });
+	if (!owned) h.ctx.agents.isOwnedBy = () => false;
+	const result = h.invoke("all");
+	t.after(async () => { idle.resolve(); await result; });
+	await h.denied;
+	await new Promise(setImmediate);
+	h.live.set(child.id, child);
+	h.emit("subagent/start", { id: child.id });
+	h.release();
+	await new Promise(setImmediate);
+	assert.equal(h.sendCalls.length, 1, "the rejected first attempt must be the only maintenance send");
+	assert.equal(h.compactCalls.length, 0, "do not compact external work before its idle window");
+	idle.resolve();
+	const receipt = await result;
+	assert.equal(receipt.kind, owned ? "success" : "error");
+	assert.match(receipt.text, owned ? /compacted 1, nothing-to-compact 0/ : /not-authorized/);
+	assert.doesNotMatch(receipt.text, /after resume/);
+	assert.equal(child.whenIdleCalls, owned ? 1 : 0);
+	assert.equal(h.compactCalls.length, owned ? 1 : 0);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+for (const failure of ["host-refusal", "caller-cancel"]) test(`capacity: a foreign start cannot hide ${failure} from a pending send`, async (t) => {
+	const h = capacityHarness();
+	const entered = Promise.withResolvers();
+	const delivery = Promise.withResolvers();
+	const controller = new AbortController();
+	const result = h.invoke("waiting-child", controller.signal);
+	t.after(async () => { controller.abort(new Error("test cleanup")); delivery.reject(controller.signal.reason); await result; });
+	await h.denied;
+	await new Promise(setImmediate);
+	h.ctx.subagents.sendMessage = async (_caller, _id, _content, { signal }) => {
+		entered.resolve(signal);
+		return delivery.promise;
+	};
+	h.release();
+	const sendSignal = await entered.promise;
+	h.live.set("waiting-child", makeChild("waiting-child"));
+	h.emit("subagent/start", { id: "waiting-child" });
+	assert.equal(sendSignal.aborted, true, "only the pending maintenance admission is cancelled");
+	assert.equal(controller.signal.aborted, false, "the caller's signal must remain independent");
+	if (failure === "caller-cancel") controller.abort(new Error("user cancelled after foreign start"));
+	delivery.reject(new StubSubagentError("UNAUTHORIZED", "independent host refusal"));
+	const receipt = await result;
+	assert.equal(receipt.kind, "error");
+	assert.match(receipt.text, failure === "caller-cancel" ? /cancelled/ : /not your direct runtime child/);
+	assert.equal(h.compactCalls.length, 0, "a foreign start is not our maintenance edge");
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
 /** A child stub whose idle wait resolves immediately by default. */
 function makeChild(id, { idle = () => Promise.resolve(), onCompact } = {}) {
 	const agent = { id, whenIdleCalls: 0, whenIdle() { this.whenIdleCalls += 1; return idle(); } };

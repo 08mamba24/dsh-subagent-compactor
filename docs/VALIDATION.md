@@ -1,8 +1,8 @@
 # Validation record
 
-## Current branch: 1.3.1 capacity backpressure preview
+## Current branch: 1.3.2 concurrent-resume correction preview
 
-Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle with bounded capacity waiting. The 46/46 record below is the **1.2.0 preview point** (live-only scope); 1.3.0 and 1.3.1 evidence follows at the end.
+Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle with bounded capacity waiting. The 46/46 record below is the **1.2.0 preview point** (live-only scope); 1.3.0, 1.3.1 and 1.3.2 evidence follows at the end.
 
 The records below distinguish automated runtime tests, an isolated bundled Web UI journey, and historical acceptance of the older candidate. Public evidence contains a summary, sanitized machine evidence, and synthetic screenshots; raw conversations, request bodies, session stores, credentials, and machine profiles are excluded.
 
@@ -121,3 +121,11 @@ node --test --test-timeout=60000 --test-name-pattern='capacity' test/batch.test.
 ```
 
 The two-minute default is a finite admission-wait budget, configurable up to ten minutes; it can still time out if existing work holds all slots longer. It is not a summary timeout. These are programmatic stock-runtime tests, not a new native Electron or Web UI acceptance, real-model quality benchmark, release, or daily Desktop deployment.
+
+## 1.3.2 concurrent-resume evidence (2026-11-10)
+
+**92/92** tracked tests pass: unit 35, batch 40, integration 3, preset 14. The five added cases fail against the merged 1.3.1 runtime: an externally restored live child (owned and unauthorized variants), a foreign start followed by an unrelated host refusal or caller cancellation, and an external cold resume queued ahead of maintenance in the real stock child lock.
+
+The stock case fixes capacity at one throughout. A working occupant settles naturally; an external sender then owns the target's child lock while its Session observation is held at a public query boundary. The compactor's retry sees no live Agent and queues behind it. After observation is released, the plugin cancels only its own unaccepted wake, waits for the user's turn to complete, and persists exactly one summary under the initiating command ID. The user's assistant response is durable before that summary, no maintenance message enters its inbox or HTTP requests, and the observed peak remains one. No runtime limits are increased, no working Agent is stopped, and no host implementation is changed.
+
+These are isolated stock-runtime regressions with temporary persistence and loopback synthetic responses. The earlier native-window 16/16 acceptance remains evidence for its recorded 1.3.1 runtime, not a native-window claim for this new runtime or real-model task quality.
