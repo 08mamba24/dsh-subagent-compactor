@@ -510,7 +510,15 @@ test("preset: a mixed batch compacts the live child directly and resumes the set
 		assert.match(execution.result.text, /Summary \(completed\) — total 2: compacted 2 \(1 after resume\)/);
 		assert.match(execution.result.text, new RegExp(`${settledId}: resumed from settled state and compacted`));
 		assert.match(execution.result.text, new RegExp(`${liveActivation.childId}: compacted — replaced`));
-		/* Exactly one wake: the live child never needed one. */
+		/* Exactly one wake: the live child never needed one. The batch result
+		 * only proves the summary committed — the settled child's wake is
+		 * answered by a normal turn that starts AFTER compaction/end, so its
+		 * HTTP may not have arrived when the command returns. Wait for that
+		 * turn's completion (a real event, no sleep) before counting: the
+		 * wake request must be in flight's record by then. */
+		const endEntry = journal.entries.find(({ sessionId, event }) => sessionId === settledId && event.type === "compaction/end");
+		assert.ok(endEntry, "the settled child's compaction completed");
+		await journal.wait(({ sessionId, event }) => sessionId === settledId && event.type === "assistant/message" && event.seq > endEntry.event.seq, "the settled child's wake turn completed");
 		const wakeRequests = fake.requests.filter((request) => !request.summarizing && JSON.stringify(request.body.messages.at(-1)).includes("history-compaction maintenance"));
 		assert.equal(wakeRequests.length, 1, "only the settled child received the maintenance wake");
 		for (const id of [settledId, liveActivation.childId]) {
