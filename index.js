@@ -1,28 +1,41 @@
 /**
- * @local/dsh-subagent-compactor — manual history compaction for one of the
- * caller's live direct subagents, reusing the composition's compaction engine.
+ * @local/dsh-subagent-compactor — manual history compaction for the caller's
+ * direct subagents, reusing the composition's compaction engine.
  *
  * Surfaces:
  * - `/subagent-compact` — no arguments: list the caller session's durable
- *   direct-subagent catalog; with `all` (or `--all`): compact every still-live
- *   direct subagent in one catalog snapshot; with one session id: compact that
- *   live child.
+ *   direct-subagent catalog; with `all` (or `--all`): compact every direct
+ *   subagent in one catalog snapshot — live children directly, settled
+ *   continuable children by resuming them first; with one session id: the
+ *   same single-child operation for that id.
  * - `compact_subagent` tool — the single-child operation from inside a model turn.
  *
- * The batch is live-only by design: the snapshot comes from the durable
- * catalog, but only children still resident are compacted; a child whose
- * settlement already reclaimed it is reported skipped (`not-resident`), not
- * failed — compacting persisted-but-not-loaded children needs host-side
- * maintenance the stock runtime does not expose, and this plugin does not
- * pretend otherwise. All items run CONCURRENTLY (each parks on its own
- * idle wait immediately, because the live window closes at settlement)
- * under the same per-target locks as the single-child path; one item's
- * failure never hides the rest.
+ * A settled child is compacted through the normal continuation lifecycle: a
+ * scoped `subagent/start` listener is registered first, then the ordinary
+ * `subagents.sendMessage` resumes the same id under its own preset, routing,
+ * and ownership. The start edge fires synchronously after the manager has
+ * finished resume and ownership but before the message is delivered, and the
+ * listener calls `engine.compactNow` right there — synchronously reserving
+ * the maintenance window — never awaiting `whenIdle` first (the resume agent
+ * is already idle at that edge) and never wrapping the engine in another
+ * maintenance call. The wake message itself stays parked in the inbox and is
+ * answered only after the summary commits, so compaction is a real extra
+ * exchange, not an offline transaction: if the summary fails the delivered
+ * message still runs. Non-continuable, external, or unrestorable targets are
+ * refused with their host reason, never silently dropped.
  *
- * Both surfaces authorize through runtime ownership (`agents.isOwnedBy`),
- * never persisted lineage, and resolve the engine on exactly one of two
- * lawful planes (preset `serviceFor`, or Host `compaction` when the
- * composition has no preset registry); there is no cross-realm fallback.
+ * The batch runs all items CONCURRENTLY (each live item parks on its own
+ * idle wait immediately, because the live window closes at settlement; each
+ * settled item performs its own resume) under the same per-target locks as
+ * the single-child path; one item's failure never hides the rest. A run in
+ * which nothing was compacted reports `nothing-compacted` explicitly instead
+ * of implying success.
+ *
+ * Both surfaces authorize through runtime ownership (`agents.isOwnedBy`) and
+ * the manager's own continuation admission — never persisted lineage alone —
+ * and resolve the engine on exactly one of two lawful planes (preset
+ * `serviceFor`, or Host `compaction` when the composition has no preset
+ * registry); there is no cross-realm fallback.
  *
  * @module @local/dsh-subagent-compactor
  */
@@ -34,7 +47,11 @@ const name = "subagent-compactor";
 const inject = ["commands", "tools", "agents", "subagents"];
 
 const Config = z.object({
-	waitForIdle: z.boolean().default(true)
+	waitForIdle: z.boolean().default(true),
+	/* Settled continuable children are resumed (one real wake message each)
+	 * so they can be compacted. Turn off to restrict every surface to
+	 * children that are live right now. */
+	resumeInactive: z.boolean().default(true)
 });
 
 const USAGE = "Usage: /subagent-compact [all | <subagent-session-id>]";
@@ -42,6 +59,13 @@ const USAGE = "Usage: /subagent-compact [all | <subagent-session-id>]";
 const MANUAL_CODES = new Set(["busy", "cancelled", "changed", "summary", "commit", "persistence"]);
 /** Bounded unload wait so one pathological engine cannot hang teardown. */
 const DISPOSE_TIMEOUT_MS = 10_000;
+/**
+ * The one message this plugin ever sends a settled child. It asks only for a
+ * maintenance acknowledgment after the summary commits — it must never read
+ * as instructions for new work, because the child will answer it with a real
+ * model turn after compaction.
+ */
+const WAKE_MESSAGE = [{ type: "text", text: "[history-compaction maintenance] A history compaction is being applied to this session. When it completes, acknowledge this message with a single short line and stop; do not start new work." }];
 
 /**
  * Map one manual-compaction failure code to a human-readable message.
@@ -194,7 +218,18 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
 		return { outcome: "busy-target", text: `A compaction for subagent "${sessionId}" is already in progress.` };
 	}
 	try {
-		return await compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+		if (ctx.agents.get(sessionId) !== undefined) {
+			const result = await compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+			/* A true mid-wait reclamation (no live agent at all) still gets
+			 * one resume attempt; a same-id instance swap stays a refusal —
+			 * the stale handle must not be compacted and the replacement is
+			 * a fresh target the caller may address explicitly. */
+			if (result.outcome !== "not-resident" || !config.resumeInactive || ctx.agents.get(sessionId) !== undefined) return result;
+		}
+		if (config.resumeInactive) {
+			return await resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+		}
+		return { outcome: "not-resident", text: `No live agent with session id "${sessionId}". Only still-live (resident) subagents can be compacted here (resumeInactive is disabled); a child whose settlement already reclaimed it is out of reach.` };
 	} finally {
 		locks.release(sessionId);
 	}
@@ -224,25 +259,140 @@ async function compactLiveSubagent(ctx, config, caller, sessionId, signal, sourc
 		}
 		const result = await resolvedEngine.engine.compactNow(agent, signal, sourceCommandId);
 		if (result === null) return { outcome: "nothing-to-compact", text: `No compactable history yet in subagent "${sessionId}".` };
-		return {
-			outcome: "compacted",
-			targetSessionId: sessionId,
-			summarySeq: result.summarySeq,
-			replacedItems: result.shadowedSeqs.length,
-			replacedTokens: result.shadowedTokenCount,
-			text: `Compacted subagent "${sessionId}": replaced ${result.shadowedSeqs.length} history items (~${result.shadowedTokenCount} tokens of the replaced history; the summary sits at session-seq ${result.summarySeq} of the child's own log).`
-		};
+		return compactedOutcome(sessionId, result, "Compacted ");
 	} catch (error) {
-		/* Signal first: compactNow folds its own caught aborts into `busy`,
-		 * so "the caller cancelled" is only decidable from the signal. */
+		const classified = classifyEngineError(error, signal);
+		if (classified !== undefined) return classified;
+		throw error;
+	}
+}
+
+/** Render one committed compactNow result; `lead` distinguishes the resume path. */
+function compactedOutcome(sessionId, result, lead) {
+	return {
+		outcome: "compacted",
+		targetSessionId: sessionId,
+		summarySeq: result.summarySeq,
+		replacedItems: result.shadowedSeqs.length,
+		replacedTokens: result.shadowedTokenCount,
+		text: `${lead}subagent "${sessionId}": replaced ${result.shadowedSeqs.length} history items (~${result.shadowedTokenCount} tokens of the replaced history; the summary sits at session-seq ${result.summarySeq} of the child's own log).`
+	};
+}
+
+/** Signal-first classification of one engine failure; undefined means rethrow. */
+function classifyEngineError(error, signal) {
+	/* Signal first: compactNow folds its own caught aborts into `busy`,
+	 * so "the caller cancelled" is only decidable from the signal. */
+	if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+	if (isManualCompactionError(error)) {
+		const known = MANUAL_CODES.has(error.code);
+		return {
+			outcome: known ? error.code : "unknown-code",
+			code: error.code,
+			text: manualFailureText(error.code, known ? undefined : error.message)
+		};
+	}
+	return undefined;
+}
+
+/** Map one wake-delivery failure from the manager to an honest outcome. */
+function resumeRefusal(sessionId, error) {
+	if (error instanceof Error && error.name === "SubagentError") {
+		switch (error.code) {
+			case "UNAUTHORIZED":
+				return { outcome: "not-authorized", text: `Session "${sessionId}" is not your direct runtime child; only its exact runtime parent may compact it.` };
+			case "NOT_RESUMABLE":
+				return { outcome: "not-resumable", text: `Session "${sessionId}" cannot be resumed: ${error.message}. Only continuable children with intact persisted state can be compacted after settlement.` };
+			case "PERSISTENCE_UNAVAILABLE":
+			case "CONTINUATION_UNAVAILABLE":
+				return { outcome: "not-resumable", text: `This composition cannot resume settled children (${error.message}); only live children can be compacted here.` };
+			case "ACTIVATION_CLOSING":
+			case "DUPLICATE_CHILD":
+			case "INPUT_CLOSED":
+				return { outcome: "busy-target", text: `Subagent "${sessionId}" has live activity in flight (a continuation or another maintenance); retry shortly.` };
+			default:
+				return { outcome: "resume-failed", text: `Resuming subagent "${sessionId}" failed: ${error.message}` };
+		}
+	}
+	return { outcome: "resume-failed", text: `Resuming subagent "${sessionId}" failed: ${error instanceof Error ? error.message : String(error)}` };
+}
+
+/**
+ * Compact one of the caller's SETTLED continuable direct subagents by
+ * resuming it through the normal continuation lifecycle, with the target's
+ * per-session lock already held. A listener scoped to this session id is
+ * registered BEFORE the wake message; `subagent/start` fires synchronously
+ * once the manager has finished resume and ownership but before the message
+ * is delivered, and the listener reserves the engine's maintenance window
+ * right there by calling compactNow synchronously — never awaiting whenIdle
+ * (the resume agent is idle at that edge) and never wrapping the engine in
+ * another maintenance call. The wake message stays parked in the inbox while
+ * the summary runs and is answered afterwards: compaction here is a real
+ * extra exchange, not an offline transaction.
+ *
+ * @param ctx - plugin context carrying `agents`, `subagents`, events.
+ * @param config - resolved plugin configuration.
+ * @param caller - the exact live Agent authorizing the operation.
+ * @param {string} sessionId - the settled child's shared agent/session id.
+ * @param signal - cancellation scoped to this request.
+ * @param sourceCommandId - initiating command identity, when command-invoked.
+ * @returns outcome with `text`; `compacted` adds stats and the `resumed` mark.
+ */
+async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId) {
+	const state = { fired: false, compaction: undefined, failure: undefined };
+	const off = ctx.on("subagent/start", (info) => {
+		if (state.fired || info?.id !== sessionId) return;
+		state.fired = true;
+		try {
+			const agent = ctx.agents.get(sessionId);
+			if (agent === undefined || !ctx.agents.isOwnedBy(sessionId, caller)) {
+				state.failure = { outcome: "not-authorized", text: `Session "${sessionId}" did not resume under your runtime parentage; compaction was refused.` };
+				return;
+			}
+			const resolvedEngine = resolveCompactionEngine(ctx, agent);
+			if (!resolvedEngine.ok) {
+				state.failure = { outcome: "engine-missing", text: resolvedEngine.reason };
+				return;
+			}
+			state.compaction = resolvedEngine.engine.compactNow(agent, signal, sourceCommandId);
+		} catch (error) {
+			state.failure = { outcome: "error", text: `resume listener failed: ${error instanceof Error ? error.message : String(error)}` };
+		}
+	});
+	let messageId;
+	try {
+		messageId = await ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal });
+	} catch (error) {
+		off();
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
-		if (isManualCompactionError(error)) {
-			const known = MANUAL_CODES.has(error.code);
-			return {
-				outcome: known ? error.code : "unknown-code",
-				code: error.code,
-				text: manualFailureText(error.code, known ? undefined : error.message)
-			};
+		return resumeRefusal(sessionId, error);
+	}
+	off();
+	if (state.compaction !== undefined) state.compaction.catch(() => {});
+	if (!state.fired) {
+		/* No start edge: the target raced back live through another
+		 * continuation, and the wake was delivered to that instance — the
+		 * ordinary live path applies to it now. */
+		if (ctx.agents.get(sessionId) !== undefined) {
+			return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+		}
+		return { outcome: "resume-failed", text: `Subagent "${sessionId}" accepted the wake message without a resume start edge or a live agent; nothing was compacted (the message stays delivered).` };
+	}
+	if (state.failure !== undefined) return state.failure;
+	try {
+		const result = await state.compaction;
+		if (result === null) {
+			return { outcome: "nothing-to-compact", resumed: true, text: `Resumed subagent "${sessionId}", but it has no compactable history yet. The wake message stays in the child's inbox and is answered by a normal turn.` };
+		}
+		const outcome = compactedOutcome(sessionId, result, "Resumed and compacted ");
+		outcome.resumed = true;
+		outcome.text += ` The wake message (${messageId}) stays in the child's inbox and is answered by a normal turn after the summary.`;
+		return outcome;
+	} catch (error) {
+		const classified = classifyEngineError(error, signal);
+		if (classified !== undefined) {
+			classified.text += " The wake message stays delivered and is answered by a normal turn.";
+			return classified;
 		}
 		throw error;
 	}
@@ -272,22 +422,26 @@ async function listDirectChildren(ctx, caller, signal) {
  * serial miss again. Per-target reentry locks and the shared fused signal
  * keep the items independent; one item's failure never hides the rest.
  *
- * Live-only: a catalog entry that is no longer resident reports skipped
- * (`not-resident`) — an expected outcome here, because the durable catalog
- * legitimately contains already-settled children — while every other failure
- * counts against the item without hiding the rest.
+ * Live children are compacted directly; settled continuable children are
+ * resumed first (one real wake message each, see resumeAndCompactSubagent),
+ * which is why every settled non-continuable entry reports skipped with its
+ * mode instead of pretending to be compactable. Every other failure counts
+ * against the item without hiding the rest.
  *
- * Outcomes: `completed` when every item compacted or had nothing to compact
- * (skips do not spoil the run); `all-failed` when nothing succeeded;
- * `partial-failure` in between; `empty-catalog` when the snapshot resolved
- * empty; `listing-failed` when the catalog read itself failed;
- * `batch-cancelled` when the signal aborted — an abort landing while the
- * catalog read is still resolving leaves the snapshot unknown, a snapshot
- * that already resolved reports every target not-started, and items already
- * started each report their own `cancelled`. Each compaction still costs one
- * summary request on the child's own route. Batch results are not persisted
- * beyond the command result; a cancelled invocation's per-item detail is
- * dropped by the host's abort semantics.
+ * Outcomes: `completed` when at least one item compacted or had nothing to
+ * compact and no item failed, was cancelled, or never started (skips do not
+ * spoil the run); `nothing-compacted` when not a single target compacted —
+ * the summary must never imply success there; `all-failed` when nothing
+ * succeeded and something failed; `partial-failure` in between;
+ * `empty-catalog` when the snapshot resolved empty; `listing-failed` when
+ * the catalog read itself failed; `batch-cancelled` when the signal
+ * aborted — an abort landing while the catalog read is still resolving
+ * leaves the snapshot unknown, a snapshot that already resolved reports
+ * every target not-started, and items already started each report their own
+ * `cancelled`. Each compaction costs one summary request on the child's own
+ * route, and each resume adds one wake-message turn after the summary.
+ * Batch results are not persisted beyond the command result; a cancelled
+ * invocation's per-item detail is dropped by the host's abort semantics.
  */
 async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCommandId) {
 	let entries;
@@ -319,11 +473,19 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 	if (items.length === 0) {
 		return { outcome: "empty-catalog", kind: "success", text: "(no direct subagents on record for this session; nothing to compact)", total: 0 };
 	}
-	const counts = { compacted: 0, "nothing-to-compact": 0, skipped: 0, failed: 0, cancelled: 0, "not-started": 0 };
+	const counts = { compacted: 0, resumed: 0, "nothing-to-compact": 0, skipped: 0, failed: 0, cancelled: 0, "not-started": 0 };
 	/* Report lines are written back by catalog index, so completion order
 	 * never shuffles the batch receipt. */
 	const lines = new Array(items.length);
 	await Promise.all(items.map(async (item, index) => {
+		/* Settled non-continuable children (one-shot, external, unknown) can
+		 * never be resumed for in-place compaction; say so instead of paying
+		 * for a doomed wake. Live children go straight to the live path. */
+		if (config.resumeInactive && ctx.agents.get(item.id) === undefined && item.mode !== "continuable") {
+			counts.skipped += 1;
+			lines[index] = `${item.id}: skipped — settled and not continuable (mode: ${item.mode}); only continuable children can be resumed for compaction`;
+			return;
+		}
 		let result;
 		try {
 			result = await compactSubagent(ctx, locks, config, caller, item.id, signal, sourceCommandId);
@@ -332,16 +494,19 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 		}
 		if (result.outcome === "compacted") counts.compacted += 1;
 		else if (result.outcome === "nothing-to-compact") counts["nothing-to-compact"] += 1;
-		/* Live-only batch: a reclaimed child is an expected skip, not a failure. */
-		else if (result.outcome === "not-resident") counts.skipped += 1;
+		/* Settled children that cannot come back are expected skips. */
+		else if (result.outcome === "not-resident" || result.outcome === "not-resumable") counts.skipped += 1;
 		else if (result.outcome === "cancelled") counts.cancelled += 1;
 		else counts.failed += 1;
+		if (result.resumed === true) counts.resumed += 1;
 		if (result.outcome === "compacted") {
-			lines[index] = `${item.id}: compacted — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`;
+			lines[index] = `${item.id}: ${result.resumed === true ? "resumed from settled state and " : ""}compacted — replaced ${result.replacedItems} items (~${result.replacedTokens} tokens; summary at session-seq ${result.summarySeq})`;
 		} else if (result.outcome === "not-resident") {
 			lines[index] = `${item.id}: skipped — no longer live (already settled; compactable only while resident)`;
+		} else if (result.outcome === "not-resumable") {
+			lines[index] = `${item.id}: skipped — not resumable (${result.text})`;
 		} else if (result.outcome === "nothing-to-compact") {
-			lines[index] = `${item.id}: nothing to compact`;
+			lines[index] = `${item.id}: ${result.resumed === true ? "resumed, " : ""}nothing to compact`;
 		} else {
 			lines[index] = `${item.id}: ${result.outcome} — ${result.text}`;
 		}
@@ -349,11 +514,14 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 	const clean = counts.compacted + counts["nothing-to-compact"];
 	let outcome;
 	if (signal.aborted) outcome = "batch-cancelled";
-	else if (counts.failed === 0 && counts.cancelled === 0 && counts["not-started"] === 0) outcome = "completed";
-	else if (clean === 0) outcome = "all-failed";
-	else outcome = "partial-failure";
-	const summary = `Summary (${outcome}) — total ${items.length}: compacted ${counts.compacted}, nothing-to-compact ${counts["nothing-to-compact"]}, skipped ${counts.skipped}, failed ${counts.failed}, cancelled ${counts.cancelled}, not-started: ${counts["not-started"]}.`;
-	const text = ["Batch compaction of the caller's direct-subagent snapshot (live children only):", ...lines, summary].join("\n");
+	else if (clean > 0 && counts.failed === 0 && counts.cancelled === 0 && counts["not-started"] === 0) outcome = "completed";
+	else if (clean > 0) outcome = "partial-failure";
+	else if (counts.failed > 0) outcome = "all-failed";
+	/* Nothing was compacted at all — every target was skipped or worse.
+	 * Never let a summary line imply success here. */
+	else outcome = "nothing-compacted";
+	const summary = `Summary (${outcome}) — total ${items.length}: compacted ${counts.compacted}${counts.resumed > 0 ? ` (${counts.resumed} after resume)` : ""}, nothing-to-compact ${counts["nothing-to-compact"]}, skipped ${counts.skipped}, failed ${counts.failed}, cancelled ${counts.cancelled}, not-started: ${counts["not-started"]}.`;
+	const text = ["Batch compaction of the caller's direct-subagent snapshot (live children compacted directly; settled continuable children resumed first):", ...lines, summary].join("\n");
 	return { outcome, kind: batchCommandKind(outcome), text, total: items.length };
 }
 
@@ -362,7 +530,7 @@ function commandKind(outcome) {
 	return outcome === "compacted" || outcome === "nothing-to-compact" ? "success" : "error";
 }
 
-/** Batch outcomes the command reports as success rather than error: anything with a failed, cancelled, or not-started child is an error. */
+/** Batch outcomes the command reports as success rather than error: anything with a failed, cancelled, or not-started child — or a run that compacted nothing at all — is an error. */
 function batchCommandKind(outcome) {
 	return outcome === "completed" || outcome === "empty-catalog" ? "success" : "error";
 }
@@ -404,12 +572,12 @@ function commandHandler(ctx, locks, config, active) {
 function subagentCompactTool(ctx, locks, config, active) {
 	return defineTool({
 		name: "compact_subagent",
-		description: "Compact the older history of one of your live direct subagents into a summary so the child frees context while staying usable. Use an id from your subagent catalog. Reports how many history items were replaced and where the summary landed in the child's own session log.",
+		description: "Compact the older history of one of your direct subagents into a summary so the child frees context while staying usable. Works on a still-live child, or resumes a settled continuable child by id first (one real wake message). Use an id from your subagent catalog. Reports how many history items were replaced and where the summary landed in the child's own session log.",
 		parameters: {
 			session_id: {
 				type: "string",
 				required: true,
-				description: "Session id of your live direct subagent to compact."
+				description: "Session id of your direct subagent to compact (live, or settled continuable — it gets resumed first)."
 			}
 		},
 		output: {
@@ -422,7 +590,8 @@ function subagentCompactTool(ctx, locks, config, active) {
 					target_session_id: { type: "string" },
 					summary_seq: { type: "number" },
 					replaced_items: { type: "number" },
-					replaced_tokens: { type: "number" }
+					replaced_tokens: { type: "number" },
+					resumed: { type: "boolean" }
 				}
 			},
 			render: (_args, value) => [{ type: "text", text: value.text }]
@@ -441,7 +610,8 @@ function subagentCompactTool(ctx, locks, config, active) {
 					target_session_id: result.targetSessionId,
 					summary_seq: result.summarySeq,
 					replaced_items: result.replacedItems,
-					replaced_tokens: result.replacedTokens
+					replaced_tokens: result.replacedTokens,
+					...(result.resumed === true ? { resumed: true } : {})
 				} : {}
 			};
 		}
@@ -477,7 +647,7 @@ function apply(ctx, config = {}) {
 		yield ctx.commands.register({
 			definitionId: CommandDefinitionId("@local/dsh-subagent-compactor"),
 			name: "subagent-compact",
-			description: "List direct subagents, compact every live one, or compact one live direct subagent's history",
+			description: "List direct subagents, compact them all in one run (settled continuable children are resumed first), or compact one by id",
 			/* Desktop's command UI only claims a NON-bare invocation (arguments
 			 * present) when the definition declares `input`; without it the line
 			 * falls through as a plain user message

@@ -32,16 +32,44 @@ function makeAgent({ id = "child-1", busy = false, disposeDuringWait = false } =
 	return agent;
 }
 
-function makeHarness({ agent, owned = true, resident = true, presets, hostEngine, children, config } = {}) {
+/** Error-shape peer of the host's SubagentError (matched by name+code). */
+class StubSubagentError extends Error {
+	constructor(code, message) {
+		super(message ?? `subagent failure ${code}`);
+		this.name = "SubagentError";
+		this.code = code;
+	}
+}
+
+function makeHarness({ agent, owned = true, resident = true, presets, hostEngine, children, config, resume } = {}) {
 	const caller = { id: "parent-1", label: "caller" };
-	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [] };
+	const registrations = { commands: [], tools: [], effects: [], effectDisposers: [], listeners: [] };
+	const sendCalls = [];
+	/* Mutable residency so a resume scenario can materialize the live agent
+	 * at exactly the moment the host's start edge fires. */
+	const residency = { current: resident && agent !== undefined ? agent : undefined };
 	const ctx = {
 		agents: {
-			get: (id) => (resident && id === agent?.id ? agent : undefined),
-			isOwnedBy: (id, owner) => owned && id === agent?.id && owner === caller
+			get: (id) => (residency.current !== undefined && id === residency.current.id ? residency.current : undefined),
+			isOwnedBy: (id, owner) => owned && owner === caller && residency.current !== undefined && id === residency.current.id
 		},
 		subagents: {
-			listChildren: children ?? (async () => [{ id: "child-1", mode: "continuable", label: "worker" }])
+			listChildren: children ?? (async () => [{ id: "child-1", mode: "continuable", label: "worker" }]),
+			/* The host's wake delivery; tests override per scenario. The
+			 * default refuses the resume like a real unrestorable child. */
+			sendMessage: async (sender, targetId, content, options) => {
+				sendCalls.push({ sender, targetId, content, options });
+				if (resume?.sendMessage !== undefined) return resume.sendMessage(sender, targetId, content, options);
+				throw new StubSubagentError("NOT_RESUMABLE", `subagent "${targetId}" has no supported continuation state`);
+			}
+		},
+		on(eventName, listener) {
+			const entry = { eventName, listener };
+			registrations.listeners.push(entry);
+			return () => {
+				const index = registrations.listeners.indexOf(entry);
+				if (index >= 0) registrations.listeners.splice(index, 1);
+			};
 		},
 		get(serviceName) {
 			if (serviceName === "agentPresets") return presets;
@@ -78,7 +106,18 @@ function makeHarness({ agent, owned = true, resident = true, presets, hostEngine
 	}
 	const command = registrations.commands.find((definition) => definition.name === "subagent-compact");
 	const tool = registrations.tools[0];
-	return { ctx, caller, command, tool, registrations };
+	/** Emit one lifecycle edge exactly like the contained host emitter would. */
+	const emit = (eventName, info) => {
+		for (const { eventName: registered, listener } of [...registrations.listeners]) {
+			if (registered !== eventName) continue;
+			try {
+				listener(info);
+			} catch {
+				/* the host logs and continues */
+			}
+		}
+	};
+	return { ctx, caller, command, tool, registrations, sendCalls, emit, residency };
 }
 
 function invocation(harness, rawInput, signal) {
@@ -135,11 +174,203 @@ test("command usage errors: too many arguments", async () => {
 	assert.match(result.text, /Usage: \/subagent-compact/);
 });
 
-test("not-resident when no live agent has the id", async () => {
-	const harness = makeHarness({ agent: undefined, resident: false });
+test("not-resident when no live agent has the id and resume is disabled", async () => {
+	const harness = makeHarness({ agent: undefined, resident: false, config: { resumeInactive: false } });
 	const result = await harness.command.handler(invocation(harness, "ghost"));
 	assert.equal(result.kind, "error");
 	assert.match(result.text, /No live agent with session id "ghost"/);
+});
+
+test("a settled child whose wake is refused reports not-resumable", async () => {
+	const harness = makeHarness({ agent: undefined, resident: false });
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /cannot be resumed/);
+});
+
+test("resumes a settled continuable child and compacts through the synchronous start edge", async () => {
+	const agent = makeAgent();
+	const harness = makeHarness({
+		agent,
+		resident: false,
+		hostEngine: {
+			async compactNow(target) {
+				assert.equal(target, agent, "compaction runs against the resumed live agent");
+				return { summarySeq: 21, shadowedSeqs: [3, 4], shadowedTokenCount: 900 };
+			}
+		},
+		resume: {
+			sendMessage: async () => {
+				/* The manager finishes resume, then the start edge fires
+				 * synchronously before the message is delivered. */
+				harness.residency.current = agent;
+				harness.emit("subagent/start", { runId: "run-2", provider: "spawn", id: agent.id, local: true });
+				return "wake-1";
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "success");
+	assert.match(result.text, /Resumed and compacted subagent "child-1": replaced 2 history items/);
+	assert.match(result.text, /The wake message \(wake-1\) stays in the child's inbox/);
+	/* The wake text asks only for a maintenance acknowledgment. */
+	const wake = harness.sendCalls[0];
+	assert.equal(wake.targetId, "child-1");
+	assert.equal(wake.sender, harness.caller);
+	assert.match(wake.content[0].text, /\[history-compaction maintenance\]/);
+	assert.match(wake.content[0].text, /do not start new work/);
+	/* The idle wait was never used on the resume path. */
+	assert.equal(agent.whenIdleCalls, 0);
+});
+
+test("a wake refused for authorization reports not-authorized", async () => {
+	const harness = makeHarness({
+		agent: undefined,
+		resident: false,
+		resume: {
+			sendMessage: async () => {
+				throw new StubSubagentError("UNAUTHORIZED", "subagent \"child-1\" belongs to another parent session");
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /not your direct runtime child/);
+});
+
+test("a busy wake (activation closing) reports busy-target", async () => {
+	const harness = makeHarness({
+		agent: undefined,
+		resident: false,
+		resume: {
+			sendMessage: async () => {
+				throw new StubSubagentError("ACTIVATION_CLOSING", "subagent activation is being disposed");
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /live activity in flight/);
+});
+
+test("a target that raced back live without a start edge compacts via the live path", async () => {
+	const agent = makeAgent();
+	const harness = makeHarness({
+		agent,
+		resident: false,
+		hostEngine: {
+			async compactNow() {
+				return { summarySeq: 7, shadowedSeqs: [2], shadowedTokenCount: 100 };
+			}
+		},
+		resume: {
+			sendMessage: async () => {
+				/* Another continuation resumed the child; no start edge of
+				 * ours fires, but the agent is live when the wake resolves. */
+				harness.residency.current = agent;
+				return "wake-1";
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "success");
+	assert.match(result.text, /Compacted subagent "child-1"/);
+	assert.doesNotMatch(result.text, /Resumed and compacted/);
+});
+
+test("a wake that neither starts nor materializes reports resume-failed", async () => {
+	const harness = makeHarness({
+		agent: undefined,
+		resident: false,
+		resume: { sendMessage: async () => "wake-1" }
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /without a resume start edge or a live agent/);
+});
+
+test("the start edge resolves the engine before compacting; a missing engine refuses", async () => {
+	const agent = makeAgent();
+	const harness = makeHarness({
+		agent,
+		resident: false,
+		resume: {
+			sendMessage: async () => {
+				harness.residency.current = agent;
+				harness.emit("subagent/start", { runId: "run-2", provider: "spawn", id: agent.id, local: true });
+				return "wake-1";
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /no agent preset registry and no Host-plane compaction engine/);
+});
+
+test("a summary failure during resume keeps the wake delivered and says so", async () => {
+	const agent = makeAgent();
+	const harness = makeHarness({
+		agent,
+		resident: false,
+		hostEngine: {
+			async compactNow() {
+				throw new ManualError("summary");
+			}
+		},
+		resume: {
+			sendMessage: async () => {
+				harness.residency.current = agent;
+				harness.emit("subagent/start", { runId: "run-2", provider: "spawn", id: agent.id, local: true });
+				return "wake-1";
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1"));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /could not produce a useful summary/);
+	assert.match(result.text, /wake message stays delivered/);
+});
+
+test("cancelling the wake aborts the resume path", async () => {
+	const controller = new AbortController();
+	const harness = makeHarness({
+		agent: undefined,
+		resident: false,
+		resume: {
+			sendMessage: async () => {
+				controller.abort();
+				throw new StubSubagentError("NOT_RESUMABLE", "refused");
+			}
+		}
+	});
+	const result = await harness.command.handler(invocation(harness, "child-1", controller.signal));
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /cancelled/);
+});
+
+test("the model tool resumes a settled continuable child too", async () => {
+	const agent = makeAgent();
+	const harness = makeHarness({
+		agent,
+		resident: false,
+		hostEngine: {
+			async compactNow() {
+				return { summarySeq: 5, shadowedSeqs: [1], shadowedTokenCount: 50 };
+			}
+		},
+		resume: {
+			sendMessage: async () => {
+				harness.residency.current = agent;
+				harness.emit("subagent/start", { runId: "run-2", provider: "spawn", id: agent.id, local: true });
+				return "wake-1";
+			}
+		}
+	});
+	const result = await harness.tool.execute({ session_id: "child-1" }, { agent: harness.caller, signal: new AbortController().signal });
+	assert.equal(result.outcome, "compacted");
+	assert.equal(result.resumed, true);
+	assert.equal(result.summary_seq, 5);
+	assert.match(result.text, /Resumed and compacted/);
 });
 
 test("not-authorized for foreign/self/grandchild targets (runtime ownership only)", async () => {

@@ -1,6 +1,6 @@
 # Validation record
 
-## Current branch: 1.2.0 live-only preview
+## Current branch: 1.3.0 settle-and-resume preview
 
 Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required for this live-only scope.
 
@@ -81,3 +81,11 @@ Historical material remains available:
 The released `v1.0.1` implementation provided listing and single live-child compaction. Its earlier automated run passed **26 tests** (25 unit and one real-runtime integration). Desktop acceptance covered listing, the model tool, the parameterized command, and same-ID continuation with real-model fact retention on the then-tested runtime.
 
 That record belongs to the released 1.0.1 code and runtime. The 1.2.0 compatibility and batch claims are supported by the separate current records above.
+
+## 1.3.0 settle-and-resume evidence (2026-11-10)
+
+- Automated: four tracked suites, **67/67** on the clean pinned npm tree (`npm ci --include=dev`, Node 24). Baseline 46 unchanged; +11 unit resume-path cases, +8 batch cases (resume counting, mixed live+settled, mode pre-skip, abort during resume, nothing-compacted, ownership refusal, wake lock mutual exclusion), +1 Host-plane integration resume case, +2 preset cases.
+- Red-first: both new preset resume cases fail against the previous live-only HEAD `d079037` (no resume: receipts show only skips) and pass on this branch.
+- Timing probe (kept outside this repository with the working notes): `subagent/start` fires synchronously after resume and ownership complete and before message delivery; `compactNow` called inside the edge reserves maintenance before the listener returns; the wake stays parked in the inbox until the summary commits (summary → end → next turn ordering verified with a deliberately slow 200 ms summary); `agent/created` is unusable for this (initialization maintenance holds the phase; awaiting idle deadlocks, direct compaction reports busy).
+- Preset resume case: two truly settled-and-reclaimed children, one `/subagent-compact all`, two durable summaries with the same `sourceCommandId`, both wake messages answered by normal turns, and a later same-id continuation whose next model request carries the committed checkpoint. Mixed case: the live child is compacted directly with no wake; exactly one maintenance wake exists in the whole run.
+- Known limits of this evidence: the model is a loopback fake (no real summary quality), no native Electron-window acceptance yet, and no per-target timeout exists beyond the caller's cancellation signal.

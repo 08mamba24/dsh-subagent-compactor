@@ -2,9 +2,9 @@
 
 [简体中文](README.zh-CN.md) · [Changelog](CHANGELOG.md)
 
-Manually compact the history of **live direct subagents** from their parent session in DSH Desktop. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
+Manually compact the history of **direct subagents** from their parent session in DSH Desktop — children that are still live, and settled *continuable* children by resuming them first. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
 
-**Status: 1.2.0 branch preview, not tagged or released.** The published tag remains **v1.0.1**. This branch targets stock Harness **0.2.2-rc.1** and requires only plugin installation and enablement; it does not require changes to Desktop's application source or bundled runtime.
+**Status: 1.3.0 branch preview, not tagged or released.** The published tag remains **v1.0.1**. This branch targets stock Harness **0.2.2-rc.1** and requires only plugin installation and enablement; it does not require changes to Desktop's application source or bundled runtime.
 
 ## Install
 
@@ -13,7 +13,7 @@ Open **Plugins → Add plugin**, paste a Git source, and select **Install → En
 | Version | Git source |
 | --- | --- |
 | Published 1.0.1, single live-child compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| This 1.2.0 preview branch, including live batch compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/live-only-1.2.0` |
+| This 1.3.0 preview branch, batch compaction with settle-and-resume | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/resume-inactive-1.3.0` |
 
 The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.2.0` release tag for this preview.
 
@@ -32,18 +32,20 @@ Run commands in the parent session that created the children:
 ```
 
 - **No argument:** lists the parent's persisted direct-child catalog. Each entry is marked `live` or `persisted (not loaded)`. The list is an observation, not a reservation.
-- **One session ID:** compacts that live direct child. Invoke while it is still running; the default `waitForIdle: true` waits for its turn to end before compacting. A child already reclaimed after settlement returns `not-resident`.
-- **`all` or `--all`:** takes one catalog snapshot and starts all child attempts concurrently. Results retain catalog order. A child that is no longer live is `skipped`; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
+- **One session ID:** compacts that direct child. A still-live child is compacted through its idle window (`waitForIdle: true` by default). A settled *continuable* child is resumed first — the plugin sends one real maintenance wake message, compacts at the resume edge, and the wake is answered by a normal turn afterwards. Children that cannot resume (one-shot, external, or unrestorable) return an explicit refusal such as `not-resumable`.
+- **`all` or `--all`:** takes one catalog snapshot and starts all child attempts concurrently. Live children compact directly; settled continuable children are each resumed once. Results retain catalog order. Settled non-continuable or unrestorable children are `skipped` with their reason; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
 
-A successful two-child batch ends with a result such as:
+A successful two-child batch (both children had settled) ends with a result such as:
 
 ```text
-<child-1>: compacted — replaced 3 items (...)
-<child-2>: compacted — replaced 3 items (...)
-Summary (completed) — total 2: compacted 2, nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0.
+<child-1>: resumed from settled state and compacted — replaced 3 items (...)
+<child-2>: resumed from settled state and compacted — replaced 3 items (...)
+Summary (completed) — total 2: compacted 2 (2 after resume), nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0.
 ```
 
-`completed` also allows skipped children. Read the individual lines and `compacted` count to see how much work ran. The batch covers direct children of this parent only, with no recursion into grandchildren.
+`completed` allows skipped children but requires at least one compacted or nothing-to-compact result. A run where nothing was compacted at all reports `nothing-compacted` and is an error, never an implied success. Read the individual lines and the `compacted` count to see how much work ran. The batch covers direct children of this parent only, with no recursion into grandchildren.
+
+**Resuming a settled child costs real conversation.** Each resume sends one maintenance wake message; the child's history is summarized (one summary-model request on its own route), then the wake is answered by one short acknowledgment turn. This is a live exchange, not an offline transaction: if the summary fails, the already-delivered wake message still runs, and the receipt says so. The wake text asks only for a maintenance acknowledgment — it never instructs new work. Set `resumeInactive: false` to restrict every surface to children that are live right now.
 
 The parent model has one tool:
 
@@ -57,7 +59,7 @@ It uses the same single-child path and follows the host's tool permissions. Batc
 
 The slash command should execute as a command card. A successful item identifies the child, replaced history items, and summary sequence in that child's log. The model tool returns `outcome`, `target_session_id`, `summary_seq`, `replaced_items`, and `replaced_tokens` on success.
 
-`replaced_tokens` estimates the old history span that was replaced. It is not the net context saving after adding the summary. Each actual compaction makes one summary-model request on the child's own route.
+`replaced_tokens` estimates the old history span that was replaced. It is not the net context saving after adding the summary. Each actual compaction makes one summary-model request on the child's own route, and each resume adds the wake-acknowledgment turn afterwards. A child whose remaining history is too short for a useful summary fails honestly with the engine's `summary` code (the wake stays delivered); retrying after the child accumulates more history is the usual fix.
 
 Compaction summaries persist through the host's session storage. Batch output is only the command result: this version has no separate receipt store or `report` command, and the host may discard a cancelled command's result.
 
@@ -65,8 +67,8 @@ Compaction summaries persist through the host's session storage. Batch output is
 
 - A normal subagent-capable composition must provide `commands`, `tools`, `agents`, `subagents`, and the child's compaction engine. Listing and batch discovery also require the host's persisted child catalog.
 - Only the exact live runtime parent may compact its direct child. Self, grandchildren, and another parent's children are rejected.
-- Already settled children are outside this version's scope. Normal continuation can make the same ID live again, but the plugin does not restore a child just to compact it.
-- All batch items start together, without a concurrency cap, so each can wait for its child's live window. Model rate limits can cause individual failures, which the result reports.
+- Settled continuable children are resumed through the normal continuation lifecycle (one real wake message, one summary, one acknowledgment turn). One-shot, external, or unrestorable children get explicit refusals, never silent drops. A same-ID instance *swap* during an idle wait still refuses conservatively with `not-resident`.
+- All batch items start together, without a concurrency cap, so each can wait for its child's live window and perform its own resume. Model rate limits can cause individual failures, which the result reports; more resumed children mean more concurrent summary and acknowledgment requests — an explicit trade-off.
 - Missing engines, changed residency, contention, cancellation, and engine failures produce explicit outcomes. See [TECHNICAL.md](TECHNICAL.md).
 - The plugin provides manual commands and one model tool. It adds no automatic compaction trigger, deletion, or handoff operation.
 

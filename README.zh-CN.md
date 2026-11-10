@@ -2,9 +2,9 @@
 
 [English](README.md) · [变更日志](CHANGELOG.md)
 
-在 DSH Desktop 的父会话中，手动压缩 **live（仍驻留）的直接子智能体**的历史。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
+在 DSH Desktop 的父会话中，手动压缩**直接子智能体**的历史——仍 live 的直接压缩；已结算的*可续接*子智能体会先被唤醒恢复再压缩。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
-**状态：1.2.0 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
+**状态：1.3.0 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
 
 ## 安装
 
@@ -13,7 +13,7 @@
 | 版本 | Git 来源 |
 | --- | --- |
 | 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| 本次 1.2.0 预览分支，含 live 批量压缩 | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/live-only-1.2.0` |
+| 本次 1.3.0 预览分支，批量压缩含结算恢复 | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/resume-inactive-1.3.0` |
 
 分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.2.0` 发布 tag。
 
@@ -32,18 +32,20 @@ Desktop 插件管理器负责应用插件的 bundle 配置。无需手改 profil
 ```
 
 - **不带参数：**列出父会话的持久化直接子成员目录，标注 `live` 或 `persisted (not loaded)`。列表是即时观察，不会预留目标。
-- **一个 session ID：**压缩该 live 直接子成员。请在它仍运行时发起；默认 `waitForIdle: true` 会等本轮结束再压缩。已经结算并被回收的目标返回 `not-resident`。
-- **`all` 或 `--all`：**读取一次目录快照，同时启动所有目标的压缩尝试，按目录顺序返回结果。已不再 live 的成员记为 `skipped`；单项失败不会吞掉其他结果。快照之后创建的成员属于下一次运行。
+- **一个 session ID：**压缩该直接子成员。仍 live 的成员走空闲窗口压缩（默认 `waitForIdle: true`）；已结算的*可续接*成员会先被恢复——插件发送一条真实的维护唤醒消息，在恢复边沿完成压缩，唤醒消息随后由一轮正常对话回应。无法恢复的成员（一次性、外部、持久状态不完整）返回明确拒绝，如 `not-resumable`。
+- **`all` 或 `--all`：**读取一次目录快照，同时启动所有目标的压缩尝试。live 成员直接压缩；已结算的可续接成员各恢复一次。按目录顺序返回结果。已结算但不可续接或不可恢复的成员带原因记为 `skipped`；单项失败不会吞掉其他结果。快照之后创建的成员属于下一次运行。
 
 两个子成员均成功时，回执类似：
 
 ```text
-<child-1>: compacted — replaced 3 items (...)
-<child-2>: compacted — replaced 3 items (...)
-Summary (completed) — total 2: compacted 2, nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0.
+<child-1>: resumed from settled state and compacted — replaced 3 items (...)
+<child-2>: resumed from settled state and compacted — replaced 3 items (...)
+Summary (completed) — total 2: compacted 2 (2 after resume), nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0.
 ```
 
-`completed` 允许包含被跳过的成员；请结合逐项结果和 `compacted` 数量判断实际完成量。批量只覆盖当前父会话的直接子成员，不递归孙成员。
+`completed` 允许包含被跳过的成员，但要求至少有一项完成压缩或无可压缩；一项都没压成的运行会报 `nothing-compacted` 并按错误处理，绝不暗示成功。请结合逐项结果和 `compacted` 数量判断实际完成量。批量只覆盖当前父会话的直接子成员，不递归孙成员。
+
+**恢复已结算成员是真实的额外对话。**每次恢复发送一条维护唤醒消息；子成员历史被摘要（在其自身模型路由上多一次摘要请求），随后唤醒消息由一轮简短确认回应。这是真实交互，不是离线事务：若摘要失败，已投递的唤醒消息仍会执行，回执会如实说明。唤醒文本只要求维护确认，绝不指示新任务。设置 `resumeInactive: false` 可将所有入口限制为仅当前 live 的成员。
 
 父模型只有一个工具：
 
@@ -57,7 +59,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 斜杠命令应显示为命令卡片。成功项包含子会话 ID、替换的历史条目数，以及摘要在该子会话日志中的序号。模型工具成功时返回 `outcome`、`target_session_id`、`summary_seq`、`replaced_items` 和 `replaced_tokens`。
 
-`replaced_tokens` 估算的是被替换的旧历史跨度，不是加入摘要后的净节省量。每次实际压缩都会在子成员自己的模型路由上增加一次摘要请求。
+`replaced_tokens` 估算的是被替换的旧历史跨度，不是加入摘要后的净节省量。每次实际压缩都会在子成员自己的模型路由上增加一次摘要请求，每次恢复还会在摘要后多一轮唤醒确认。剩余历史太短、不足以产出有效摘要的成员会以引擎的 `summary` 错误码如实失败（唤醒消息仍已投递）；待其积累更多历史后重试是通常的处理方式。
 
 压缩摘要通过宿主会话存储持久化。批量回执只存在于命令结果中：本版本没有独立回执库或 `report` 命令，宿主可能丢弃已取消命令的结果。
 
@@ -65,8 +67,8 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 - 组合需要提供 `commands`、`tools`、`agents`、`subagents` 和子成员的压缩引擎。列表及批量发现目标还需要宿主的持久化子成员目录。
 - 只有精确的 live runtime 父成员能压缩其直接子成员；自己、孙成员和其他父会话的子成员都会被拒绝。
-- 已结算的子成员不在本版本范围内。正常续接可以让同一 ID 再次 live，但插件不会只为压缩而恢复子会话。
-- 批量全并发、不设并发上限，让各项都能等待自己的 live 窗口。模型限流可能造成单项失败，回执会如实报告。
+- 已结算的可续接子成员会通过正常续接生命周期恢复后压缩（一条真实唤醒消息 + 一次摘要 + 一轮确认）；一次性、外部或不可恢复的成员给出明确拒绝，不会静默丢弃。同 ID 在等待空闲期间被替换为*另一个*实例时仍按 `not-resident` 保守拒绝。
+- 批量全并发、不设并发上限，让各项都能等待自己的 live 窗口、各自完成恢复。模型限流可能造成单项失败，回执会如实报告；恢复项越多，并发摘要与确认请求也越多，这是明确取舍。
 - 缺少引擎、目标被回收、同目标争用、取消和引擎失败均有明确结果，详见 [TECHNICAL.md](TECHNICAL.md)。
 - 本插件提供手动命令与一个模型工具，不增加自动触发、成员删除或交接操作。
 

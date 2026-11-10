@@ -95,7 +95,7 @@ function createFakeMessagesServer() {
 }
 
 /** Boot the full Host-plane composition plus the plugin under test. */
-async function bootComposition(baseURL, storageRoot) {
+async function bootComposition(baseURL, storageRoot, { resumeInactive = false } = {}) {
 	const modules = {};
 	for (const moduleName of [
 		"@deepseek-ai/cordis-plugin-timer",
@@ -145,7 +145,7 @@ async function bootComposition(baseURL, storageRoot) {
 		await ctx.plugin(module.default ?? module, config);
 	}
 	const plugin = await import("../index.js");
-	await ctx.plugin(plugin, { waitForIdle: true });
+	await ctx.plugin(plugin, { waitForIdle: true, resumeInactive });
 	return ctx;
 }
 
@@ -278,6 +278,103 @@ test("integration: live-window compaction of a real continuable subagent", async
 		round3.release();
 
 		console.log(`integration ok: child=${childId} tokens ${tokensBefore} -> ${tokensAfter}, llm requests=${fake.state.requests.length}`);
+	} finally {
+		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
+		await fake.close();
+		rmSync(storageRoot, { recursive: true, force: true });
+	}
+});
+
+/**
+ * Integration: the RESUME path on the plain Host-plane composition. A real
+ * continuable subagent runs to true settlement and reclamation; one
+ * /subagent-compact <id> then wakes it through the ordinary continuation
+ * lifecycle, compacts it at the synchronous start edge, persists the summary,
+ * and the wake message is answered afterwards by a normal turn — no held
+ * request creates any window here.
+ */
+test("integration: resume-path compaction of a settled continuable subagent", async () => {
+	const fake = createFakeMessagesServer();
+	const baseURL = await fake.start();
+	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-resume-"));
+	const ctx = await bootComposition(baseURL, storageRoot, { resumeInactive: true });
+	const signal = () => new AbortController().signal;
+	try {
+		const parent = (await ctx.agents.create({
+			sessionId: "resume-parent-1",
+			agentOptions: { provider: PROVIDER, model: MODEL }
+		})).agent;
+		const activation = await ctx.subagents.startActivation({
+			provider: "spawn",
+			label: "resume worker",
+			request: { prompt: [{ type: "text", text: "Please do the first task. " + "Background context line that the worker must keep. ".repeat(300) }], parent },
+			signal: signal(),
+			delivery: "parent"
+		});
+		const childId = activation.childId;
+		const originalChild = ctx.agents.get(childId);
+		const firstResult = await activation.result;
+		assert.notEqual(firstResult.stopReason, "error", `first turn failed: ${JSON.stringify(firstResult)}`);
+		await waitFor(() => ctx.agents.get(childId) === undefined);
+		assert.equal(ctx.agents.get(childId), undefined, "the child starts truly settled and reclaimed");
+
+		/* Summaries answer with checkpoint text; the wake turn after the
+		 * summary answers with the short round text. */
+		fake.state.mode = "summarize";
+		const execution = await ctx.commands.execute(parent, `/subagent-compact ${childId}`, [], signal());
+		assert.equal(execution.result.kind, "success", `resume compact failed: ${execution.result.text}`);
+		assert.match(execution.result.text, /Resumed and compacted subagent/);
+		assert.match(execution.result.text, /replaced [1-9]\d* history items/);
+		assert.match(execution.result.text, /wake message/);
+
+		const observed = await ctx.sessionQuery.observeSession(childId);
+		let events;
+		try {
+			events = [...observed.events];
+		} finally {
+			observed[Symbol.dispose]();
+		}
+		const summary = events.find((event) => event.type === "compaction/summary");
+		assert.ok(summary, "the resumed child records the summary in its own session");
+		assert.equal(summary.data.sourceCommandId, execution.commandId, "summary provenance is the resume command");
+		const persisted = [];
+		const visit = (directory) => {
+			for (const entry of readdirSync(directory, { withFileTypes: true })) {
+				const full = join(directory, entry.name);
+				if (entry.isDirectory()) visit(full);
+				else if (entry.name.endsWith(".jsonl")) persisted.push(readFileSync(full, "utf8"));
+			}
+		};
+		visit(storageRoot);
+		assert.notEqual(
+			persisted.find((content) => content.includes(childId) && content.includes("compaction/summary")),
+			undefined,
+			"the resume-path summary is durable on disk"
+		);
+
+		/* The wake message is answered by a normal turn AFTER the summary. */
+		await waitFor(async () => {
+			const observation = await ctx.sessionQuery.observeSession(childId);
+			try {
+				return [...observation.events].some((event) => event.type === "assistant/message");
+			} finally {
+				observation[Symbol.dispose]();
+			}
+		});
+		/* A later continuation sees the committed checkpoint in its context. */
+		fake.state.mode = "turn2";
+		await ctx.subagents.sendMessage(parent, childId, [{ type: "text", text: "Please handle the follow-up." }], { signal: signal() });
+		await waitFor(async () => {
+			const observation = await ctx.sessionQuery.observeSession(childId);
+			try {
+				return [...observation.events].some((event) => event.type === "assistant/message" && JSON.stringify(event.data).includes("Follow-up handled after compaction."));
+			} finally {
+				observation[Symbol.dispose]();
+			}
+		});
+		const followupRequest = [...fake.state.requests].reverse().find((request) => request.url.includes("/messages"));
+		assert.ok(JSON.stringify(followupRequest).length > 0);
+		console.log(`integration resume ok: child=${childId} requests=${fake.state.requests.length}`);
 	} finally {
 		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
 		await fake.close();
