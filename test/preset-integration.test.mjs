@@ -390,3 +390,144 @@ test("preset: native automatic child compaction works without loading this plugi
 		rmSync(storageRoot, { recursive: true, force: true });
 	}
 });
+
+/**
+ * The RESUME path on the real preset composition: two continuable children
+ * run to true settlement and reclamation, then ONE /subagent-compact all
+ * wakes both through the ordinary continuation lifecycle and compacts them at
+ * the synchronous start edge. Both summaries persist with the same command
+ * provenance, the wake messages are answered by normal turns afterwards, and
+ * a later same-id continuation sees the committed checkpoint. No held request
+ * creates any live window here — the plugin's own wake is the only trigger.
+ */
+test("preset: /subagent-compact all resumes two settled children and compacts both", { timeout: 60_000 }, async () => {
+	const fake = fakeMessagesServer();
+	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-resume-"));
+	const baseURL = await fake.start();
+	let ctx;
+	let journal;
+	try {
+		ctx = await boot(baseURL, storageRoot, { plugin: true, auto: false });
+		journal = sessionJournal(ctx);
+		const parent = await createParent(ctx, "preset-resume-parent");
+		const activations = [];
+		for (let index = 1; index <= 2; index += 1) {
+			const activation = await ctx.subagents.startActivation({
+				provider: "spawn", label: `settled worker ${index}`, delivery: "parent",
+				request: { parent, prompt: [{ type: "text", text: `SETTLED_WORKER_${index}: review the corpus. ` + "Background context line that the worker must keep. ".repeat(300) }] },
+				signal: AbortSignal.timeout(25_000)
+			});
+			activation.result.catch(() => {});
+			activations.push(activation);
+		}
+		const ids = activations.map((activation) => activation.childId);
+		for (const activation of activations) {
+			const settled = await deadline(activation.result, "first settlement");
+			assert.notEqual(settled.stopReason, "error", JSON.stringify(settled));
+		}
+		await Promise.all(ids.map(async (id) => {
+			assert.equal(ctx.agents.get(id), undefined, `child ${id} starts truly settled and reclaimed`);
+		}));
+
+		const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(50_000));
+		const execution = await deadline(command, "resume batch result");
+		assert.equal(execution.result.kind, "success", JSON.stringify(execution.result));
+		assert.match(execution.result.text, /Summary \(completed\) — total 2: compacted 2 \(2 after resume\)/);
+		assert.match(execution.result.text, new RegExp(`${ids[0]}: resumed from settled state and compacted[\\s\\S]*${ids[1]}: resumed from settled state and compacted`));
+
+		for (const id of ids) {
+			const summary = journal.entries.find(({ sessionId, event }) => sessionId === id && event.type === "compaction/summary")?.event;
+			assert.ok(summary, `child ${id} records the resume-path summary`);
+			assert.ok(summary.data.shadowedSeqs.length > 0);
+			assert.equal(summary.data.sourceCommandId, execution.commandId, "every summary traces to the one batch command");
+			assert.ok(persistedEvents(storageRoot, id).some((event) => event.type === "compaction/summary"), "resume-path summaries are durable on disk");
+		}
+		assert.equal(fake.requests.filter((request) => request.summarizing).length, 2, "one summary request per resumed child");
+
+		/* The wake messages are answered by normal turns AFTER each summary. */
+		for (const [index, id] of ids.entries()) {
+			await journal.wait(({ sessionId, event }) => sessionId === id && event.type === "compaction/end", `compaction end for child ${index + 1}`);
+			await journal.wait(({ sessionId, event }) => sessionId === id && event.type === "assistant/message" && event.seq > 0, `wake turn answered for child ${index + 1}`);
+		}
+		/* Each resumed child settles again after answering its wake. */
+
+		/* A later same-id continuation of the FIRST child sees the committed
+		 * checkpoint in its next model request. */
+		const followup = fake.hold("AFTER_COMPACTION");
+		await ctx.subagents.sendMessage(parent, ids[0], [{ type: "text", text: "AFTER_COMPACTION: continue the same task." }], { signal: AbortSignal.timeout(15_000) });
+		const resumedRequest = await followup.arrived();
+		assert.ok(JSON.stringify(resumedRequest.body.messages).includes("completed the corpus review"), "the next request after resume carries the committed checkpoint");
+		followup.release();
+		await journal.wait(({ sessionId, event }) => sessionId === ids[0] && event.type === "assistant/message" && JSON.stringify(event.data).includes("Same child continued"), "same-id continuation response");
+	} finally {
+		journal?.dispose();
+		await fake.close();
+		await ctx?.fiber.dispose();
+		rmSync(storageRoot, { recursive: true, force: true });
+	}
+});
+
+/**
+ * A mixed batch: one child still live (its turn held open) and one already
+ * settled. The live child is compacted directly through its idle wait; the
+ * settled one is resumed. Neither item is lost and neither is double-woken.
+ */
+test("preset: a mixed batch compacts the live child directly and resumes the settled one", { timeout: 60_000 }, async () => {
+	const fake = fakeMessagesServer();
+	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-mixed-"));
+	const baseURL = await fake.start();
+	let ctx;
+	let journal;
+	try {
+		ctx = await boot(baseURL, storageRoot, { plugin: true, auto: false });
+		journal = sessionJournal(ctx);
+		const parent = await createParent(ctx, "preset-mixed-parent");
+		const settledActivation = await ctx.subagents.startActivation({
+			provider: "spawn", label: "mixed settled worker", delivery: "parent",
+			request: { parent, prompt: [{ type: "text", text: "MIXED_SETTLED: review the corpus. " + "Background context line that the worker must keep. ".repeat(300) }] },
+			signal: AbortSignal.timeout(25_000)
+		});
+		settledActivation.result.catch(() => {});
+		const settledId = settledActivation.childId;
+		const settled = await deadline(settledActivation.result, "settled child's first settlement");
+		assert.notEqual(settled.stopReason, "error", JSON.stringify(settled));
+		assert.equal(ctx.agents.get(settledId), undefined, "the settled child is reclaimed before the batch");
+		const liveHold = fake.hold("MIXED_LIVE_TURN");
+		const liveActivation = await ctx.subagents.startActivation({
+			provider: "spawn", label: "mixed live worker", delivery: "parent",
+			request: { parent, prompt: [{ type: "text", text: "MIXED_LIVE_TURN: review the ledger. " + "Background context line that the worker must keep. ".repeat(300) }] },
+			signal: AbortSignal.timeout(25_000)
+		});
+		liveActivation.result.catch(() => {});
+		await liveHold.arrived();
+		assert.notEqual(ctx.agents.get(liveActivation.childId), undefined, "the live child is resident mid-turn");
+
+		const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(50_000));
+		await journal.wait(({ sessionId, event }) => sessionId === parent.id && event.type === "command/run", "mixed batch admission");
+		liveHold.release();
+		const execution = await deadline(command, "mixed batch result");
+		assert.equal(execution.result.kind, "success", JSON.stringify(execution.result));
+		assert.match(execution.result.text, /Summary \(completed\) — total 2: compacted 2 \(1 after resume\)/);
+		assert.match(execution.result.text, new RegExp(`${settledId}: resumed from settled state and compacted`));
+		assert.match(execution.result.text, new RegExp(`${liveActivation.childId}: compacted — replaced`));
+		/* Exactly one wake: the live child never needed one. The batch result
+		 * only proves the summary committed — the settled child's wake is
+		 * answered by a normal turn that starts AFTER compaction/end, so its
+		 * HTTP may not have arrived when the command returns. Wait for that
+		 * turn's completion (a real event, no sleep) before counting: the
+		 * wake request must be in flight's record by then. */
+		const endEntry = journal.entries.find(({ sessionId, event }) => sessionId === settledId && event.type === "compaction/end");
+		assert.ok(endEntry, "the settled child's compaction completed");
+		await journal.wait(({ sessionId, event }) => sessionId === settledId && event.type === "assistant/message" && event.seq > endEntry.event.seq, "the settled child's wake turn completed");
+		const wakeRequests = fake.requests.filter((request) => !request.summarizing && JSON.stringify(request.body.messages.at(-1)).includes("history-compaction maintenance"));
+		assert.equal(wakeRequests.length, 1, "only the settled child received the maintenance wake");
+		for (const id of [settledId, liveActivation.childId]) {
+			assert.ok(persistedEvents(storageRoot, id).some((event) => event.type === "compaction/summary"), `child ${id} summary is durable`);
+		}
+	} finally {
+		journal?.dispose();
+		await fake.close();
+		await ctx?.fiber.dispose();
+		rmSync(storageRoot, { recursive: true, force: true });
+	}
+});

@@ -1,30 +1,41 @@
-# Technical contract: 1.2.0 live-only compaction
+# Technical contract: 1.3.0 compaction with settle-and-resume
 
-This branch compacts the caller's **live runtime-owned direct children** through the child's existing compaction engine. Its tested runtime is stock Harness `0.2.2-rc.1`. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
+This branch compacts the caller's **runtime-owned direct children** through the child's existing compaction engine — live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. Its tested runtime is stock Harness `0.2.2-rc.1`. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
 
 ## Entry points
 
 | Entry point | Operation |
 | --- | --- |
 | `/subagent-compact` | Read the caller's durable direct-child catalog and mark each entry `live` or `persisted (not loaded)` |
-| `/subagent-compact <id>` | Compact one live direct child |
-| `/subagent-compact all` or `--all` | Compact live direct children from one catalog snapshot concurrently |
+| `/subagent-compact <id>` | Compact one direct child — live directly, settled continuable via resume |
+| `/subagent-compact all` or `--all` | Compact every child from one catalog snapshot concurrently — live directly, settled continuable via resume |
 | `compact_subagent({session_id})` | Run the single-child operation from a model turn |
 
-The model tool returns `text` and `outcome`; success also includes `target_session_id`, `summary_seq`, `replaced_items`, and `replaced_tokens`. There is no batch model tool, report command, cold restore path, or plugin batch-receipt domain in this version.
+The model tool returns `text` and `outcome`; success also includes `target_session_id`, `summary_seq`, `replaced_items`, `replaced_tokens`, and `resumed: true` when a resume happened first. There is no batch model tool, report command, host-patch cold restore path, or plugin batch-receipt domain in this version.
 
 ## Single-child path and authorization
 
 1. Acquire the plugin's per-target lock. A competing single or batch operation on the same ID returns `busy-target`.
-2. Resolve the live agent through `agents.get(id)`. An unloaded or reclaimed target returns `not-resident`.
+2. Resolve the live agent through `agents.get(id)`. A live target takes the live path below; a settled target takes the resume path (next section) when `resumeInactive` is on (the default), and otherwise returns `not-resident`.
 3. Require `agents.isOwnedBy(id, caller)`. The runtime registry checks the exact parent Agent object; a persisted catalog entry alone grants no authority. Self, foreign children, and grandchildren return `not-authorized`.
 4. Resolve the child's compaction engine as described below.
 5. With `waitForIdle: true` (the default), wait for `agent.whenIdle()` with the request's cancellation signal.
-6. Recheck that `agents.get(id)` is still the same Agent object after the wait. Disposal or same-ID replacement returns `not-resident`.
+6. Recheck that `agents.get(id)` is still the same Agent object after the wait. A true reclamation (no live agent at all) falls through to one resume attempt; a same-ID replacement *object* still refuses with `not-resident` — the stale handle must not be compacted.
 7. Call `engine.compactNow(agent, signal, sourceCommandId)` and render its result. A null result means `nothing-to-compact`.
 8. Release the per-target lock in `finally`.
 
-The plugin never restores a persisted session. A normal message may make a previously settled child live again; compaction can then use that new live instance. Calling while a request is still running lets the idle wait bridge the turn end into compaction, before settlement reclaims the child.
+Calling while a request is still running lets the idle wait bridge the turn end into compaction, before settlement reclaims the child.
+
+## Settled-child resume path
+
+A settled continuable child is compacted through the host's own continuation lifecycle — no host patch, no private maintenance API:
+
+1. A `subagent/start` listener scoped to this one target ID is registered **before** anything else. The listener is one-shot (first matching edge wins) and is always removed in the operation's cleanup.
+2. The plugin calls the ordinary `subagents.sendMessage(caller, id, WAKE_MESSAGE, { signal })`. The manager performs the cold resume under its own admission, ownership, preset restoration, and model routing — the plugin claims no authority beyond the caller's own parenthood. A refused wake maps the host's `SubagentError` code: `UNAUTHORIZED` → `not-authorized`; `NOT_RESUMABLE`/`PERSISTENCE_UNAVAILABLE`/`CONTINUATION_UNAVAILABLE` → `not-resumable`; `ACTIVATION_CLOSING`/`DUPLICATE_CHILD`/`INPUT_CLOSED` → `busy-target`; anything else → `resume-failed`.
+3. `subagent/start` fires synchronously once the manager has finished resume and ownership but **before the message is delivered**. At that edge the resumed agent is registered (`agents.get`), owned by the caller, and idle — the factory's initialization maintenance has already finished. The listener therefore calls `engine.compactNow(agent, signal, sourceCommandId)` **synchronously inside the edge**, reserving the engine's maintenance window before the listener returns. Awaiting `whenIdle` first is wrong here (the agent is idle already; on the earlier `agent/created` edge it would deadlock), and wrapping the engine in another maintenance call is wrong too — the probe for this timing is preserved with the acceptance records.
+4. The operation joins the compaction promise. The wake message stays parked in the child's inbox during the summary and is answered by one normal turn afterwards, which is why compaction here is a real extra exchange: if the summary fails, the delivered message still runs, and every failure receipt says so explicitly.
+5. If the wake resolves without a start edge of ours, the target was concurrently resumed by someone else: a live agent now takes the ordinary live path; anything else reports `resume-failed`. A same-ID instance swap never re-enters the resume path.
+6. The wake text is fixed: it asks for a single maintenance acknowledgment and explicitly forbids starting new work. It is the only message this plugin ever sends.
 
 ## Engine resolution
 
@@ -41,14 +52,15 @@ The batch reads `subagents.listChildren(caller.id, signal)` once and de-duplicat
 
 Every item starts concurrently and immediately enters the same single-child path. This matters because one child's summary can take longer than another child's remaining live window. Serial scheduling or a concurrency queue could arrive after a later child has already been reclaimed. There is no concurrency cap; model rate-limit failures are reported per item.
 
-Results are assigned by catalog index, so completion order does not reorder the output. Each child contributes `compacted`, `nothing-to-compact`, `skipped` for `not-resident`, `cancelled`, or `failed`. Unexpected errors become that item's failure and do not hide other results.
+Results are assigned by catalog index, so completion order does not reorder the output. Each child contributes `compacted` (marked and counted when it needed a resume first), `nothing-to-compact`, `skipped` for `not-resident` or `not-resumable`, `cancelled`, or `failed`. Settled non-continuable entries (one-shot, external, unknown) are skipped up front with their mode — no wake is paid for a child that can never resume. Unexpected errors become that item's failure and do not hide other results.
 
 | Batch outcome | Meaning | Command kind |
 | --- | --- | --- |
-| `completed` | No item failed, was cancelled, or remained not-started; skips are allowed, including an all-skipped run | Success |
+| `completed` | At least one item compacted or had nothing to compact, and no item failed, was cancelled, or remained not-started; skips are allowed | Success |
 | `empty-catalog` | The snapshot contained no children | Success |
 | `partial-failure` | At least one item compacted or had nothing to compact, and another failed | Error |
 | `all-failed` | Failures occurred and no item compacted or had nothing to compact | Error |
+| `nothing-compacted` | Not a single target compacted — every item was skipped; the summary must never imply success | Error |
 | `listing-failed` | Catalog discovery failed | Error |
 | `batch-cancelled` | The request signal was aborted | Error |
 
@@ -85,4 +97,4 @@ npm ci --include=dev
 npm test
 ```
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for the 46-test installed-runtime and clean npm runs, isolated bundled Web UI journey, and limits on that evidence.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for the current 69-test npm run, the historical installed-runtime runs, the settle-and-resume evidence (including the synchronous start-edge probe), isolated bundled Web UI journey, and limits on that evidence.

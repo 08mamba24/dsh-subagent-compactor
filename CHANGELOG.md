@@ -1,5 +1,34 @@
 # Changelog / 变更日志
 
+## 1.3.0 — Unreleased / 未发布
+
+This entry describes the `feature/resume-inactive-1.3.0` branch preview. No `v1.3.0` tag or release has been created; the published tag remains `v1.0.1`.
+
+本条记录对应 `feature/resume-inactive-1.3.0` 分支预览。尚未创建 `v1.3.0` tag 或 release，已发布 tag 仍为 `v1.0.1`。
+
+### Added / 新增
+
+- `/subagent-compact all` now compacts settled continuable children too: each is resumed through the normal continuation lifecycle (one scoped `subagent/start` listener registered before a single maintenance wake message; `engine.compactNow` is called synchronously at the start edge, before the message is delivered), then the wake is answered by one normal turn. Live children keep their direct concurrent path; a mixed batch loses no item and double-wakes none.
+  `/subagent-compact all` 现在也能压缩已结算的可续接子成员：每个成员通过正常续接生命周期恢复（先注册仅对该目标的 `subagent/start` 监听，再发送一条维护唤醒消息；在 start 边沿、消息投递前同步调用 `engine.compactNow`），随后唤醒消息由一轮正常对话回应。live 成员保持直接并发路径；混合批量不丢项、不重复唤醒。
+- `/subagent-compact <id>` and the `compact_subagent` model tool gained the same settle-and-resume semantics (`resumed: true` is reported on success), so every surface agrees instead of reserving resume for the batch.
+  `/subagent-compact <id>` 与 `compact_subagent` 模型工具获得同样的结算恢复语义（成功时报告 `resumed: true`），所有入口一致，不再把恢复能力留在批量专享。
+- New batch outcome `nothing-compacted`: a run in which not a single target compacted is an explicit error and never an implied success. Settled non-continuable children (one-shot, external, unknown) are skipped up front with their mode and no wake attempt; `not-resumable` refusals surface the host's reason.
+  新增批量结果 `nothing-compacted`：一项都没压成的运行按显式错误报告，绝不暗示成功。已结算且不可续接的成员（一次性、外部、未知）带模式预先跳过、不尝试唤醒；`not-resumable` 拒绝如实透出宿主原因。
+- Configuration `resumeInactive` (default `true`); set `false` to restrict every surface to children that are live right now.
+  新增配置 `resumeInactive`（默认 `true`）；设为 `false` 可将所有入口限制为仅当前 live 的成员。
+
+### Behavior / 行为
+
+- A mid-wait true reclamation (no live agent at all) falls through to one resume attempt; a same-ID instance swap during the idle wait still refuses conservatively with `not-resident` — the stale handle is never compacted.
+- 等待空闲期间发生的真实回收（已无 live agent）会再尝试一次恢复；同 ID 被替换为另一个实例时仍按 `not-resident` 保守拒绝——绝不压缩过期句柄。
+- Resuming is a real extra exchange, not a transaction: one summary request plus one wake-acknowledgment turn per resumed child; if the summary fails the delivered wake still runs and the receipt says so. The wake text only asks for a maintenance acknowledgment and forbids new work. Concurrent resumes share the no-cap batch policy; rate-limit failures are reported per item.
+  恢复是真实的额外交互而非事务：每个被恢复成员一次摘要请求加一轮唤醒确认；摘要失败时已投递的唤醒仍会执行，回执如实说明。唤醒文本只要求维护确认并禁止新任务。并发恢复沿用无上限批量策略；限流失败逐项如实报告。
+
+### Validation / 验证
+
+- Four tracked suites pass **69/69** (46 baseline cases plus 23 added cases) on the clean pinned npm runtime tree with Node 24: unit 35, batch 24, integration 3, preset 7. Red-first evidence: the two new preset resume cases fail against the previous live-only `d079037` HEAD and pass on this branch; the resume-path integration case covers the plain Host plane, the two settled-children preset case proves both summaries durable with the same command provenance and a later same-id continuation seeing the committed checkpoint, and the mixed case proves one wake for the settled child and none for the live one. Review regressions cover cancellation in the resume admission gap without an unhandled rejection and keep resumed compactions a true subset of successful compactions.
+  四份受跟踪测试在干净的固定版本 npm 运行时树上以 Node 24 通过 **69/69**（46 项基线加 23 项新增用例）：unit 35、batch 24、integration 3、preset 7。先红后绿证据：两条新增 preset 恢复用例在上一 live-only `d079037` HEAD 上失败、在本分支通过；恢复路径集成用例覆盖普通 Host 平面；双已结算成员 preset 用例证明两份摘要持久化且溯源同一命令、后续同 ID 续接可见 checkpoint；混合用例证明仅结算成员被唤醒一次而 live 成员无需唤醒。审查回归还覆盖恢复接纳间隙取消不产生未处理拒绝，以及恢复后压缩数量始终为成功压缩数量的真实子集。
+
 ## 1.2.0 — Unreleased / 未发布
 
 This entry describes the `feature/live-only-1.2.0` branch preview. No `v1.2.0` tag or release has been created; the published tag remains `v1.0.1`.
