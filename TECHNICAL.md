@@ -1,4 +1,4 @@
-# Technical contract: 1.3.0 compaction with settle-and-resume
+# Technical contract: 1.3.1 compaction with capacity-aware resume
 
 This branch compacts the caller's **runtime-owned direct children** through the child's existing compaction engine — live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. Its tested runtime is stock Harness `0.2.2-rc.1`. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
 
@@ -20,7 +20,7 @@ The model tool returns `text` and `outcome`; success also includes `target_sessi
 3. Require `agents.isOwnedBy(id, caller)`. The runtime registry checks the exact parent Agent object; a persisted catalog entry alone grants no authority. Self, foreign children, and grandchildren return `not-authorized`.
 4. Resolve the child's compaction engine as described below.
 5. With `waitForIdle: true` (the default), wait for `agent.whenIdle()` with the request's cancellation signal.
-6. Recheck that `agents.get(id)` is still the same Agent object after the wait. A true reclamation (no live agent at all) falls through to one resume attempt; a same-ID replacement *object* still refuses with `not-resident` — the stale handle must not be compacted.
+6. Recheck that `agents.get(id)` is still the same Agent object after the wait. A true reclamation (no live agent at all) falls through to the capacity-aware resume path; a same-ID replacement *object* still refuses with `not-resident` — the stale handle must not be compacted.
 7. Call `engine.compactNow(agent, signal, sourceCommandId)` and render its result. A null result means `nothing-to-compact`.
 8. Release the per-target lock in `finally`.
 
@@ -30,12 +30,24 @@ Calling while a request is still running lets the idle wait bridge the turn end 
 
 A settled continuable child is compacted through the host's own continuation lifecycle — no host patch, no private maintenance API:
 
-1. A `subagent/start` listener scoped to this one target ID is registered **before** anything else. The listener is one-shot (first matching edge wins) and is always removed in the operation's cleanup.
+1. A `subagent/start` listener scoped to this one target ID is registered **before each admission attempt**. The listener is one-shot (first matching edge wins) and removed when that attempt returns or throws. It is absent while waiting for capacity, so another actor's resume during that wait cannot launch an orphan summary.
 2. The plugin calls the ordinary `subagents.sendMessage(caller, id, WAKE_MESSAGE, { signal })`. The manager performs the cold resume under its own admission, ownership, preset restoration, and model routing — the plugin claims no authority beyond the caller's own parenthood. A refused wake maps the host's `SubagentError` code: `UNAUTHORIZED` → `not-authorized`; `NOT_RESUMABLE`/`PERSISTENCE_UNAVAILABLE`/`CONTINUATION_UNAVAILABLE` → `not-resumable`; `ACTIVATION_CLOSING`/`DUPLICATE_CHILD`/`INPUT_CLOSED` → `busy-target`; anything else → `resume-failed`.
 3. `subagent/start` fires synchronously once the manager has finished resume and ownership but **before the message is delivered**. At that edge the resumed agent is registered (`agents.get`), owned by the caller, and idle — the factory's initialization maintenance has already finished. The listener therefore calls `engine.compactNow(agent, signal, sourceCommandId)` **synchronously inside the edge**, reserving the engine's maintenance window before the listener returns. Awaiting `whenIdle` first is wrong here (the agent is idle already; on the earlier `agent/created` edge it would deadlock), and wrapping the engine in another maintenance call is wrong too — the probe for this timing is preserved with the acceptance records.
 4. The operation joins the compaction promise. The wake message stays parked in the child's inbox during the summary and is answered by one normal turn afterwards, which is why compaction here is a real extra exchange: if the summary fails, the delivered message still runs, and every failure receipt says so explicitly.
 5. If the wake resolves without a start edge of ours, the target was concurrently resumed by someone else: a live agent now takes the ordinary live path; anything else reports `resume-failed`. A same-ID instance swap never re-enters the resume path.
 6. The wake text is fixed: it asks for a single maintenance acknowledgment and explicitly forbids starting new work. It is the only message this plugin ever sends.
+
+### Capacity backpressure
+
+Only `SubagentError` with code `ACTIVATION_LIMIT_REACHED`, before a matching start edge, waits and retries. Such a rejection has not accepted a wake. Every retry goes through the same public `sendMessage` admission; the plugin neither guesses slots from the direct catalog nor changes the host limit. Errors after a start edge, ownership refusals, missing capabilities, and summary errors remain terminal outcomes.
+
+Before the first attempt, the operation subscribes to public `subagent/end` with `{ global: true }`. A release in the shared pool can come from another parent or a descendant outside this snapshot. On stock `0.2.2-rc.1`, slot release follows handle disposal and precedes this event. `agent/disposed` and summary completion happen too early to prove admission capacity. An event is only a hint: competing batches still have to pass host admission.
+
+A generation captured before each attempt detects an end arriving before its rejection is observed. Otherwise the operation sleeps until an end, cancellation, or a one-second probe. The probe covers unpublished materialization rollback and dynamic host-capacity changes, which need not emit an end. There is no per-target FIFO guarantee across competing commands; the host arbitrates each attempt.
+
+`resumeCapacityTimeoutMs` defaults to 120000, accepts integer values from 1 through 600000, and starts at the first capacity rejection. It bounds capacity waiting, including nested callers whose own activation may keep their shared pool full. Expiry returns `capacity-timeout` with the host's last diagnostic and the fact that no maintenance wake was accepted. Successful admission removes the event listener and capacity timer; the budget never aborts a later summary or acknowledgment turn. An already-entered host admission still follows the caller's signal and host cancellation contract.
+
+Waiting remains inside the existing per-target lock and uses the caller/unload fused signal for single-ID commands, the tool, and batches. Cancellation removes the capacity wait and listeners, prevents further attempts, and releases the lock. The plugin never ends a working activation to make room.
 
 ## Engine resolution
 
@@ -50,7 +62,7 @@ This is service lookup into the stock runtime, not a replacement compaction impl
 
 The batch reads `subagents.listChildren(caller.id, signal)` once and de-duplicates IDs, retaining catalog order. The catalog is durable and can include settled children; residency and runtime ownership are checked independently for every attempt. Children created after the snapshot are excluded.
 
-Every item starts concurrently and immediately enters the same single-child path. This matters because one child's summary can take longer than another child's remaining live window. Serial scheduling or a concurrency queue could arrive after a later child has already been reclaimed. There is no concurrency cap; model rate-limit failures are reported per item.
+Every item starts concurrently and immediately enters the same single-child path. All live idle waits are registered immediately: one child's summary can take longer than another child's remaining live window. Settled targets wait only when actual host admission rejects for capacity. A blocked resume never queues a live idle wait behind it. Model rate-limit failures are reported per item.
 
 Results are assigned by catalog index, so completion order does not reorder the output. Each child contributes `compacted` (marked and counted when it needed a resume first), `nothing-to-compact`, `skipped` for `not-resident` or `not-resumable`, `cancelled`, or `failed`. Settled non-continuable entries (one-shot, external, unknown) are skipped up front with their mode — no wake is paid for a child that can never resume. Unexpected errors become that item's failure and do not hide other results.
 
@@ -97,4 +109,4 @@ npm ci --include=dev
 npm test
 ```
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for the current 69-test npm run, the historical installed-runtime runs, the settle-and-resume evidence (including the synchronous start-edge probe), isolated bundled Web UI journey, and limits on that evidence.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for the current 87-test npm run, the 16-target capacity regression, historical installed-runtime runs, settle-and-resume evidence, isolated bundled Web UI journey, and limits on that evidence.

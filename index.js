@@ -26,8 +26,8 @@
  *
  * The batch runs all items CONCURRENTLY (each live item parks on its own
  * idle wait immediately, because the live window closes at settlement; each
- * settled item performs its own resume) under the same per-target locks as
- * the single-child path; one item's failure never hides the rest. A run in
+ * settled item waits for host admission when capacity is full) under the same
+ * per-target locks as the single-child path; one item's failure never hides the rest. A run in
  * which nothing was compacted reports `nothing-compacted` explicitly instead
  * of implying success.
  *
@@ -51,7 +51,10 @@ const Config = z.object({
 	/* Settled continuable children are resumed (one real wake message each)
 	 * so they can be compacted. Turn off to restrict every surface to
 	 * children that are live right now. */
-	resumeInactive: z.boolean().default(true)
+	resumeInactive: z.boolean().default(true),
+	/* A nested caller may itself keep the shared pool full. Waiting for
+	 * capacity must therefore be bounded even without caller cancellation. */
+	resumeCapacityTimeoutMs: z.number().step(1).min(1).max(600_000).default(120_000)
 });
 
 const USAGE = "Usage: /subagent-compact [all | <subagent-session-id>]";
@@ -59,6 +62,8 @@ const USAGE = "Usage: /subagent-compact [all | <subagent-session-id>]";
 const MANUAL_CODES = new Set(["busy", "cancelled", "changed", "summary", "commit", "persistence"]);
 /** Bounded unload wait so one pathological engine cannot hang teardown. */
 const DISPOSE_TIMEOUT_MS = 10_000;
+/** Public end events miss unpublished rollback and dynamic capacity changes. */
+const CAPACITY_PROBE_MS = 1_000;
 /**
  * The one message this plugin ever sends a settled child. It asks only for a
  * maintenance acknowledgment after the summary commits — it must never read
@@ -221,7 +226,7 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
 		if (ctx.agents.get(sessionId) !== undefined) {
 			const result = await compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
 			/* A true mid-wait reclamation (no live agent at all) still gets
-			 * one resume attempt; a same-id instance swap stays a refusal —
+			 * one admitted resume; a same-id instance swap stays a refusal —
 			 * the stale handle must not be compacted and the replacement is
 			 * a fresh target the caller may address explicitly. */
 			if (result.outcome !== "not-resident" || !config.resumeInactive || ctx.agents.get(sessionId) !== undefined) return result;
@@ -297,6 +302,9 @@ function classifyEngineError(error, signal) {
 
 /** Map one wake-delivery failure from the manager to an honest outcome. */
 function resumeRefusal(sessionId, error) {
+	if (error instanceof Error && error.name === "ResumeCapacityTimeoutError") {
+		return { outcome: "capacity-timeout", text: error.message };
+	}
 	if (error instanceof Error && error.name === "SubagentError") {
 		switch (error.code) {
 			case "UNAUTHORIZED":
@@ -318,10 +326,67 @@ function resumeRefusal(sessionId, error) {
 }
 
 /**
+ * Only a pre-start capacity rejection is safe to retry: no wake was accepted.
+ * The host remains the admission authority; summary completion is not slot
+ * release. Public ends (including other parents in a shared pool) are hints,
+ * with a slow probe for rollback/increased limits that emit no end event.
+ */
+async function sendWhenCapacityAvailable(ctx, config, sessionId, signal, attempt, didStart) {
+	let generation = 0;
+	let wake;
+	const offEnd = ctx.on("subagent/end", () => {
+		generation += 1;
+		wake?.();
+	}, { global: true });
+	let deadline;
+	let lastError;
+	try {
+		while (true) {
+			signal?.throwIfAborted();
+			if (deadline !== undefined && performance.now() >= deadline) {
+				const error = new Error(`Timed out after ${config.resumeCapacityTimeoutMs}ms waiting for capacity to resume subagent "${sessionId}"; no maintenance wake was accepted. ${lastError.message}`);
+				error.name = "ResumeCapacityTimeoutError";
+				throw error;
+			}
+			// Capture before admission, so an end during a rejected attempt is not lost.
+			const before = generation;
+			try {
+				return await attempt();
+			} catch (error) {
+				if (signal?.aborted || didStart() || !(error instanceof Error) || error.name !== "SubagentError" || error.code !== "ACTIVATION_LIMIT_REACHED") throw error;
+				lastError = error;
+				deadline ??= performance.now() + config.resumeCapacityTimeoutMs;
+			}
+			if (generation !== before) continue;
+			await new Promise((resolve, reject) => {
+				let timer;
+				let settled = false;
+				const finish = (error) => {
+					if (settled) return;
+					settled = true;
+					clearTimeout(timer);
+					signal?.removeEventListener("abort", onAbort);
+					wake = undefined;
+					if (error !== undefined) reject(error);
+					else resolve();
+				};
+				const onAbort = () => finish(signal.reason);
+				wake = () => finish();
+				if (signal?.aborted) { onAbort(); return; }
+				signal?.addEventListener("abort", onAbort, { once: true });
+				timer = setTimeout(wake, Math.max(1, Math.ceil(Math.min(CAPACITY_PROBE_MS, deadline - performance.now()))));
+			});
+		}
+	} finally {
+		offEnd();
+	}
+}
+
+/**
  * Compact one of the caller's SETTLED continuable direct subagents by
  * resuming it through the normal continuation lifecycle, with the target's
  * per-session lock already held. A listener scoped to this session id is
- * registered BEFORE the wake message; `subagent/start` fires synchronously
+ * registered BEFORE each admission attempt; `subagent/start` fires synchronously
  * once the manager has finished resume and ownership but before the message
  * is delivered, and the listener reserves the engine's maintenance window
  * right there by calling compactNow synchronously — never awaiting whenIdle
@@ -340,7 +405,7 @@ function resumeRefusal(sessionId, error) {
  */
 async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId) {
 	const state = { fired: false, compaction: undefined, failure: undefined };
-	const off = ctx.on("subagent/start", (info) => {
+	const onStart = (info) => {
 		if (state.fired || info?.id !== sessionId) return;
 		state.fired = true;
 		try {
@@ -363,12 +428,17 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		} catch (error) {
 			state.failure = { outcome: "error", text: `resume listener failed: ${error instanceof Error ? error.message : String(error)}` };
 		}
-	});
+	};
 	let messageId;
 	try {
-		messageId = await ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal });
+		messageId = await sendWhenCapacityAvailable(ctx, config, sessionId, signal, async () => {
+			// Listen only during admission, never while parked for capacity:
+			// another actor's resume during that wait is not our start edge.
+			const offStart = ctx.on("subagent/start", onStart);
+			try { return await ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal }); }
+			finally { offStart(); }
+		}, () => state.fired);
 	} catch (error) {
-		off();
 		/* The start edge may already have launched the engine job (a failure
 		 * or cancellation inside the admission gap); converge it — its
 		 * rejection is observed from the moment it existed — before this
@@ -377,7 +447,6 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
 		return resumeRefusal(sessionId, error);
 	}
-	off();
 	if (!state.fired) {
 		/* No start edge: the target raced back live through another
 		 * continuation, and the wake was delivered to that instance — the
@@ -422,13 +491,14 @@ async function listDirectChildren(ctx, caller, signal) {
  * Compact every still-live direct subagent in ONE durable catalog snapshot of
  * the calling parent: the snapshot is taken once at start (children spawned
  * afterwards belong to the next run) and ids are de-duplicated. All items
- * then run CONCURRENTLY — each parks on its own `whenIdle` immediately —
+ * then run CONCURRENTLY — each live child parks on its own `whenIdle` immediately —
  * because a one-shot child is only compactable between its turn end and its
  * settlement reclamation: a serial batch that reaches a later child only
  * after finishing an earlier one can arrive after that child already
  * settled, and would silently skip a child the same window can still catch.
- * There is deliberately NO concurrency cap: a queued item is exactly the
- * serial miss again. Per-target reentry locks and the shared fused signal
+ * There is deliberately NO cap on live waits: queuing those would cause the
+ * serial miss again. Settled children instead wait on host capacity rejection.
+ * Per-target reentry locks and the shared fused signal
  * keep the items independent; one item's failure never hides the rest.
  *
  * Live children are compacted directly; settled continuable children are

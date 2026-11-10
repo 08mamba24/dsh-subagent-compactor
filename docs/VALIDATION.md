@@ -1,8 +1,8 @@
 # Validation record
 
-## Current branch: 1.3.0 settle-and-resume preview
+## Current branch: 1.3.1 capacity backpressure preview
 
-Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle. The 46/46 record immediately below is the **1.2.0 preview point** (live-only scope); the current 1.3.0 record follows at the end.
+Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle with bounded capacity waiting. The 46/46 record below is the **1.2.0 preview point** (live-only scope); 1.3.0 and 1.3.1 evidence follows at the end.
 
 The records below distinguish automated runtime tests, an isolated bundled Web UI journey, and historical acceptance of the older candidate. Public evidence contains a summary, sanitized machine evidence, and synthetic screenshots; raw conversations, request bodies, session stores, credentials, and machine profiles are excluded.
 
@@ -60,7 +60,7 @@ Each successful item replaced three old history items. Its token figure estimate
 - The Web UI proof covers the installed application's Web pipeline. It does not establish that a user's already-running daily Electron process has loaded the new plugin, or that the Electron shell was exercised.
 - The synthetic model makes the mechanism deterministic. It does not evaluate real-model summary quality, fact retention, or provider rate limits under a large batch.
 - Batch command output has no independent receipt store. Cancellation can discard the host command result; the test's durable child summaries do not imply durable per-item batch receipts.
-- The implementation does not compact settled, unloaded children. Batch results skip those targets; a successful `completed` status can include skips.
+- That 1.2.0 implementation did not compact settled, unloaded children. Its batches skipped them; 1.3.0 added the resume path described below. A successful `completed` status can still include skips.
 - No `v1.2.0` release/tag or approval of an unreviewed public PR is implied by these tests.
 
 ## Legacy: unreleased 1.1.0 cold-compaction candidate
@@ -89,3 +89,35 @@ That record belongs to the released 1.0.1 code and runtime. The 1.2.0 compatibil
 - Timing probe (kept outside this repository with the working notes): `subagent/start` fires synchronously after resume and ownership complete and before message delivery; `compactNow` called inside the edge reserves maintenance before the listener returns; the wake stays parked in the inbox until the summary commits (summary → end → next turn ordering verified with a deliberately slow 200 ms summary); `agent/created` is unusable for this (initialization maintenance holds the phase; awaiting idle deadlocks, direct compaction reports busy).
 - Preset resume case: two truly settled-and-reclaimed children, one `/subagent-compact all`, two durable summaries with the same `sourceCommandId`, both wake messages answered by normal turns, and a later same-id continuation whose next model request carries the committed checkpoint. Mixed case: the live child is compacted directly with no wake; exactly one maintenance wake exists in the whole run.
 - Known limits of this evidence: the model is a loopback fake (no real summary quality), no native Electron-window acceptance yet, and no per-target timeout exists beyond the caller's cancellation signal.
+
+## 1.3.1 capacity backpressure evidence (2026-11-10)
+
+Baseline: `1139607b4747efeb32f024239fd2c201c9e5c938`, version 1.3.0. Node **24.18.0**, clean `npm ci --include=dev`, pinned stock Harness **0.2.2-rc.1**. All new runtime cases use a loopback synthetic model and fresh temporary JSONL storage. No live profiles or real user sessions are loaded.
+
+### Failure and cause
+
+Sixteen children were created sequentially and allowed to settle and be reclaimed naturally. One `/subagent-compact all` with the default limit of eight produced **8 compacted, 8 resume-failed**, with eight durable summaries. The regression assertion expecting all sixteen failed before the implementation changed. Seven initial capacity unit regressions also failed on the baseline.
+
+The batch started all inactive resumes concurrently. The stock manager synchronously reserves capacity before materialization and throws `ACTIVATION_LIMIT_REACHED` when full; it has no implicit queue. The plugin treated that transient refusal as terminal. Compaction's result does not free a slot: the maintenance wake must finish and the activation must settle and dispose. Public `subagent/end` follows actual release. The earlier two-inactive-child acceptance stayed below eight and could not detect this failure.
+
+### Current results
+
+**87/87** tracked tests pass: unit 35, batch 36, integration 3, preset 13. The original 69 tests remain; eighteen new cases cover capacity behavior.
+
+| Scenario | Verified result |
+| --- | --- |
+| 16 naturally settled children, default 8 slots, exactly one batch | 16 compacted; 16 persisted summaries with the same `sourceCommandId`; exactly one accepted maintenance wake each; observed peak at most 8 |
+| All 16 original IDs continued | Every subsequent model request contains its persisted checkpoint and produces output on that same ID |
+| Full shared pool, a grandchild outside the caller's snapshot | No target wake before admission; that grandchild's natural settlement frees a slot while the other live occupants keep working |
+| Inactive entries ahead of two live entries, second live finishes first | Both live idle windows caught; all four summaries complete; only inactive targets get maintenance wakes |
+| Empty summary at capacity 1 | Failure remains visible, delivered wake runs, slot naturally releases, next target completes |
+| Real full-pool cancellation and timeout | No summary or late wake for the stopped target, occupant keeps working, fresh invocation can later compact the same ID |
+| Unit scheduling and cleanup | Global end hints, failure-to-wait race, no-event probe, cancel/unload, target-lock exclusion, competing batches, non-capacity refusal, post-start refusal, long admitted summary, and foreign start while parked |
+
+Reproduce the full suite with `npm test`. To run the capacity-focused subset:
+
+```sh
+node --test --test-timeout=60000 --test-name-pattern='capacity' test/batch.test.mjs test/preset-integration.test.mjs
+```
+
+The two-minute default is a finite admission-wait budget, configurable up to ten minutes; it can still time out if existing work holds all slots longer. It is not a summary timeout. These are programmatic stock-runtime tests, not a new native Electron or Web UI acceptance, real-model quality benchmark, release, or daily Desktop deployment.

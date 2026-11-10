@@ -66,8 +66,8 @@ function makeBatchHarness({ children, live = new Map(), owned, engineFor, config
 				throw new StubSubagentError("NOT_RESUMABLE", `subagent "${targetId}" has no supported continuation state`);
 			}
 		},
-		on(eventName, listener) {
-			const entry = { eventName, listener };
+		on(eventName, listener, options) {
+			const entry = { eventName, listener, options };
 			registrations.listeners.push(entry);
 			return () => {
 				const index = registrations.listeners.indexOf(entry);
@@ -95,6 +95,194 @@ function makeBatchHarness({ children, live = new Map(), owned, engineFor, config
 	const invoke = (rawInput, signal) => command.handler({ rawInput, agent: caller, signal: signal ?? new AbortController().signal, commandId: "cmd-batch" });
 	return { ctx, caller, command, invoke, compactCalls, sendCalls, emit, registrations, live };
 }
+
+/** Admission is distinct from summary completion: only release() frees a slot. */
+function capacityHarness(config, ids = ["waiting-child"]) {
+	const denied = Promise.withResolvers();
+	let occupied = true;
+	const harness = withEngines(makeBatchHarness({
+		children: async () => ids.map((id) => ({ id, mode: "continuable" })),
+		owned: new Set(ids), config,
+		resume: { async sendMessage(_caller, id) {
+			if (occupied) {
+				denied.resolve();
+				throw new StubSubagentError("ACTIVATION_LIMIT_REACHED", "active child limit: 1");
+			}
+			occupied = true;
+			harness.live.set(id, makeChild(id));
+			harness.emit("subagent/start", { id });
+			return `wake-${id}`;
+		} }
+	}), {});
+	return Object.assign(harness, {
+		denied: denied.promise,
+		release(emit = true) {
+			occupied = false;
+			// This occupant is outside the caller's direct-child snapshot.
+			if (emit) harness.emit("subagent/end", { id: "other-parent-child" });
+		}
+	});
+}
+
+test("capacity: a global end outside the snapshot releases an awaiting resume", async () => {
+	const h = capacityHarness();
+	const result = h.invoke("all");
+	await h.denied;
+	assert.ok(h.registrations.listeners.some((entry) => entry.eventName === "subagent/end" && entry.options?.global), "subscribe globally before trying admission");
+	h.release();
+	assert.equal((await result).kind, "success");
+	assert.equal(h.sendCalls.length, 2);
+	assert.equal(h.compactCalls.length, 1);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+test("capacity: an end between attempt and rejection cannot be lost", async () => {
+	const h = capacityHarness();
+	const send = h.ctx.subagents.sendMessage;
+	h.ctx.subagents.sendMessage = async (...args) => {
+		try { return await send(...args); }
+		catch (error) { h.release(); throw error; }
+	};
+	assert.equal((await h.invoke("waiting-child")).kind, "success");
+	assert.equal(h.sendCalls.length, 2);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+test("capacity: periodic probe handles capacity changes with no end event", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const h = capacityHarness();
+	const result = h.invoke("waiting-child");
+	await h.denied;
+	await new Promise(setImmediate);
+	h.release(false);
+	t.mock.timers.tick(1_000);
+	assert.equal((await result).kind, "success");
+	assert.equal(h.sendCalls.length, 2);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+for (const stop of ["cancel", "unload"]) test(`capacity: ${stop} clears waits, listeners and target locks without a late wake`, async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const h = capacityHarness();
+	const controller = new AbortController();
+	const result = h.invoke("all", controller.signal);
+	await h.denied;
+	await new Promise(setImmediate);
+	assert.match((await h.invoke("waiting-child")).text, /already in progress/);
+	if (stop === "cancel") controller.abort(new Error("test cancellation"));
+	else for (const dispose of [...h.registrations.effectDisposers].reverse()) await dispose();
+	assert.match((await result).text, /cancelled/);
+	assert.equal(h.registrations.listeners.length, 0);
+	h.release();
+	t.mock.timers.tick(120_000);
+	await new Promise(setImmediate);
+	assert.equal(h.sendCalls.length, 1, "no admitted wake after cancellation or unload");
+	if (stop === "cancel") assert.equal((await h.invoke("waiting-child")).kind, "success", "the target lock is released");
+});
+
+test("capacity: timeout is a bounded, explicit failure and releases the lock", async () => {
+	const h = capacityHarness({ resumeCapacityTimeoutMs: 20 });
+	const result = await h.invoke("all");
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /waiting-child: capacity-timeout/);
+	assert.match(result.text, /active child limit: 1/);
+	assert.equal(h.sendCalls.length, 1, "no busy loop at full capacity");
+	assert.equal(h.registrations.listeners.length, 0);
+	h.release();
+	assert.equal((await h.invoke("waiting-child")).kind, "success");
+});
+
+test("capacity: model tool and competing batches share admission and target locks", async () => {
+	const h = capacityHarness();
+	const tool = h.registrations.tools.find((entry) => entry.name === "compact_subagent");
+	const result = tool.execute({ session_id: "waiting-child" }, { agent: h.caller, signal: new AbortController().signal });
+	await h.denied;
+	assert.match((await h.invoke("all")).text, /busy-target/);
+	h.release();
+	assert.equal((await result).outcome, "compacted");
+	assert.equal(h.sendCalls.length, 2);
+});
+
+test("capacity: non-capacity refusals are terminal and do not leave listeners", async () => {
+	for (const code of ["UNAUTHORIZED", "NOT_RESUMABLE", "CONTINUATION_UNAVAILABLE", "PERSISTENCE_UNAVAILABLE", "ACTIVATION_CLOSING", "UNKNOWN"]) {
+		const h = capacityHarness();
+		let attempts = 0;
+		h.ctx.subagents.sendMessage = async () => { attempts++; throw new StubSubagentError(code); };
+		const result = await h.invoke("waiting-child");
+		assert.equal(result.kind, "error");
+		assert.equal(attempts, 1, code);
+		assert.equal(h.registrations.listeners.length, 0, code);
+	}
+});
+
+test("capacity: a capacity-shaped error after start is never retried", async () => {
+	const h = capacityHarness();
+	let attempts = 0;
+	h.ctx.subagents.sendMessage = async () => {
+		attempts++;
+		h.live.set("waiting-child", makeChild("waiting-child"));
+		h.emit("subagent/start", { id: "waiting-child" });
+		throw new StubSubagentError("ACTIVATION_LIMIT_REACHED");
+	};
+	assert.equal((await h.invoke("waiting-child")).kind, "error");
+	assert.equal(attempts, 1);
+	assert.equal(h.compactCalls.length, 1);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+test("capacity: disjoint batches compete for real admission and both eventually finish", async () => {
+	const ids = ["queued-a", "queued-b"];
+	const h = capacityHarness(undefined, ids);
+	let snapshot = 0;
+	h.ctx.subagents.listChildren = async () => [{ id: ids[snapshot++], mode: "continuable" }];
+	const first = h.invoke("all");
+	const second = h.invoke("all");
+	await h.denied;
+	await new Promise(setImmediate);
+	assert.equal(h.sendCalls.length, 2);
+	h.release();
+	assert.equal((await Promise.race([first, second])).kind, "success");
+	assert.equal(h.compactCalls.length, 1, "the other target waits until actual release, not summary completion");
+	h.release();
+	for (const result of await Promise.all([first, second])) assert.equal(result.kind, "success");
+	assert.equal(h.compactCalls.length, 2);
+	assert.equal(h.registrations.listeners.length, 0);
+});
+
+test("capacity: admission clears its deadline before a long summary begins", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const h = capacityHarness({ resumeCapacityTimeoutMs: 100 });
+	const entered = Promise.withResolvers();
+	const summary = Promise.withResolvers();
+	h.ctx.get = (service) => service === "compaction" ? {
+		compactNow(_agent, signal) { entered.resolve(signal); return summary.promise; }
+	} : undefined;
+	const result = h.invoke("waiting-child");
+	await h.denied;
+	h.release();
+	const signal = await entered.promise;
+	await new Promise(setImmediate); // delivery returns before its listener cleanup
+	assert.equal(h.registrations.listeners.filter((entry) => entry.eventName === "subagent/end").length, 0);
+	t.mock.timers.tick(120_000);
+	assert.equal(signal.aborted, false, "capacity timeout must not abort an admitted summary");
+	summary.resolve({ summarySeq: 15, shadowedSeqs: [3, 4], shadowedTokenCount: 900 });
+	assert.equal((await result).kind, "success");
+});
+
+test("capacity: another actor's start while parked cannot launch an orphan summary", async () => {
+	const h = capacityHarness();
+	const result = h.invoke("waiting-child");
+	await h.denied;
+	await new Promise(setImmediate);
+	h.live.set("waiting-child", makeChild("waiting-child"));
+	h.emit("subagent/start", { id: "waiting-child" });
+	await new Promise(setImmediate);
+	assert.equal(h.compactCalls.length, 0);
+	h.live.delete("waiting-child");
+	h.release();
+	assert.equal((await result).kind, "success");
+	assert.equal(h.compactCalls.length, 1);
+});
 
 /** A child stub whose idle wait resolves immediately by default. */
 function makeChild(id, { idle = () => Promise.resolve(), onCompact } = {}) {

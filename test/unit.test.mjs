@@ -134,6 +134,9 @@ test("plugin surface", () => {
 	assert.deepEqual(inject, ["commands", "tools", "agents", "subagents"]);
 	assert.equal(Config({}).waitForIdle, true);
 	assert.equal(Config({ waitForIdle: false }).waitForIdle, false);
+	assert.equal(Config({}).resumeCapacityTimeoutMs, 120_000);
+	assert.equal(Config({ resumeCapacityTimeoutMs: 600_000 }).resumeCapacityTimeoutMs, 600_000);
+	for (const value of [0, -1, 1.5, 600_001, Infinity]) assert.throws(() => Config({ resumeCapacityTimeoutMs: value }));
 });
 
 test("apply registers command and tool inside one reversed-order effect", () => {
