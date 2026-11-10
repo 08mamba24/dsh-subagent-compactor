@@ -26,8 +26,8 @@ This entry describes the `feature/resume-inactive-1.3.0` branch preview. No `v1.
 
 ### Validation / 验证
 
-- Four tracked suites pass **67/67** (baseline 46 unchanged) on the clean pinned npm runtime tree with Node 24: unit 35, batch 23, integration 2, preset 7. Red-first evidence: the two new preset resume cases fail against the previous live-only `d079037` HEAD and pass on this branch; the resume-path integration case covers the plain Host plane, the two settled-children preset case proves both summaries durable with the same command provenance and a later same-id continuation seeing the committed checkpoint, and the mixed case proves one wake for the settled child and none for the live one.
-  四份受跟踪测试在干净的固定版本 npm 运行时树上以 Node 24 通过 **67/67**（46 项基线不变）：unit 35、batch 23、integration 2、preset 7。先红后绿证据：两条新增 preset 恢复用例在上一 live-only `d079037` HEAD 上失败、在本分支通过；恢复路径集成用例覆盖普通 Host 平面；双已结算成员 preset 用例证明两份摘要持久化且溯源同一命令、后续同 ID 续接可见 checkpoint；混合用例证明仅结算成员被唤醒一次而 live 成员无需唤醒。
+- Four tracked suites pass **69/69** (46 baseline cases plus 23 added cases) on the clean pinned npm runtime tree with Node 24: unit 35, batch 24, integration 3, preset 7. Red-first evidence: the two new preset resume cases fail against the previous live-only `d079037` HEAD and pass on this branch; the resume-path integration case covers the plain Host plane, the two settled-children preset case proves both summaries durable with the same command provenance and a later same-id continuation seeing the committed checkpoint, and the mixed case proves one wake for the settled child and none for the live one. Review regressions cover cancellation in the resume admission gap without an unhandled rejection and keep resumed compactions a true subset of successful compactions.
+  四份受跟踪测试在干净的固定版本 npm 运行时树上以 Node 24 通过 **69/69**（46 项基线加 23 项新增用例）：unit 35、batch 24、integration 3、preset 7。先红后绿证据：两条新增 preset 恢复用例在上一 live-only `d079037` HEAD 上失败、在本分支通过；恢复路径集成用例覆盖普通 Host 平面；双已结算成员 preset 用例证明两份摘要持久化且溯源同一命令、后续同 ID 续接可见 checkpoint；混合用例证明仅结算成员被唤醒一次而 live 成员无需唤醒。审查回归还覆盖恢复接纳间隙取消不产生未处理拒绝，以及恢复后压缩数量始终为成功压缩数量的真实子集。
 
 ## 1.2.0 — Unreleased / 未发布
 

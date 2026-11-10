@@ -97,4 +97,4 @@ npm ci --include=dev
 npm test
 ```
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for the 67-test installed-runtime and clean npm runs, the settle-and-resume evidence (including the synchronous start-edge probe), isolated bundled Web UI journey, and limits on that evidence.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for the current 69-test npm run, the historical installed-runtime runs, the settle-and-resume evidence (including the synchronous start-edge probe), isolated bundled Web UI journey, and limits on that evidence.
