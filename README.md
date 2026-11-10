@@ -4,7 +4,7 @@
 
 Manually compact the history of **direct subagents** from their parent session in DSH Desktop — children that are still live, and settled *continuable* children by resuming them first. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
 
-**Status: 1.3.0 branch preview, not tagged or released.** The published tag remains **v1.0.1**. This branch targets stock Harness **0.2.2-rc.1** and requires only plugin installation and enablement; it does not require changes to Desktop's application source or bundled runtime.
+**Status: 1.3.1 branch preview, not tagged or released.** The published tag remains **v1.0.1**. This branch targets stock Harness **0.2.2-rc.1** and requires only plugin installation and enablement; it does not require changes to Desktop's application source or bundled runtime.
 
 ## Install
 
@@ -13,9 +13,9 @@ Open **Plugins → Add plugin**, paste a Git source, and select **Install → En
 | Version | Git source |
 | --- | --- |
 | Published 1.0.1, single live-child compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| This 1.3.0 preview branch, batch compaction with settle-and-resume | `https://github.com/08mamba24/dsh-subagent-compactor.git#feature/resume-inactive-1.3.0` |
+| This 1.3.1 preview branch, batch compaction with settle-and-resume | `https://github.com/08mamba24/dsh-subagent-compactor.git#fix/resume-capacity-backpressure` |
 
-The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.3.0` release tag for this preview.
+The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.3.1` release tag for this preview.
 
 Confirm that `@local/dsh-subagent-compactor` is enabled and shows the intended version. After replacing an existing installation, fully quit and reopen Desktop to load the new command definition. If the same package was installed from a local directory, remove that installation source before adding the Git source.
 
@@ -33,7 +33,7 @@ Run commands in the parent session that created the children:
 
 - **No argument:** lists the parent's persisted direct-child catalog. Each entry is marked `live` or `persisted (not loaded)`. The list is an observation, not a reservation.
 - **One session ID:** compacts that direct child. A still-live child is compacted through its idle window (`waitForIdle: true` by default). A settled *continuable* child is resumed first — the plugin sends one real maintenance wake message, compacts at the resume edge, and the wake is answered by a normal turn afterwards. Children that cannot resume (one-shot, external, or unrestorable) return an explicit refusal such as `not-resumable`.
-- **`all` or `--all`:** takes one catalog snapshot and starts all child attempts concurrently. Live children compact directly; settled continuable children are each resumed once. Results retain catalog order. Settled non-continuable or unrestorable children are `skipped` with their reason; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
+- **`all` or `--all`:** takes one catalog snapshot and starts all child attempts concurrently. Live children compact directly; settled continuable children wait for host capacity before resuming. Each admitted resume sends one wake message. Results retain catalog order. Settled non-continuable or unrestorable children are `skipped` with their reason; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
 
 A successful two-child batch (both children had settled) ends with a result such as:
 
@@ -68,13 +68,19 @@ Compaction summaries persist through the host's session storage. Batch output is
 - A normal subagent-capable composition must provide `commands`, `tools`, `agents`, `subagents`, and the child's compaction engine. Listing and batch discovery also require the host's persisted child catalog.
 - Only the exact live runtime parent may compact its direct child. Self, grandchildren, and another parent's children are rejected.
 - Settled continuable children are resumed through the normal continuation lifecycle (one real wake message, one summary, one acknowledgment turn). One-shot, external, or unrestorable children get explicit refusals, never silent drops. A same-ID instance *swap* during an idle wait still refuses conservatively with `not-resident`.
-- All batch items start together, without a concurrency cap, so each can wait for its child's live window and perform its own resume. Model rate limits can cause individual failures, which the result reports; more resumed children mean more concurrent summary and acknowledgment requests — an explicit trade-off.
+- All live items enter their idle waits immediately. Resume attempts obey the host's shared pool, waiting for actual slot release after settlement and disposal. Model rate limits and non-capacity errors remain individual failures; they are not retried as capacity shortages.
 - Missing engines, changed residency, contention, cancellation, and engine failures produce explicit outcomes. See [TECHNICAL.md](TECHNICAL.md).
 - The plugin provides manual commands and one model tool. It adds no automatic compaction trigger, deletion, or handoff operation.
 
+## Capacity waiting
+
+When active children fill the host's pool, settled targets wait for a slot to be released. The same behavior applies to the batch, single-ID command, and model tool. Live children keep their concurrent idle waits. The plugin does not change the host limit or stop existing work.
+
+`resumeCapacityTimeoutMs` defaults to **120000** (two minutes), configurable from **1 to 600000** milliseconds in the plugin settings. The budget starts at the first capacity rejection and ends when admission succeeds; it does not limit an admitted summary or acknowledgment turn. A target still waiting at the deadline reports `capacity-timeout`, including the host's capacity diagnostic. Cancellation and plugin unload also stop the wait. A capacity-rejected attempt sends no accepted wake and makes no model request.
+
 ## Changes from the unreleased 1.1.0 candidate
 
-The old candidate combined cold compaction with a host maintenance patch. The 1.2.0 preview moved to stock runtime capabilities and live-only compaction; this 1.3.0 branch keeps that base and adds settle-and-resume for continuable children (the comparison below is the historical 1.2.0 snapshot):
+The old candidate combined cold compaction with a host maintenance patch. The 1.2.0 preview moved to stock runtime capabilities and live-only compaction; this 1.3.1 branch keeps that base and adds settle-and-resume for continuable children (the comparison below is the historical 1.2.0 snapshot):
 
 | Surface | Unreleased 1.1.0 candidate | 1.2.0 preview (historical) |
 | --- | --- | --- |
@@ -88,7 +94,7 @@ The old candidate combined cold compaction with a host maintenance patch. The 1.
 
 ## Validation and tests
 
-Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); this 1.3.0 branch runs **69/69** (unit 35, batch 24, integration 3, preset 7) on stock Harness `0.2.2-rc.1`. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
+Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); this 1.3.1 branch runs **87/87** (unit 35, batch 36, integration 3, preset 13) on stock Harness `0.2.2-rc.1`. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
 
 The Web UI run used a local synthetic model endpoint. It verifies the command and persistence path, not real-model summary quality or operation of the user's daily Electron window. See [docs/VALIDATION.md](docs/VALIDATION.md) and the [live-only acceptance summary](docs/acceptance/2026-11-10-live-only/acceptance.md).
 

@@ -1,5 +1,14 @@
 # Changelog / 变更日志
 
+## 1.3.1 — Unreleased / 未发布
+
+- Fix capacity backpressure across batch, single-ID command, and model tool. Pre-start `ACTIVATION_LIMIT_REACHED` waits for public global `subagent/end` hints and retries host admission; a one-second probe covers rollback or capacity changes without an event. Live idle waits remain concurrent. No host limit is raised and no working child is terminated.
+  修复批量、单 ID 命令和模型工具的容量回压：start 前的 `ACTIVATION_LIMIT_REACHED` 等待公开全局 `subagent/end` 后重新申请宿主准入，每秒补查覆盖无事件的回滚或容量变更；live 空闲等待保持并发，不提升宿主上限、不终止工作中的成员。
+- Add `resumeCapacityTimeoutMs` (default 120000, integer range 1–600000) and explicit `capacity-timeout` outcomes. The budget applies only to waiting for admission; accepted summaries retain their normal lifetime. Cancellation/unload remove waits, listeners, and target locks. Only capacity refusals before start are retried; other failures remain visible.
+  新增 `resumeCapacityTimeoutMs`（默认 120000，整数范围 1–600000）和明确的 `capacity-timeout` 回执。预算仅限制等待准入，不限制已经接纳的摘要；取消或卸载清理等待、监听和目标锁，仅重试 start 前的容量拒绝。
+- Regression: **87/87** tracked tests pass on stock Harness `0.2.2-rc.1` with Node 24. The default-eight-slot, 16-settled-child test fails 8/16 on 1.3.0 and now persists all 16 summaries under one command and continues all 16 original IDs with their checkpoints. Additional cases cover shared-pool occupants outside the snapshot, reversed live windows, failed-summary slot release, real full-pool cancellation/timeout, competing batches, lost wakeups, and admission-only deadlines. Tests use temporary data and a loopback model; no daily Desktop deployment or new UI acceptance is implied.
+  原版 Harness `0.2.2-rc.1`、Node 24 下 **87/87** 测试通过。默认 8 槽、16 个已结算成员的回归在 1.3.0 上失败 8 项，修复后一次命令持久化 16 份摘要，全部 16 个原 ID 续接请求均携带 checkpoint；另覆盖共享池外部占位、live 反序窗口、摘要失败后释放、满容量取消/超时、竞争批次、防丢唤醒和仅准入超时。均使用临时数据与本地模型，不代表日用 Desktop 已部署或新增 UI 验收。
+
 ## 1.3.0 — Unreleased / 未发布
 
 This entry describes the `feature/resume-inactive-1.3.0` branch preview. No `v1.3.0` tag or release has been created; the published tag remains `v1.0.1`.

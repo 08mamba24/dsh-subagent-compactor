@@ -1,9 +1,11 @@
-# Manual compaction of the caller's live direct subagents, reusing the
+# Manual compaction of the caller's live or settled continuable subagents, reusing the
 # composition's compaction engine (dsh-compaction-basic or a compatible
 # backend). waitForIdle: wait for a busy child to become idle before
 # compacting instead of failing with `busy`.
+# resumeCapacityTimeoutMs bounds capacity waiting before resume admission (2 min).
 - insert:
     - id: subagent-compactor
       name: '@local/dsh-subagent-compactor'
       config:
         waitForIdle: true
+        resumeCapacityTimeoutMs: 120000
