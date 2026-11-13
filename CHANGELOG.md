@@ -1,5 +1,18 @@
 # Changelog / 变更日志
 
+## 1.3.3 — Local candidate / 本地候选，未发布
+
+- Adapt the rc.2 direct catalog through SessionQuery with disposal and explicit projection failures; preserve rc.1 listChildren and runtime ownership. No recursive descendants enter a direct-child batch.
+  rc.2 通过 SessionQuery 读取直接子目录，确保释放并明确报告投影失败；保留 rc.1 的 listChildren 与运行时归属校验，不将孙级加入批量。
+- Gate every rc.2 target before maintenance delivery using direct creator membership, exact Agent identity and live runtime tree ownership. Validate creator/target/local run identity at the synchronous start edge. Existing locks, idle waits, preset engines, bounded capacity admission and ALS cancellation remain in use.
+  rc.2 维护消息发送前结合直接创建者、精确 Agent 身份与宿主树归属授权；同步 start 边沿校验父级、目标及本地 run 身份，保留锁、空闲等待、preset 引擎、容量回压与 ALS 取消。
+- Extend stock activation fixtures and the installed-runtime runner to rc.1/rc.2. Add authorization and real direct-parent boundary regressions; CI uses two separate stock dependency trees. Historical 1.3.2 rc.1 evidence remains unchanged.
+  迁移真实宿主夹具与 installed-runtime runner 以覆盖 rc.1/rc.2；新增授权和直接父级回归，CI 使用两套独立原版依赖，保留 1.3.2 的 rc.1 历史证据。
+- Validation: **108/108** on rc.1, installed App rc.2, and a clean npm rc.2 tree (authorization 14, unit 35, batch 40, integration 3, preset 16). Each includes the default-eight-slot 16-child checkpoint scenario.
+  rc.1、App 内置 rc.2 与干净 npm rc.2 树均通过 **108/108**（authorization 14、unit 35、batch 40、integration 3、preset 16），均覆盖默认 8 槽的 16 成员 checkpoint 续接。
+- Local implementation/test candidate only; no push, merge, tag, daily installation update or new native-window acceptance.
+  本轮仅本地实现与测试，未推送、合入、打 tag、更新日用安装或声明新增原生窗口验收。
+
 ## 1.3.2 — Unreleased / 未发布
 
 - Recheck residency before every resume attempt. A target restored by another message while waiting for capacity uses live compaction, without an extra maintenance wake. Runtime ownership and Agent identity checks still apply.

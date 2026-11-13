@@ -31,8 +31,11 @@
  * which nothing was compacted reports `nothing-compacted` explicitly instead
  * of implying success.
  *
- * Both surfaces authorize through runtime ownership (`agents.isOwnedBy`) and
- * the manager's own continuation admission — never persisted lineage alone —
+ * Both surfaces authorize direct parentage and exact runtime identities:
+ * rc.1 uses `agents.isOwnedBy`; rc.2 combines the creator's catalog with the
+ * manager's live tree ownership, and checks direct creator identity at start.
+ * Catalog membership alone never authorizes a live instance. Both versions
+ * also retain the manager's own continuation admission,
  * and resolve the engine on exactly one of two lawful planes (preset
  * `serviceFor`, or Host `compaction` when the composition has no preset
  * registry); there is no cross-realm fallback.
@@ -205,6 +208,81 @@ class TargetLocks {
 	}
 }
 
+/** Read direct creation edges, never a recursive descendants list. */
+async function directChildren(ctx, caller, signal) {
+	if (typeof ctx.subagents.listChildren === "function") return ctx.subagents.listChildren(caller.id, signal);
+	if (ctx.agents.get(caller.id) !== caller || typeof ctx.subagents.rootOf !== "function") throw new Error("Direct-child catalog requires the exact live runtime parent.");
+	ctx.subagents.rootOf(caller);
+	const query = ctx.get("sessionQuery");
+	if (query === undefined) throw new Error("Direct-child catalog requires the sessionQuery service.");
+	const observation = await query.observeSession(caller.id, { signal });
+	try {
+		const entries = observation.projections?.values?.subagentCatalog;
+		if (!Array.isArray(entries)) throw new Error("Direct-child subagentCatalog projection is unavailable.");
+		// Snapshot before releasing the observation. Invalid/diagnostic rows
+		// are errors, not an empty catalog or silently omitted targets.
+		return entries.map((entry) => {
+			if (entry === null || typeof entry !== "object" || typeof entry.id !== "string" || typeof entry.mode !== "string" || entry.kind === "diagnostic") {
+				throw new Error("Direct-child catalog contains an invalid or diagnostic entry.");
+			}
+			return { ...entry };
+		});
+	} finally { observation[Symbol.dispose](); }
+}
+
+function deniedParent(sessionId) {
+	return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
+}
+
+/**
+ * One policy for live, cold, batch and tool targets. rc.2 creation edges are
+ * durable; tree membership is checked separately against exact live objects.
+ * The proof never grants authority through rootOf alone, or through a catalog
+ * alone. Capacity end events remain global hints; every retry checks this
+ * same proof before any delivery, including after the caller was replaced.
+ */
+function directAuthority(ctx, caller, sessionId, signal, snapshot) {
+	if (typeof ctx.agents.isOwnedBy === "function") return {
+		callerCurrent: () => true,
+		owns: () => ctx.agents.isOwnedBy(sessionId, caller),
+		matchesStart: (info) => info?.id === sessionId
+	};
+	return observedDirectAuthority(ctx, caller, sessionId, signal, snapshot);
+}
+
+/** rc.2 combines a direct creator snapshot with the manager's runtime root. */
+async function observedDirectAuthority(ctx, caller, sessionId, signal, snapshot) {
+	if (caller.id === sessionId || ctx.agents.get(caller.id) !== caller || typeof ctx.subagents.rootOf !== "function") return deniedParent(sessionId);
+	let root;
+	try { root = ctx.subagents.rootOf(caller); }
+	catch (error) {
+		if (error?.name === "SubagentError" && error.code === "UNAUTHORIZED") return deniedParent(sessionId);
+		throw error;
+	}
+	const entries = snapshot ?? await directChildren(ctx, caller, signal);
+	if (!entries.some((entry) => entry.id === sessionId)) return deniedParent(sessionId);
+	const callerCurrent = () => {
+		if (ctx.agents.get(caller.id) !== caller) return false;
+		try { return ctx.subagents.rootOf(caller) === root; }
+		catch (error) {
+			if (error?.name === "SubagentError" && error.code === "UNAUTHORIZED") return false;
+			throw error;
+		}
+	};
+	return {
+		callerCurrent,
+		owns(agent) {
+			if (!callerCurrent() || agent === undefined || ctx.agents.get(sessionId) !== agent) return false;
+			try { return ctx.subagents.rootOf(agent) === root; }
+			catch (error) {
+				if (error?.name === "SubagentError" && error.code === "UNAUTHORIZED") return false;
+				throw error;
+			}
+		},
+		matchesStart: (info) => info?.id === sessionId && info.parentSessionId === caller.id && info.local === true && typeof info.runId === "string" && info.runId.length > 0
+	};
+}
+
 /**
  * Compact one of the caller's live direct subagents through the resolved
  * engine, under the per-target reentry lock. Expected failures return an
@@ -218,7 +296,7 @@ class TargetLocks {
  * @param sourceCommandId - initiating command identity, when command-invoked.
  * @returns outcome with `text`, plus compact stats when `outcome === "compacted"`.
  */
-async function compactSubagent(ctx, locks, config, caller, targetId, signal, sourceCommandId) {
+async function compactSubagent(ctx, locks, config, caller, targetId, signal, sourceCommandId, snapshot) {
 	if (typeof targetId !== "string" || targetId.trim().length === 0) {
 		return { outcome: "usage", text: USAGE };
 	}
@@ -227,8 +305,19 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
 		return { outcome: "busy-target", text: `A compaction for subagent "${sessionId}" is already in progress.` };
 	}
 	try {
+		let authority;
+		try {
+			// Do not insert an await into rc.1's live-window admission.
+			const proof = directAuthority(ctx, caller, sessionId, signal, snapshot);
+			authority = proof instanceof Promise ? await proof : proof;
+		} catch (error) {
+			if (signal?.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+			return { outcome: "listing-failed", text: `Direct-child catalog unavailable: ${error instanceof Error ? error.message : String(error)}` };
+		}
+		if (signal?.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+		if (authority.outcome !== undefined) return authority;
 		if (ctx.agents.get(sessionId) !== undefined) {
-			const result = await compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+			const result = await compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority);
 			/* A true mid-wait reclamation (no live agent at all) still gets
 			 * one admitted resume; a same-id instance swap stays a refusal —
 			 * the stale handle must not be compacted and the replacement is
@@ -236,7 +325,7 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
 			if (result.outcome !== "not-resident" || !config.resumeInactive || ctx.agents.get(sessionId) !== undefined) return result;
 		}
 		if (config.resumeInactive) {
-			return await resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+			return await resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority);
 		}
 		return { outcome: "not-resident", text: `No live agent with session id "${sessionId}". Only still-live (resident) subagents can be compacted here (resumeInactive is disabled); a child whose settlement already reclaimed it is out of reach.` };
 	} finally {
@@ -249,23 +338,23 @@ async function compactSubagent(ctx, locks, config, caller, targetId, signal, sou
  * lock already held. Expected failures return an outcome object; only
  * unexpected non-manual errors propagate.
  */
-async function compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId) {
+async function compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority) {
 	const agent = ctx.agents.get(sessionId);
 	if (agent === undefined) {
 		return { outcome: "not-resident", text: `No live agent with session id "${sessionId}". Only still-live (resident) subagents can be compacted; a child whose settlement already reclaimed it is out of reach.` };
 	}
-	if (!ctx.agents.isOwnedBy(sessionId, caller)) {
-		return { outcome: "not-authorized", text: `Session "${sessionId}" is not one of your live runtime-created direct subagents. Only the exact runtime parent may compact a child.` };
-	}
+	if (!authority.owns(agent)) return deniedParent(sessionId);
 	const resolvedEngine = resolveCompactionEngine(ctx, agent);
 	if (!resolvedEngine.ok) return { outcome: "engine-missing", text: resolvedEngine.reason };
 	try {
 		if (config.waitForIdle) await raceAbort(agent.whenIdle(), signal);
+		signal?.throwIfAborted();
 		/* Identity re-check after the wait: a same-id replacement agent is a
 		 * different object, and the old session handle must not be compacted. */
 		if (ctx.agents.get(sessionId) !== agent) {
 			return { outcome: "not-resident", text: `Subagent "${sessionId}" was disposed while waiting for it to become idle.` };
 		}
+		if (!authority.owns(agent)) return deniedParent(sessionId);
 		const result = await resolvedEngine.engine.compactNow(agent, signal, sourceCommandId);
 		if (result === null) return { outcome: "nothing-to-compact", text: `No compactable history yet in subagent "${sessionId}".` };
 		return compactedOutcome(sessionId, result, "Compacted ");
@@ -407,14 +496,14 @@ async function sendWhenCapacityAvailable(ctx, config, sessionId, signal, attempt
  * @param sourceCommandId - initiating command identity, when command-invoked.
  * @returns outcome with `text`; `compacted` adds stats and the `resumed` mark.
  */
-async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId) {
+async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority) {
 	const state = { fired: false, compaction: undefined, failure: undefined };
 	const onStart = (info) => {
 		if (state.fired || info?.id !== sessionId) return;
 		state.fired = true;
 		try {
 			const agent = ctx.agents.get(sessionId);
-			if (agent === undefined || !ctx.agents.isOwnedBy(sessionId, caller)) {
+			if (!authority.matchesStart(info) || !authority.owns(agent)) {
 				state.failure = { outcome: "not-authorized", text: `Session "${sessionId}" did not resume under your runtime parentage; compaction was refused.` };
 				return;
 			}
@@ -436,6 +525,7 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 	let admission;
 	try {
 		admission = await sendWhenCapacityAvailable(ctx, config, sessionId, signal, async () => {
+			if (!authority.callerCurrent()) return { kind: "refused", result: deniedParent(sessionId) };
 			const live = ctx.agents.get(sessionId);
 			if (live !== undefined) return { kind: "live", agent: live };
 			const token = Symbol();
@@ -446,12 +536,22 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 			// another actor's resume during that wait is not our start edge.
 			const offStart = ctx.on("subagent/start", (info) => {
 				if (info?.id !== sessionId || state.fired) return;
-				if (resumeAttempts.getStore() === token) { onStart(info); return; }
+				if (!authority.matchesStart(info)) {
+					state.fired = true;
+					state.failure = deniedParent(sessionId);
+					guard.abort(new Error("The start edge does not belong to the authorized direct child activation."));
+					return;
+				}
+				if (resumeAttempts.getStore() === token) {
+					onStart(info);
+					if (state.failure?.outcome === "not-authorized") guard.abort(new Error(state.failure.text));
+					return;
+				}
 				foreignStart = { kind: "live", agent: ctx.agents.get(sessionId) };
 				// Cancel only our queued delivery. The host checks this signal
 				// before accepting the wake; the external user's task stays live.
 				guard.abort(new Error("Another sender restored the child before maintenance admission."));
-			});
+			}, { global: true });
 			try {
 				const messageId = await resumeAttempts.run(token, () => ctx.subagents.sendMessage(caller, sessionId, WAKE_MESSAGE, { signal: sendSignal }));
 				return { kind: "sent", messageId };
@@ -468,13 +568,15 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		 * operation reports, so no engine promise outlives the call. */
 		if (state.compaction !== undefined) await state.compaction.catch(() => {});
 		if (signal !== undefined && signal.aborted) return { outcome: "cancelled", text: "Compaction cancelled." };
+		if (state.failure?.outcome === "not-authorized") return state.failure;
 		return resumeRefusal(sessionId, error);
 	}
+	if (admission.kind === "refused") return admission.result;
 	if (admission.kind === "live") {
 		if (admission.agent === undefined || ctx.agents.get(sessionId) !== admission.agent) {
 			return { outcome: "not-resident", text: `Subagent "${sessionId}" changed before live compaction could begin; no maintenance wake was accepted.` };
 		}
-		return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+		return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority);
 	}
 	const messageId = admission.messageId;
 	if (!state.fired) {
@@ -482,7 +584,7 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 		 * continuation, and the wake was delivered to that instance — the
 		 * ordinary live path applies to it now. */
 		if (ctx.agents.get(sessionId) !== undefined) {
-			return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId);
+			return compactLiveSubagent(ctx, config, caller, sessionId, signal, sourceCommandId, authority);
 		}
 		return { outcome: "resume-failed", text: `Subagent "${sessionId}" accepted the wake message without a resume start edge or a live agent; nothing was compacted (the message stays delivered).` };
 	}
@@ -508,7 +610,7 @@ async function resumeAndCompactSubagent(ctx, config, caller, sessionId, signal, 
 
 /** Render the durable direct-children catalog of the calling session. */
 async function listDirectChildren(ctx, caller, signal) {
-	const entries = await ctx.subagents.listChildren(caller.id, signal);
+	const entries = await directChildren(ctx, caller, signal);
 	if (entries.length === 0) return { kind: "success", text: "(no direct subagents on record for this session)" };
 	const lines = entries.map((entry) => {
 		const live = ctx.agents.get(entry.id) !== undefined;
@@ -555,7 +657,7 @@ async function listDirectChildren(ctx, caller, signal) {
 async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCommandId) {
 	let entries;
 	try {
-		entries = await ctx.subagents.listChildren(caller.id, signal);
+		entries = await directChildren(ctx, caller, signal);
 	} catch (error) {
 		if (signal.aborted) {
 			return { outcome: "batch-cancelled", kind: "error", text: "Batch compaction cancelled while the catalog read was still in flight; the catalog snapshot is unknown (it was never read).", total: 0 };
@@ -597,7 +699,7 @@ async function compactAllSubagents(ctx, locks, config, caller, signal, sourceCom
 		}
 		let result;
 		try {
-			result = await compactSubagent(ctx, locks, config, caller, item.id, signal, sourceCommandId);
+			result = await compactSubagent(ctx, locks, config, caller, item.id, signal, sourceCommandId, entries);
 		} catch (error) {
 			result = { outcome: "error", text: `unexpected error: ${error instanceof Error ? error.message : String(error)}` };
 		}

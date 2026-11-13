@@ -1,6 +1,6 @@
-# Technical contract: 1.3.2 compaction with capacity-aware resume
+# Technical contract: 1.3.3 rc.1/rc.2 compatibility candidate
 
-This branch compacts the caller's **runtime-owned direct children** through the child's existing compaction engine — live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. Its tested runtime is stock Harness `0.2.2-rc.1`. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
+This branch compacts the caller's **runtime-owned direct children** through the child's existing compaction engine — live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. Its module-level test runtimes are stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`; the candidate is local and awaits independent review. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
 
 ## Entry points
 
@@ -17,10 +17,10 @@ The model tool returns `text` and `outcome`; success also includes `target_sessi
 
 1. Acquire the plugin's per-target lock. A competing single or batch operation on the same ID returns `busy-target`.
 2. Resolve the live agent through `agents.get(id)`. A live target takes the live path below; a settled target takes the resume path (next section) when `resumeInactive` is on (the default), and otherwise returns `not-resident`.
-3. Require `agents.isOwnedBy(id, caller)`. The runtime registry checks the exact parent Agent object; a persisted catalog entry alone grants no authority. Self, foreign children, and grandchildren return `not-authorized`.
+3. Apply the shared direct-parent policy. rc.1 retains `agents.isOwnedBy(id, caller)`. rc.2 first requires the exact live caller and a target in its direct catalog, then checks the exact caller/target Agent objects through the manager's `subagents.rootOf`. Both must still belong to the captured runtime root. A catalog alone or a shared root alone grants no authority. Self, foreign children, unmanaged instances, and grandchildren return `not-authorized`. Cold rc.2 targets pass the catalog gate before any wake is sent.
 4. Resolve the child's compaction engine as described below.
 5. With `waitForIdle: true` (the default), wait for `agent.whenIdle()` with the request's cancellation signal.
-6. Recheck that `agents.get(id)` is still the same Agent object after the wait. A true reclamation (no live agent at all) falls through to the capacity-aware resume path; a same-ID replacement *object* still refuses with `not-resident` — the stale handle must not be compacted.
+6. Recheck both runtime authorization and that `agents.get(id)` is still the same Agent object after the wait. A true reclamation (no live agent at all) falls through to the capacity-aware resume path; a same-ID replacement *object* still refuses with `not-resident` — the stale handle must not be compacted.
 7. Call `engine.compactNow(agent, signal, sourceCommandId)` and render its result. A null result means `nothing-to-compact`.
 8. Release the per-target lock in `finally`.
 
@@ -30,7 +30,7 @@ Calling while a request is still running lets the idle wait bridge the turn end 
 
 A settled continuable child is compacted through the host's own continuation lifecycle — no host patch, no private maintenance API:
 
-1. Every admission attempt first checks for a live target; an externally restored Agent takes the existing live path without a wake. Otherwise a `subagent/start` listener scoped to this one target ID is registered **before each admission attempt**. The listener accepts only a matching edge in this send attempt's AsyncLocalStorage scope and is removed when that attempt returns or throws. It is absent while waiting for capacity, so another actor's resume during that wait cannot launch an orphan summary.
+1. Every admission attempt first checks for a live target; an externally restored Agent takes the existing live path without a wake. Otherwise a `subagent/start` listener scoped to this one target ID is registered **before each admission attempt**. On rc.2 the listener checks `parentSessionId === caller.id`, target ID, a local activation with a nonempty run ID, and the exact runtime Agent/root; one edge can reserve maintenance only once. It accepts an own start edge only in this send attempt's AsyncLocalStorage scope and is removed when that attempt returns or throws. It is absent while waiting for capacity, so another actor's resume during that wait cannot launch an orphan summary.
 2. The plugin calls the ordinary `subagents.sendMessage(caller, id, WAKE_MESSAGE, { signal: sendSignal })`. The manager performs the cold resume under its own admission, ownership, preset restoration, and model routing — the plugin claims no authority beyond the caller's own parenthood. A refused wake maps the host's `SubagentError` code: `UNAUTHORIZED` → `not-authorized`; `NOT_RESUMABLE`/`PERSISTENCE_UNAVAILABLE`/`CONTINUATION_UNAVAILABLE` → `not-resumable`; `ACTIVATION_CLOSING`/`DUPLICATE_CHILD`/`INPUT_CLOSED` → `busy-target`; anything else → `resume-failed`.
 3. `subagent/start` fires synchronously once the manager has finished resume and ownership but **before the message is delivered**. At that edge the resumed agent is registered (`agents.get`), owned by the caller, and idle — the factory's initialization maintenance has already finished. The listener therefore calls `engine.compactNow(agent, signal, sourceCommandId)` **synchronously inside the edge**, reserving the engine's maintenance window before the listener returns. Awaiting `whenIdle` first is wrong here (the agent is idle already; on the earlier `agent/created` edge it would deadlock), and wrapping the engine in another maintenance call is wrong too — the probe for this timing is preserved with the acceptance records.
 4. The operation joins the compaction promise. The wake message stays parked in the child's inbox during the summary and is answered by one normal turn afterwards, which is why compaction here is a real extra exchange: if the summary fails, the delivered message still runs, and every failure receipt says so explicitly.
@@ -43,7 +43,7 @@ Node AsyncLocalStorage supplies causal attribution for the start listener; it do
 
 Only `SubagentError` with code `ACTIVATION_LIMIT_REACHED`, before a matching start edge, waits and retries. Such a rejection has not accepted a wake. Every retry either uses the now-live Agent without a message or goes through the same public `sendMessage` admission; the plugin neither guesses slots from the direct catalog nor changes the host limit. Errors after a start edge, ownership refusals, missing capabilities, and summary errors remain terminal outcomes.
 
-Before the first attempt, the operation subscribes to public `subagent/end` with `{ global: true }`. A release in the shared pool can come from another parent or a descendant outside this snapshot. On stock `0.2.2-rc.1`, slot release follows handle disposal and precedes this event. `agent/disposed` and summary completion happen too early to prove admission capacity. An event is only a hint: competing batches still have to pass host admission.
+Before the first attempt, the operation subscribes to public `subagent/end` with `{ global: true }`. A release in the shared pool can come from another parent or a descendant outside this snapshot. On the tested stock rc.1/rc.2 runtimes, slot release follows handle disposal and precedes this event. `agent/disposed` and summary completion happen too early to prove admission capacity. An event is only a hint: competing batches still have to pass host admission.
 
 A generation captured before each attempt detects an end arriving before its rejection is observed. Otherwise the operation sleeps until an end, cancellation, or a one-second probe. The probe covers unpublished materialization rollback and dynamic host-capacity changes, which need not emit an end. There is no per-target FIFO guarantee across competing commands; the host arbitrates each attempt.
 
@@ -62,7 +62,7 @@ This is service lookup into the stock runtime, not a replacement compaction impl
 
 ## Batch scheduling and outcomes
 
-The batch reads `subagents.listChildren(caller.id, signal)` once and de-duplicates IDs, retaining catalog order. The catalog is durable and can include settled children; residency and runtime ownership are checked independently for every attempt. Children created after the snapshot are excluded.
+The batch reads one direct-child snapshot and de-duplicates IDs, retaining catalog order. rc.1 uses `subagents.listChildren(caller.id, signal)`; rc.2 observes the parent Session with `sessionQuery.observeSession(caller.id, {signal})`, copies `projections.values.subagentCatalog`, and disposes the observation in `finally`. Missing projections, malformed rows, and diagnostic-shaped rows fail discovery explicitly. It never enumerates descendants or silently ignores a branch diagnostic. The catalog is durable and can include settled children; residency and runtime ownership are checked independently for every attempt. Children created after the snapshot are excluded.
 
 Every item starts concurrently and immediately enters the same single-child path. All live idle waits are registered immediately: one child's summary can take longer than another child's remaining live window. Settled targets wait only when actual host admission rejects for capacity. A blocked resume never queues a live idle wait behind it. Model rate-limit failures are reported per item.
 

@@ -4,7 +4,7 @@
 
 Manually compact the history of **direct subagents** from their parent session in DSH Desktop — children that are still live, and settled *continuable* children by resuming them first. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
 
-**Status: 1.3.2 branch preview, not tagged or released.** The published tag remains **v1.0.1**. This branch targets stock Harness **0.2.2-rc.1** and requires only plugin installation and enablement; it does not require changes to Desktop's application source or bundled runtime.
+**Status: 1.3.3 local compatibility candidate, pending independent review; not pushed, tagged or released.** This candidate targets stock Harness **0.2.2-rc.1 and 0.2.2-rc.2** without changing Desktop application code. The previous 1.3.2 implementation is incompatible with rc.2; its rc.1 validation remains historical evidence.
 
 ## Install
 
@@ -13,9 +13,9 @@ Open **Plugins → Add plugin**, paste a Git source, and select **Install → En
 | Version | Git source |
 | --- | --- |
 | Published 1.0.1, single live-child compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| This 1.3.2 preview branch, batch compaction with settle-and-resume | `https://github.com/08mamba24/dsh-subagent-compactor.git#fix/recheck-live-before-resume` |
+| Previous 1.3.2 source, rc.1 only | `https://github.com/08mamba24/dsh-subagent-compactor.git#20981ebade6a260bd4a497916b450baeebe5372d` |
 
-The branch reference changes as development continues; use a full commit ID when you need a fixed revision. There is no `v1.3.2` release tag for this preview.
+The 1.3.3 candidate exists only on the local `fix/rc1-rc2-compat` branch. The Git sources above refer to older public versions; neither is this candidate. There is no `v1.3.3` tag or daily-profile deployment.
 
 Confirm that `@local/dsh-subagent-compactor` is enabled and shows the intended version. After replacing an existing installation, fully quit and reopen Desktop to load the new command definition. If the same package was installed from a local directory, remove that installation source before adding the Git source.
 
@@ -65,7 +65,7 @@ Compaction summaries persist through the host's session storage. Batch output is
 
 ## Requirements and limits
 
-- A normal subagent-capable composition must provide `commands`, `tools`, `agents`, `subagents`, and the child's compaction engine. Listing and batch discovery also require the host's persisted child catalog.
+- A normal subagent-capable composition must provide `commands`, `tools`, `agents`, `subagents`, and the child's compaction engine. Listing and batch discovery require the host's persisted child catalog. On rc.2, single-target authorization also requires `sessionQuery` and its `subagentCatalog` projection.
 - Only the exact live runtime parent may compact its direct child. Self, grandchildren, and another parent's children are rejected.
 - Settled continuable children are resumed through the normal continuation lifecycle (one real wake message, one summary, one acknowledgment turn). One-shot, external, or unrestorable children get explicit refusals, never silent drops. A same-ID instance *swap* during an idle wait still refuses conservatively with `not-resident`.
 - All live items enter their idle waits immediately. Resume attempts obey the host's shared pool, waiting for actual slot release after settlement and disposal. Model rate limits and non-capacity errors remain individual failures; they are not retried as capacity shortages.
@@ -82,7 +82,7 @@ If another message restores a target while it waits, compaction switches to the 
 
 ## Changes from the unreleased 1.1.0 candidate
 
-The old candidate combined cold compaction with a host maintenance patch. The 1.2.0 preview moved to stock runtime capabilities and live-only compaction; this 1.3.2 branch keeps that base and adds settle-and-resume for continuable children (the comparison below is the historical 1.2.0 snapshot):
+The old candidate combined cold compaction with a host maintenance patch. The 1.2.0 preview moved to stock runtime capabilities and live-only compaction; the current branch keeps that base and adds settle-and-resume for continuable children (the comparison below is the historical 1.2.0 snapshot):
 
 | Surface | Unreleased 1.1.0 candidate | 1.2.0 preview (historical) |
 | --- | --- | --- |
@@ -96,7 +96,7 @@ The old candidate combined cold compaction with a host maintenance patch. The 1.
 
 ## Validation and tests
 
-Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); this 1.3.2 branch runs **92/92** (unit 35, batch 40, integration 3, preset 14) on stock Harness `0.2.2-rc.1`. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
+Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); the historical 1.3.2 baseline passed **92/92** (unit 35, batch 40, integration 3, preset 14) on stock Harness `0.2.2-rc.1`. The 1.3.3 candidate passes **108/108 tests on each runtime** (authorization 14, unit 35, batch 40, integration 3, preset 16), including a 16-settled-child batch under the default eight-slot limit and direct-parent boundary checks. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
 
 The Web UI run used a local synthetic model endpoint. It verifies the command and persistence path, not real-model summary quality or operation of the user's daily Electron window. See [docs/VALIDATION.md](docs/VALIDATION.md) and the [live-only acceptance summary](docs/acceptance/2026-11-10-live-only/acceptance.md).
 
@@ -107,7 +107,9 @@ npm ci --include=dev
 npm test
 ```
 
-The four tracked suites use pinned stock runtime packages, isolated temporary storage, and a local fake model endpoint. They make no external model requests.
+To test another extracted stock tree, run `node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`. The runner accepts only rc.1 or rc.2 and checks all required dsh packages agree on that version. CI runs both package trees. These module-level tests do not claim a new native Electron-window acceptance.
+
+The five tracked suites use pinned stock runtime packages, isolated temporary storage, and a local fake model endpoint. They make no external model requests.
 
 ## Source and license
 

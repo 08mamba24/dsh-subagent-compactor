@@ -1,6 +1,6 @@
 # Validation record
 
-## Current branch: 1.3.2 concurrent-resume correction preview
+## Historical branch: 1.3.2 concurrent-resume correction preview
 
 Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle with bounded capacity waiting. The 46/46 record below is the **1.2.0 preview point** (live-only scope); 1.3.0, 1.3.1 and 1.3.2 evidence follows at the end.
 
@@ -129,3 +129,16 @@ The two-minute default is a finite admission-wait budget, configurable up to ten
 The stock case fixes capacity at one throughout. A working occupant settles naturally; an external sender then owns the target's child lock while its Session observation is held at a public query boundary. The compactor's retry sees no live Agent and queues behind it. After observation is released, the plugin cancels only its own unaccepted wake, waits for the user's turn to complete, and persists exactly one summary under the initiating command ID. The user's assistant response is durable before that summary, no maintenance message enters its inbox or HTTP requests, and the observed peak remains one. No runtime limits are increased, no working Agent is stopped, and no host implementation is changed.
 
 These are isolated stock-runtime regressions with temporary persistence and loopback synthetic responses. The earlier native-window 16/16 acceptance remains evidence for its recorded 1.3.1 runtime, not a native-window claim for this new runtime or real-model task quality.
+
+
+## 1.3.3 local rc.1/rc.2 compatibility candidate (2026-11-13)
+
+Baseline: public main `20981ebade6a260bd4a497916b450baeebe5372d` / v1.3.2. Before migration it passed 92/92 on rc.1; unchanged original tests on the installed rc.2 App passed 75/92, with all 17 integration/preset failures at the old activation fixture. Migrating only the fixture contracts, before changing product code, produced a 94-test red run (77 pass / 17 fail): the product's removed listChildren/isOwnedBy calls and grandchild boundary fail independently of the old fixture. An additional authorization red log is retained with the local review evidence.
+
+Final results: **108/108 pass, exit 0** on each of three independent trees: pinned rc.1 npm packages (Node 24.18.0), installed App rc.2 modules (Node 24.21.0), and a clean npm rc.2 tree installed by the exact CI selection script (Node 24.18.0). The candidate runs 108 tests per stock tree: authorization 14, unit 35, batch 40, headless integration 3, preset integration 16. The installed Desktop module route uses App 0.2.2-rc.2, Electron 44.7.0 / Node 24.21.0, ASAR SHA256 `1535941c163698d68a0cf45dd06e1ce1a18a308108d9b84076074f35a6e9c39d`. The pinned rc.1 npm route uses Node 24.18.0. Tests use isolated homes, temporary JSONL persistence and loopback synthetic model responses.
+
+The 16-target scenario retains the default eight-slot pool, observes peak activity at most eight, commits one summary per original child under the same command ID, accepts exactly one maintenance wake per resumed child, and proves all 16 original IDs receive their checkpoints on follow-up. Existing live-window, failed-summary, cancellation/timeout, external queued-resume and mixed-batch cases run against both contracts. New stock boundaries deny grandchild, self and foreign-parent targets; the intermediate creator can compact the same leaf. The tool follows the same policy. rc.2 denial occurs before sendMessage is called, not merely before compactNow.
+
+The installed-runtime runner now accepts exactly rc.1/rc.2 and verifies every required dsh package agrees. Run `npm ci --include=dev && npm test` for pinned rc.1, or `node scripts/test-installed-runtime.mjs --modules /absolute/node_modules` for either tree. The test-only activation adapter passes each version's real spec; it never adds methods or aliases to runtime services.
+
+This is a local ready-for-review candidate. No push, merge, release, daily plugin link update, Desktop restart or real session operation is included. Earlier rc.1 Electron screenshots/acceptance are historical evidence only; this candidate has no new native-window acceptance claim.
