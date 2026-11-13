@@ -217,8 +217,10 @@ function persistedEvents(root, childId) {
 			const path = join(directory, entry.name);
 			if (entry.isDirectory()) visit(path);
 			else if (entry.name.endsWith(".jsonl")) {
-				const text = readFileSync(path, "utf8");
-				if (text.includes(childId)) events.push(...text.trim().split("\n").map((line) => JSON.parse(line)));
+				const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+				// Parent catalogs also contain child ids. Only the JSONL header
+				// identifies whose events these are in a multilevel tree.
+				if (rows[0]?.type === "session" && rows[0].id === childId) events.push(...rows.slice(1));
 			}
 		}
 	};
@@ -860,4 +862,27 @@ test("stock direct-only: the model tool refuses a settled grandchild before waki
 	assert.equal(accepted.outcome, "compacted", accepted.text);
 	await lifecycle.ended(leaf.childId, 2);
 	gate.release(); await branch.result;
+});
+
+/** The root's batch must compact its branch while leaving the branch's leaf untouched. */
+test("stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold", { timeout: 60_000 }, async (t) => {
+	const { ctx, fake, parent, start, storageRoot, lifecycle } = await capacityRuntime(t);
+	const gate = fake.hold("DIRECT_BRANCH_BATCH");
+	const branch = await start("DIRECT_BRANCH_BATCH"); await gate.arrived();
+	const agent = ctx.agents.get(branch.childId), leaf = await start("NESTED_LEAF_BATCH", agent); await leaf.result;
+	assert.equal(ctx.agents.get(leaf.childId), undefined);
+	const waiting = Promise.withResolvers(), whenIdle = agent.whenIdle.bind(agent);
+	agent.whenIdle = () => { waiting.resolve(); return whenIdle(); };
+	const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(20_000));
+	await deadline(waiting.promise, "direct branch idle wait");
+	gate.release();
+	const execution = await command;
+	assert.equal(execution.result.kind, "success", execution.result.text);
+	assert.match(execution.result.text, /total 1: compacted 1,.*failed 0/);
+	await branch.result; await lifecycle.ended(branch.childId, 1);
+	const summaries = (id) => persistedEvents(storageRoot, id).filter((e) => e.type === "compaction/summary");
+	assert.equal(summaries(branch.childId).length, 1);
+	assert.equal(summaries(leaf.childId).length, 0);
+	assert.equal(ctx.agents.get(leaf.childId), undefined);
+	assert.equal(fake.requests.filter((r) => JSON.stringify(r.body.messages.at(-1)).includes("history-compaction maintenance")).length, 0);
 });

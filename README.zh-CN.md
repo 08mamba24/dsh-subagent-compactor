@@ -96,7 +96,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 验证与测试
 
-1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；历史 1.3.2 基线为 **92/92**（unit 35、batch 40、integration 3、preset 14）。1.3.3 候选在两个运行时各通过 **108/108 项测试**（authorization 14、unit 35、batch 40、integration 3、preset 16），包括默认 8 槽下的 16 个 settled 成员与直接父级边界检查。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；历史 1.3.2 基线为 **92/92**（unit 35、batch 40、integration 3、preset 14）。1.3.3 候选在两个运行时各通过 **109/109 项测试**（authorization 14、unit 35、batch 40、integration 3、preset 17），包括默认 8 槽下的 16 个 settled 成员与直接父级边界检查。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
 
 Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
 
