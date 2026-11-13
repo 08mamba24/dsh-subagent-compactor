@@ -109,6 +109,14 @@ npm test
 
 The four tracked suites use pinned stock runtime packages, isolated temporary storage, and a local fake model endpoint. They make no external model requests.
 
+## Upstream compatibility watch
+
+[`upstream-compat.yml`](.github/workflows/upstream-compat.yml) can discover recent official `deepseek-ai/deepseek-harness` releases and tags, including prerelease and RC tags, then test only exact combinations that have not been recorded before. Draft releases are excluded. Every report records the Harness tag and tag commit, this repository's exact SHA, the resolved dependency-lock digest, and the runner digest.
+
+The watcher is separate from `ci.yml` and never changes its pinned compatibility matrix. A version accepted by the stock installed-runtime runner is tested with public npm packages in temporary HOME/DSH_HOME/JSONL storage and a loopback synthetic model. An unknown runner version is `NOT_VERIFIED (runner unsupported)`, not `INCOMPATIBLE`. See [the watch design and operator guide](docs/UPSTREAM_COMPAT_WATCH.md).
+
+Scheduled execution starts only after this workflow reaches the default branch. A feature branch or Draft PR is review material, not an active monitor. Manual runs can select an exact official tag and can force a recheck without enabling an automatic upgrade, release, tag, installation, or Desktop restart.
+
 ## Source and license
 
 This repository distributes the plugin source and installation instructions. A license has not yet been specified. Git installation remains the distribution method; no npm package is published.

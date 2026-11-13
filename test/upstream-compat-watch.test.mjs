@@ -1,0 +1,235 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import {
+	buildComboDigest,
+	classifyInstallFailure,
+	classifyRunnerResult,
+	extractSupportedVersions,
+	normalizeHarnessVersion,
+	renderIssueBody,
+	selectUpstreamCandidates,
+} from "../scripts/lib/upstream-compat-core.mjs";
+
+const repository = fileURLToPath(new URL("../", import.meta.url));
+
+function temporary(t) {
+	const path = mkdtempSync(join(tmpdir(), "dsh-upstream-watch-test-"));
+	t.after(() => rmSync(path, { recursive: true, force: true }));
+	return path;
+}
+
+const releases = [
+	{
+		tag_name: "dsh-v0.2.2-rc.3",
+		draft: false,
+		prerelease: true,
+		published_at: "2026-11-13T07:56:55Z",
+		html_url: "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.3",
+	},
+	{
+		tag_name: "dsh-v0.2.2-rc.2",
+		draft: true,
+		prerelease: true,
+		published_at: "2026-11-11T11:33:06Z",
+		html_url: "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-rc.2",
+	},
+];
+
+const tags = [
+	{ name: "dsh-v0.2.2-rc.3", commit: { sha: "38a6a5c965aa99ab525161efb7cc5cf1fe62fced" } },
+	{ name: "dsh-v0.2.2-rc.2", commit: { sha: "ddac96760b6edf8fa0fe17cbdcf0b512f4c12b2c" } },
+	{ name: "dsh-v0.2.2-rc.1", commit: { sha: "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db" } },
+	{ name: "web-v9.9.9", commit: { sha: "1111111111111111111111111111111111111111" } },
+];
+
+test("discovers prereleases, excludes drafts, and preserves exact tag commits", () => {
+	const candidates = selectUpstreamCandidates({ releases, tags, limit: 3 });
+	assert.deepEqual(candidates.map(({ tag, version, commit, source, prerelease }) => ({ tag, version, commit, source, prerelease })), [
+		{
+			tag: "dsh-v0.2.2-rc.3",
+			version: "0.2.2-rc.3",
+			commit: "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+			source: "release",
+			prerelease: true,
+		},
+		{
+			tag: "dsh-v0.2.2-rc.1",
+			version: "0.2.2-rc.1",
+			commit: "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+			source: "tag",
+			prerelease: true,
+		},
+	]);
+});
+
+test("manual tag selection remains exact and rejects non-DSH tags", () => {
+	assert.equal(normalizeHarnessVersion("dsh-v0.2.2-rc.3"), "0.2.2-rc.3");
+	assert.equal(normalizeHarnessVersion("web-v9.9.9"), undefined);
+	assert.deepEqual(selectUpstreamCandidates({ releases, tags, requestedTag: "dsh-v0.2.2-rc.1" }).map(item => item.tag), ["dsh-v0.2.2-rc.1"]);
+	assert.throws(() => selectUpstreamCandidates({ releases, tags, requestedTag: "dsh-v9.9.9" }), /not found/);
+});
+
+test("dedup digest changes for every compatibility identity input", () => {
+	const base = {
+		pluginSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		tag: "dsh-v0.2.2-rc.3",
+		commit: "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+		dependencyDigest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		runnerDigest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	};
+	const first = buildComboDigest(base);
+	assert.match(first, /^[a-f0-9]{64}$/);
+	assert.equal(first, buildComboDigest({ ...base }));
+	for (const [key, value] of [
+		["pluginSha", "dddddddddddddddddddddddddddddddddddddddd"],
+		["tag", "dsh-v0.2.2-rc.4"],
+		["commit", "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"],
+		["dependencyDigest", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"],
+		["runnerDigest", "1111111111111111111111111111111111111111111111111111111111111111"],
+	]) assert.notEqual(first, buildComboDigest({ ...base, [key]: value }), key);
+});
+
+test("recognizes both the fixed-version and supportedVersions runner contracts", () => {
+	assert.deepEqual(extractSupportedVersions('const version = "0.2.2-rc.1";'), ["0.2.2-rc.1"]);
+	assert.deepEqual(extractSupportedVersions('const supportedVersions = new Set(["0.2.2-rc.1", "0.2.2-rc.2"]);'), ["0.2.2-rc.1", "0.2.2-rc.2"]);
+	assert.deepEqual(extractSupportedVersions("const version = process.env.VERSION;"), []);
+});
+
+test("classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly", () => {
+	assert.deepEqual(classifyInstallFailure("npm ERR! code ETARGET\nnpm ERR! notarget No matching version found"), {
+		classification: "NOT_VERIFIED",
+		reason: "dependency version unavailable",
+	});
+	assert.deepEqual(classifyInstallFailure("npm ERR! code ECONNRESET"), {
+		classification: "INFRA_ERROR",
+		reason: "dependency resolution failed",
+	});
+	assert.deepEqual(classifyRunnerResult({ status: 1, output: "Unsupported test runtime: 0.2.2-rc.3" }), {
+		classification: "NOT_VERIFIED",
+		reason: "runner unsupported",
+	});
+	assert.deepEqual(classifyRunnerResult({ status: 1, output: "not ok 3 - direct child compaction" }), {
+		classification: "INCOMPATIBLE",
+		reason: "stock compatibility suite failed",
+	});
+	assert.deepEqual(classifyRunnerResult({ status: 0, output: "tests 92\npass 92\nfail 0" }), {
+		classification: "COMPATIBLE",
+		reason: "stock compatibility suite passed",
+	});
+});
+
+test("issue body records provenance, classification, first failure, and report link without executable HTML", () => {
+	const body = renderIssueBody({
+		classification: "INCOMPATIBLE",
+		reason: "stock compatibility suite failed",
+		tag: "dsh-v0.2.2-rc.3",
+		version: "0.2.2-rc.3",
+		commit: "38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+		pluginSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		dependencyDigest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		firstFailure: "<script>alert(1)</script>\nsecond line",
+		runUrl: "https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/123",
+		fingerprint: "c".repeat(64),
+	});
+	assert.match(body, /INCOMPATIBLE/);
+	assert.match(body, /38a6a5c965aa99ab525161efb7cc5cf1fe62fced/);
+	assert.match(body, /actions\/runs\/123/);
+	assert.doesNotMatch(body, /<script>/);
+	assert.match(body, /alert\(1\)/);
+	assert.match(body, /upstream-compat-fingerprint:c{64}/);
+});
+
+test("discovery CLI emits a GitHub matrix from fixtures without network access", t => {
+	const directory = temporary(t);
+	const releasesPath = join(directory, "releases.json"), tagsPath = join(directory, "tags.json");
+	const output = join(directory, "discovery.json"), githubOutput = join(directory, "github-output.txt");
+	writeFileSync(releasesPath, JSON.stringify(releases));
+	writeFileSync(tagsPath, JSON.stringify(tags));
+	const result = spawnSync(process.execPath, [
+		join(repository, "scripts/discover-upstream.mjs"),
+		"--releases-file", releasesPath,
+		"--tags-file", tagsPath,
+		"--limit", "3",
+		"--output", output,
+		"--github-output", githubOutput,
+	], { encoding: "utf8", cwd: repository });
+	assert.equal(result.status, 0, result.stderr);
+	assert.deepEqual(JSON.parse(readFileSync(output, "utf8")).candidates.map(item => item.tag), ["dsh-v0.2.2-rc.3", "dsh-v0.2.2-rc.1"]);
+	const values = Object.fromEntries(readFileSync(githubOutput, "utf8").trim().split("\n").map(line => {
+		const at = line.indexOf("=");
+		return [line.slice(0, at), line.slice(at + 1)];
+	}));
+	assert.equal(values.has_candidates, "true");
+	assert.deepEqual(JSON.parse(values.matrix).include.map(item => item.commit), [
+		"38a6a5c965aa99ab525161efb7cc5cf1fe62fced",
+		"66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+	]);
+});
+
+test("aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result", t => {
+	const directory = temporary(t), reports = join(directory, "reports");
+	for (const [name, classification, reason] of [
+		["rc1", "COMPATIBLE", "stock compatibility suite passed"],
+		["rc3", "NOT_VERIFIED", "runner unsupported"],
+		["rc4", "SKIPPED", "combination already tested"],
+	]) {
+		const target = join(reports, name, "report.json");
+		mkdirSync(dirname(target), { recursive: true });
+		writeFileSync(target, JSON.stringify({ tag: `dsh-v0.2.2-${name}`, commit: "a".repeat(40), classification, reason, ...(classification === "SKIPPED" ? { previousClassification: "INCOMPATIBLE" } : {}) }));
+	}
+	const output = join(directory, "summary.json"), markdown = join(directory, "summary.md"), githubOutput = join(directory, "github-output.txt");
+	const result = spawnSync(process.execPath, [
+		join(repository, "scripts/upstream-compat.mjs"), "aggregate",
+		"--reports-directory", reports,
+		"--output", output,
+		"--markdown", markdown,
+		"--github-output", githubOutput,
+	], { encoding: "utf8", cwd: repository });
+	assert.equal(result.status, 0, result.stderr);
+	const aggregate = JSON.parse(readFileSync(output, "utf8"));
+	assert.deepEqual(aggregate.counts, { COMPATIBLE: 1, NOT_VERIFIED: 1, SKIPPED: 1 });
+	assert.deepEqual(aggregate.effectiveCounts, { COMPATIBLE: 1, NOT_VERIFIED: 1, INCOMPATIBLE: 1 });
+	assert.match(readFileSync(markdown, "utf8"), /NOT_VERIFIED.*runner unsupported/);
+	assert.match(readFileSync(githubOutput, "utf8"), /has_not_verified=true/);
+	assert.match(readFileSync(githubOutput, "utf8"), /has_incompatible=false/);
+});
+
+test("prepare CLI records the runner support decision before any runtime execution", t => {
+	const directory = temporary(t), bin = join(directory, "bin");
+	mkdirSync(bin);
+	const fakeNpm = join(bin, "npm");
+	writeFileSync(fakeNpm, "#!/bin/sh\nprintf '%s\\n' '{\"lockfileVersion\":3,\"packages\":{}}' > package-lock.json\n");
+	chmodSync(fakeNpm, 0o755);
+	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.3", false]]) {
+		const scratch = join(directory, version), report = join(scratch, "report.json");
+		const result = spawnSync(process.execPath, [
+			join(repository, "scripts/upstream-compat.mjs"), "prepare",
+			"--version", version,
+			"--tag", `dsh-v${version}`,
+			"--commit", "a".repeat(40),
+			"--plugin-sha", "b".repeat(40),
+			"--scratch", scratch,
+			"--report", report,
+		], { encoding: "utf8", cwd: repository, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+		assert.equal(result.status, 0, result.stderr);
+		const plan = JSON.parse(readFileSync(join(scratch, "plan.json"), "utf8"));
+		assert.deepEqual(plan.runnerSupportedVersions, ["0.2.2-rc.1"]);
+		assert.equal(plan.runnerSupportsVersion, expected);
+	}
+});
+
+test("workflow keeps execution read-only and isolates issue write permission", () => {
+	const workflow = readFileSync(join(repository, ".github/workflows/upstream-compat.yml"), "utf8");
+	assert.match(workflow, /cron: "23 \* \* \* \*"/);
+	assert.match(workflow, /workflow_dispatch:/);
+	assert.doesNotMatch(workflow, /^\s+release:/m);
+	assert.match(workflow, /permissions:\n  contents: read/);
+	assert.match(workflow, /notify:[\s\S]*?permissions:\n      contents: read\n      issues: write/);
+	assert.match(workflow, /persist-credentials: false/);
+});

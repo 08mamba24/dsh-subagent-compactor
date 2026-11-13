@@ -109,6 +109,14 @@ npm test
 
 四份受跟踪测试使用固定版本的原版运行时包、隔离临时存储和本地模拟模型服务，不发送外部模型请求。
 
+## 上游兼容性监控
+
+[`upstream-compat.yml`](.github/workflows/upstream-compat.yml) 可发现 `deepseek-ai/deepseek-harness` 官方近期 release 与 tag，包含 prerelease 和 RC，并只测试尚未记录的精确组合；draft release 会被排除。每份报告都会记录 Harness tag 及其精确 commit、本仓精确 SHA、解析后的依赖锁摘要和 runner 摘要。
+
+监控与 `ci.yml` 的固定兼容矩阵相互独立，不会修改原有门禁。只有被 stock installed-runtime runner 接受的版本才会使用公开 npm 包、临时 HOME/DSH_HOME/JSONL 和回环合成模型执行测试；runner 不认识的新版本会标记为 `NOT_VERIFIED (runner unsupported)`，绝不冒充 `INCOMPATIBLE`。详见[监控设计与操作说明](docs/UPSTREAM_COMPAT_WATCH.md)。
+
+只有 workflow 进入默认分支后，GitHub 才会按计划自动执行。功能分支或 Draft PR 只是审查材料，不代表监控已启用。手动运行可指定一个精确官方 tag，也可强制复查；这些动作都不会自动升级、发布、打 tag、安装插件或重启 Desktop。
+
 ## 源码与许可证
 
 本仓库提供插件源码和安装说明，尚未指定许可证。通过 Git 安装分发，不发布 npm 包。
