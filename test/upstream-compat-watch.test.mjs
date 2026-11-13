@@ -101,6 +101,18 @@ test("recognizes both the fixed-version and supportedVersions runner contracts",
 	assert.deepEqual(extractSupportedVersions("const version = process.env.VERSION;"), []);
 });
 
+test("a zero-exit runner without executed-test evidence is never COMPATIBLE", () => {
+	/* Exit code 0 alone proves nothing: empty output, a zero-test run, and a
+	 * fully-skipped run must all stay unverified instead of passing. */
+	assert.equal(classifyRunnerResult({ status: 0, output: "" }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 0, output: "\u2139 tests 0\n\u2139 pass 0\n\u2139 fail 0\n\u2139 skipped 0\n" }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 0, output: "\u2139 tests 10\n\u2139 pass 0\n\u2139 fail 0\n\u2139 skipped 10\n" }).classification, "NOT_VERIFIED");
+	const real = classifyRunnerResult({ status: 0, output: "\u2139 tests 10\n\u2139 pass 10\n\u2139 fail 0\n\u2139 skipped 0\n" });
+	assert.equal(real.classification, "COMPATIBLE");
+	assert.deepEqual(real.testSummary, { tests: 10, pass: 10, fail: 0, skipped: 0 });
+	assert.equal(classifyRunnerResult({ status: 1, output: "Error: Cannot find module" }).classification, "INCOMPATIBLE");
+});
+
 test("classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly", () => {
 	assert.deepEqual(classifyInstallFailure("npm ERR! code ETARGET\nnpm ERR! notarget No matching version found"), {
 		classification: "NOT_VERIFIED",
@@ -118,9 +130,16 @@ test("classifies unavailable packages, infrastructure failures, unsupported runn
 		classification: "INCOMPATIBLE",
 		reason: "stock compatibility suite failed",
 	});
+	/* Exit code 0 without a complete spec footer is not evidence: the same
+	 * call now stays unverified instead of passing (2026-11-13 review). */
 	assert.deepEqual(classifyRunnerResult({ status: 0, output: "tests 92\npass 92\nfail 0" }), {
+		classification: "NOT_VERIFIED",
+		reason: "runner produced no test evidence",
+	});
+	assert.deepEqual(classifyRunnerResult({ status: 0, output: "\u2139 tests 92\n\u2139 pass 92\n\u2139 fail 0\n\u2139 skipped 0\n" }), {
 		classification: "COMPATIBLE",
 		reason: "stock compatibility suite passed",
+		testSummary: { tests: 92, pass: 92, fail: 0, skipped: 0 },
 	});
 });
 
@@ -261,7 +280,7 @@ function writeReport(reports, name, report) {
 
 const targetFixture = [{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40) }];
 
-function runAggregate(t, reports, expectedTargets) {
+function runAggregate(t, reports, expectedTargets, pluginSha) {
 	const directory = temporary(t);
 	const output = join(directory, "summary.json"), markdown = join(directory, "summary.md"), githubOutput = join(directory, "github-output.txt");
 	const args = [
@@ -272,6 +291,7 @@ function runAggregate(t, reports, expectedTargets) {
 		"--github-output", githubOutput,
 		"--expected-count", String(expectedTargets.length),
 		"--expected-targets", JSON.stringify(expectedTargets),
+		...(pluginSha !== undefined ? ["--plugin-sha", pluginSha] : []),
 	];
 	const result = spawnSync(process.execPath, args, { encoding: "utf8", cwd: repository });
 	return { result, output, markdown, githubOutput };
@@ -308,6 +328,27 @@ test("aggregate rejects missing, duplicate, and unknown-classification reports",
 	const { result: unknownResult, output: unknownOutput } = runAggregate(t, unknownReports, targetFixture);
 	assert.equal(unknownResult.status, 0, unknownResult.stderr);
 	assert.equal(JSON.parse(readFileSync(unknownOutput, "utf8")).complete, false, "an unknown classification must fail validation");
+});
+
+test("aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA", t => {
+	const directory = temporary(t), reports = join(directory, "reports");
+	writeReport(reports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed" });
+	const evidenceless = runAggregate(t, reports, targetFixture, "b".repeat(40));
+	assert.equal(evidenceless.result.status, 0, evidenceless.result.stderr);
+	assert.equal(JSON.parse(readFileSync(evidenceless.output, "utf8")).complete, false, "a COMPATIBLE verdict without parsed test evidence must not validate");
+	assert.match(readFileSync(evidenceless.githubOutput, "utf8"), /has_infra_error=true/);
+
+	const foreign = temporary(t), foreignReports = join(foreign, "reports");
+	writeReport(foreignReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "c".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, skipped: 0 } });
+	const foreignRun = runAggregate(t, foreignReports, targetFixture, "b".repeat(40));
+	assert.equal(foreignRun.result.status, 0, foreignRun.result.stderr);
+	assert.equal(JSON.parse(readFileSync(foreignRun.output, "utf8")).complete, false, "a report from a different plugin SHA must not validate against this run");
+
+	const sound = temporary(t), soundReports = join(sound, "reports");
+	writeReport(soundReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, skipped: 0 } });
+	const soundRun = runAggregate(t, soundReports, targetFixture, "b".repeat(40));
+	assert.equal(soundRun.result.status, 0, soundRun.result.stderr);
+	assert.equal(JSON.parse(readFileSync(soundRun.output, "utf8")).complete, true, "evidence-backed COMPATIBLE with the exact plugin SHA validates");
 });
 
 test("aggregate gate flags read the effective verdict, not this run's skip bookkeeping", t => {

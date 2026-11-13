@@ -193,6 +193,7 @@ jobs:
             --markdown "$GITHUB_WORKSPACE/upstream-compat-summary.md" \
             --expected-count '${{ needs.discover.outputs.candidate_count }}' \
             --expected-targets '${{ needs.discover.outputs.expected_targets }}' \
+            --plugin-sha '${{ github.sha }}' \
             --step-summary "$GITHUB_STEP_SUMMARY" \
             --github-output "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4

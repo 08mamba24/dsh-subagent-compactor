@@ -75,11 +75,34 @@ export function classifyInstallFailure(output = "") {
 	return { classification: "INFRA_ERROR", reason: "dependency resolution failed" };
 }
 
+/**
+ * Parse a complete node --test spec footer. Anything less than all four
+ * counters is not evidence that a suite ran.
+ */
+export function parseTestSummary(output = "") {
+	const summary = {};
+	for (const label of ["tests", "pass", "fail", "skipped"]) {
+		const value = new RegExp(`^\\u2139\\s+${label}\\s+(\\d+)\\s*$`, "m").exec(output)?.[1];
+		if (value === undefined) return undefined;
+		summary[label] = Number(value);
+	}
+	return summary;
+}
+
 export function classifyRunnerResult({ status, output = "", error } = {}) {
 	if (error || status === null || status === undefined) return { classification: "INFRA_ERROR", reason: "runner failed to start" };
 	if (/Unsupported test runtime:/i.test(output)) return { classification: "NOT_VERIFIED", reason: "runner unsupported" };
-	if (status === 0) return { classification: "COMPATIBLE", reason: "stock compatibility suite passed" };
-	return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed" };
+	const testSummary = parseTestSummary(output);
+	if (status === 0) {
+		/* Exit code 0 alone proves nothing: an empty output, a zero-test run,
+		 * or a fully-skipped run is an unverified result, never COMPATIBLE. */
+		if (testSummary === undefined) return { classification: "NOT_VERIFIED", reason: "runner produced no test evidence" };
+		if (testSummary.tests === 0 || testSummary.fail > 0 || testSummary.skipped >= testSummary.tests) {
+			return { classification: "NOT_VERIFIED", reason: "runner did not execute a passing, non-empty suite", testSummary };
+		}
+		return { classification: "COMPATIBLE", reason: "stock compatibility suite passed", testSummary };
+	}
+	return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
 }
 
 export function sanitizeReportText(value, limit = 500) {

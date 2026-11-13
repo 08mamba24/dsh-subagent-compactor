@@ -286,6 +286,7 @@ function aggregate(args) {
 	};
 	const expectedTargets = args.expectedTargets === undefined ? null : JSON.parse(args.expectedTargets);
 	if (expectedTargets !== null && !Array.isArray(expectedTargets)) throw new Error("--expected-targets must be a JSON array");
+	if (args.pluginSha !== undefined && !/^[a-f0-9]{40}$/i.test(args.pluginSha)) throw new Error("--plugin-sha must be an exact 40-character hash");
 	const reportsByTag = new Map();
 	for (const { report } of reports) {
 		if (typeof report?.tag === "string") reportsByTag.set(report.tag, [...(reportsByTag.get(report.tag) ?? []), report]);
@@ -306,9 +307,26 @@ function aggregate(args) {
 			if (!expectedTargets.some(target => target.tag === tag)) problems.push({ tag, problem: "unexpected-report" });
 		}
 	}
+	/* A COMPATIBLE verdict (this run or cached) must carry executed-test
+	 * evidence: exit code 0 and a parsed spec footer of a non-empty,
+	 * non-fully-skipped, zero-failure suite. */
+	const hasEvidence = (report) => report.testExitCode === 0
+		&& report.testSummary !== null && typeof report.testSummary === "object"
+		&& Number.isInteger(report.testSummary.tests) && report.testSummary.tests > 0
+		&& report.testSummary.fail === 0
+		&& Number.isInteger(report.testSummary.skipped) && report.testSummary.skipped < report.testSummary.tests;
 	for (const { report } of reports) {
 		if (!terminal.has(report.classification) && !(report.classification === "SKIPPED" && terminal.has(report.previousClassification))) {
 			problems.push({ tag: report.tag, problem: "invalid-classification", classification: report.classification });
+		}
+		if (args.pluginSha !== undefined && report.pluginSha !== args.pluginSha) {
+			problems.push({ tag: report.tag, problem: "plugin-sha-mismatch" });
+		}
+		else if (args.pluginSha === undefined && !/^[a-f0-9]{40}$/i.test(String(report.pluginSha ?? ""))) {
+			problems.push({ tag: report.tag, problem: "missing-plugin-sha" });
+		}
+		if (effectiveOf(report) === "COMPATIBLE" && !hasEvidence(report)) {
+			problems.push({ tag: report.tag, problem: "missing-test-evidence" });
 		}
 	}
 	const complete = reports.length === expectedCount && problems.length === 0;
