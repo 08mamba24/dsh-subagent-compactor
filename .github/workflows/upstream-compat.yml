@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.discover.outputs.matrix }}
+      expected_targets: ${{ steps.discover.outputs.expected_targets }}
       has_candidates: ${{ steps.discover.outputs.has_candidates }}
       candidate_count: ${{ steps.discover.outputs.candidate_count }}
     steps:
@@ -99,16 +100,25 @@ jobs:
             --report "$REPORT" \
             --run-url "$RUN_URL" \
             --github-output "$GITHUB_OUTPUT"
-      - name: Restore the exact combination result
+      - name: Restore the most recent cached verdict for this combination
         id: restore
         if: steps.prepare.outputs.ready == 'true'
         uses: actions/cache/restore@v4
         with:
           path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
-          key: dsh-upstream-compat-v1-${{ steps.prepare.outputs.combo_digest }}
+          # The exact key stays unique so it never primary-hits; the prefix
+          # restores the newest stored verdict, which inspect validates below.
+          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-none
+          restore-keys: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-
+      - name: Validate the restored verdict against this exact combination
+        id: inspect
+        if: steps.prepare.outputs.ready == 'true'
+        env:
+          CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
+        run: node scripts/upstream-compat.mjs inspect --cache-directory "$CACHE_DIRECTORY" --combo-digest '${{ steps.prepare.outputs.combo_digest }}' --github-output "$GITHUB_OUTPUT"
       - name: Run the isolated stock-runtime compatibility suite
         id: run
-        if: steps.prepare.outputs.ready == 'true' && (steps.restore.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_recheck))
+        if: steps.prepare.outputs.ready == 'true' && (steps.inspect.outputs.skip != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_recheck))
         env:
           REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
         run: |
@@ -118,26 +128,29 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
       - name: Record a deduplicated skip
         id: reuse
-        if: steps.prepare.outputs.ready == 'true' && steps.restore.outputs.cache-hit == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.force_recheck)
+        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.force_recheck)
         env:
           REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
         run: |
           node scripts/upstream-compat.mjs reuse \
-            --cached-report '${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}/report.json' \
+            --cached-report '${{ steps.inspect.outputs.cachedReport }}' \
             --report "$REPORT" \
             --github-output "$GITHUB_OUTPUT"
       - name: Prepare a reusable result marker
-        if: steps.prepare.outputs.ready == 'true' && steps.restore.outputs.cache-hit != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
+        id: cache
+        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
         env:
           REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
           CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
-        run: node scripts/upstream-compat.mjs cache --report "$REPORT" --cache-directory "$CACHE_DIRECTORY"
+        run: node scripts/upstream-compat.mjs cache --report "$REPORT" --cache-directory "$CACHE_DIRECTORY" --github-output "$GITHUB_OUTPUT"
       - name: Save the exact combination result
-        if: steps.prepare.outputs.ready == 'true' && steps.restore.outputs.cache-hit != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
+        # The key embeds the result digest: a changed verdict saves a fresh
+        # entry; an identical one re-saves the same key harmlessly.
+        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
         uses: actions/cache/save@v4
         with:
           path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
-          key: dsh-upstream-compat-v1-${{ steps.prepare.outputs.combo_digest }}
+          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-${{ steps.cache.outputs.result_digest }}
       - name: Upload this compatibility report
         if: always()
         uses: actions/upload-artifact@v4
@@ -179,6 +192,7 @@ jobs:
             --output "$GITHUB_WORKSPACE/upstream-compat-summary.json" \
             --markdown "$GITHUB_WORKSPACE/upstream-compat-summary.md" \
             --expected-count '${{ needs.discover.outputs.candidate_count }}' \
+            --expected-targets '${{ needs.discover.outputs.expected_targets }}' \
             --step-summary "$GITHUB_STEP_SUMMARY" \
             --github-output "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4

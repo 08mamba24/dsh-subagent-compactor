@@ -197,7 +197,10 @@ test("aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result",
 	assert.deepEqual(aggregate.effectiveCounts, { COMPATIBLE: 1, NOT_VERIFIED: 1, INCOMPATIBLE: 1 });
 	assert.match(readFileSync(markdown, "utf8"), /NOT_VERIFIED.*runner unsupported/);
 	assert.match(readFileSync(githubOutput, "utf8"), /has_not_verified=true/);
-	assert.match(readFileSync(githubOutput, "utf8"), /has_incompatible=false/);
+	/* The gate flag reads the EFFECTIVE verdict: this run skipped a target
+	 * whose cached verdict was INCOMPATIBLE, so the gate must stay red. */
+	assert.match(readFileSync(githubOutput, "utf8"), /has_incompatible=true/);
+	assert.match(readFileSync(githubOutput, "utf8"), /skipped_count=1/);
 });
 
 test("prepare CLI records the runner support decision before any runtime execution", t => {
@@ -232,4 +235,138 @@ test("workflow keeps execution read-only and isolates issue write permission", (
 	assert.match(workflow, /permissions:\n  contents: read/);
 	assert.match(workflow, /notify:[\s\S]*?permissions:\n      contents: read\n      issues: write/);
 	assert.match(workflow, /persist-credentials: false/);
+	assert.match(workflow, /dsh-upstream-compat-v2-\$\{\{ steps.prepare.outputs.combo_digest \}\}-\$\{\{ steps.cache.outputs.result_digest \}\}/, "cache keys embed the result digest so a changed verdict gets a fresh entry");
+	assert.match(workflow, /restore-keys: dsh-upstream-compat-v2-/, "restore uses the prefix and lets inspect validate the entry");
+	assert.match(workflow, /upstream-compat.mjs inspect/, "a restored verdict is validated against the exact combination before skipping");
+	assert.match(workflow, /--expected-targets/, "aggregate validates reports against the discovered targets");
+});
+
+/** A gh stand-in that records every call and replays a configurable issue list. */
+function fakeGh(t, directory, issues) {
+	const bin = join(directory, "bin"), record = join(directory, "gh-calls.log");
+	mkdirSync(bin, { recursive: true });
+	/* The issue list travels through the environment so no shell quoting
+	 * can corrupt the JSON the real gh would print. */
+	writeFileSync(join(bin, "gh"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + record + "'\nif [ \"$1 $2\" = \"issue list\" ]; then printf '%s' \"$ISSUES_JSON\"; exit 0; fi\nif [ \"$1 $2\" = \"issue create\" ]; then echo \"https://example.invalid/issues/1\"; exit 0; fi\nexit 0\n");
+	chmodSync(join(bin, "gh"), 0o755);
+	const withIssues = { ...process.env, ISSUES_JSON: JSON.stringify(issues), PATH: `${bin}:${process.env.PATH}` };
+	return { record, env: withIssues };
+}
+
+function writeReport(reports, name, report) {
+	const target = join(reports, name, "report.json");
+	mkdirSync(dirname(target), { recursive: true });
+	writeFileSync(target, JSON.stringify(report));
+}
+
+const targetFixture = [{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40) }];
+
+function runAggregate(t, reports, expectedTargets) {
+	const directory = temporary(t);
+	const output = join(directory, "summary.json"), markdown = join(directory, "summary.md"), githubOutput = join(directory, "github-output.txt");
+	const args = [
+		join(repository, "scripts/upstream-compat.mjs"), "aggregate",
+		"--reports-directory", reports,
+		"--output", output,
+		"--markdown", markdown,
+		"--github-output", githubOutput,
+		"--expected-count", String(expectedTargets.length),
+		"--expected-targets", JSON.stringify(expectedTargets),
+	];
+	const result = spawnSync(process.execPath, args, { encoding: "utf8", cwd: repository });
+	return { result, output, markdown, githubOutput };
+}
+
+test("aggregate refuses to call a PREPARED-only run complete", t => {
+	const directory = temporary(t), reports = join(directory, "reports");
+	writeReport(reports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "PREPARED", reason: "dependency lock resolved" });
+	const { result, output, githubOutput } = runAggregate(t, reports, targetFixture);
+	assert.equal(result.status, 0, result.stderr);
+	const aggregate = JSON.parse(readFileSync(output, "utf8"));
+	assert.equal(aggregate.complete, false, "an intermediate PREPARED report must never count as a complete result");
+	assert.match(readFileSync(githubOutput, "utf8"), /has_infra_error=true/);
+	assert.equal(aggregate.effectiveCounts.INFRA_ERROR, 1);
+});
+
+test("aggregate rejects missing, duplicate, and unknown-classification reports", t => {
+	const missing = temporary(t);
+	mkdirSync(join(missing, "empty"), { recursive: true });
+	const { result: missingResult, output: missingOutput } = runAggregate(t, join(missing, "empty"), targetFixture);
+	assert.equal(missingResult.status, 0, missingResult.stderr);
+	assert.equal(JSON.parse(readFileSync(missingOutput, "utf8")).complete, false);
+
+	const duplicate = temporary(t), reports = join(duplicate, "reports");
+	const report = { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed" };
+	writeReport(reports, "a", report);
+	writeReport(reports, "b", report);
+	const { result: duplicateResult, output: duplicateOutput } = runAggregate(t, reports, targetFixture);
+	assert.equal(duplicateResult.status, 0, duplicateResult.stderr);
+	assert.equal(JSON.parse(readFileSync(duplicateOutput, "utf8")).complete, false, "two reports for one target must not satisfy the expected count");
+
+	const unknown = temporary(t), unknownReports = join(unknown, "reports");
+	writeReport(unknownReports, "a", { ...report, classification: "SOMETHING_ELSE", reason: "?" });
+	const { result: unknownResult, output: unknownOutput } = runAggregate(t, unknownReports, targetFixture);
+	assert.equal(unknownResult.status, 0, unknownResult.stderr);
+	assert.equal(JSON.parse(readFileSync(unknownOutput, "utf8")).complete, false, "an unknown classification must fail validation");
+});
+
+test("aggregate gate flags read the effective verdict, not this run's skip bookkeeping", t => {
+	const directory = temporary(t), reports = join(directory, "reports");
+	writeReport(reports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "SKIPPED", reason: "combination already tested", previousClassification: "INCOMPATIBLE", previousReason: "stock compatibility suite failed" });
+	const { result, githubOutput } = runAggregate(t, reports, targetFixture);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(readFileSync(githubOutput, "utf8"), /has_incompatible=true/, "a cached INCOMPATIBLE verdict must keep the gate red");
+	assert.match(readFileSync(githubOutput, "utf8"), /skipped_count=1/);
+});
+
+test("notify delivers a cached verdict that was never delivered before", t => {
+	const directory = temporary(t);
+	const gh = fakeGh(t, directory, []);
+	const record = gh.record;
+	const aggregatePath = join(directory, "aggregate.json");
+	writeFileSync(aggregatePath, JSON.stringify({ reports: [
+		{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), dependencyDigest: "c".repeat(64), classification: "SKIPPED", reason: "combination already tested", previousClassification: "INCOMPATIBLE", previousReason: "stock compatibility suite failed", firstFailure: "not ok suite" },
+	] }));
+	const result = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"),
+		"--aggregate", aggregatePath, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", join(directory, "notification.json"),
+	], { encoding: "utf8", cwd: repository, env: gh.env });
+	assert.equal(result.status, 0, result.stderr);
+	const actions = JSON.parse(readFileSync(join(directory, "notification.json"), "utf8")).actions;
+	assert.deepEqual(actions.map(action => action.action), ["created"], "a never-delivered cached INCOMPATIBLE verdict must create its issue");
+	assert.match(readFileSync(record, "utf8"), /issue create/);
+});
+
+test("notify stays quiet for an already-delivered identical cached verdict", t => {
+	const directory = temporary(t);
+	const existing = [{ number: 7, title: "[upstream-compat] dsh-v0.2.2-rc1", state: "OPEN", body: "old body without fingerprint" }];
+	const gh = fakeGh(t, directory, existing);
+	const record = gh.record;
+	const aggregatePath = join(directory, "aggregate.json");
+	writeFileSync(aggregatePath, JSON.stringify({ reports: [
+		{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), dependencyDigest: "c".repeat(64), classification: "SKIPPED", reason: "combination already tested", previousClassification: "COMPATIBLE", previousReason: "stock compatibility suite passed" },
+	] }));
+	const result = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"),
+		"--aggregate", aggregatePath, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", join(directory, "notification.json"),
+	], { encoding: "utf8", cwd: repository, env: gh.env });
+	assert.equal(result.status, 0, result.stderr);
+	const actions = JSON.parse(readFileSync(join(directory, "notification.json"), "utf8")).actions;
+	assert.deepEqual(actions.map(action => action.action), ["updated"], "an existing issue without the current fingerprint is updated, not skipped");
+	assert.match(readFileSync(record, "utf8"), /issue edit/);
+});
+
+test("cache emits a result digest so a changed verdict gets a fresh cache key", t => {
+	const directory = temporary(t);
+	const digests = [];
+	for (const classification of ["INCOMPATIBLE", "COMPATIBLE"]) {
+		const reportPath = join(directory, `${classification}.json`), cacheDirectory = join(directory, `cache-${classification}`);
+		writeFileSync(reportPath, JSON.stringify({ tag: "dsh-v0.2.2-rc1", classification, reason: "r" }));
+		const githubOutput = join(directory, `out-${classification}.txt`);
+		const result = spawnSync(process.execPath, [join(repository, "scripts/upstream-compat.mjs"), "cache",
+			"--report", reportPath, "--cache-directory", cacheDirectory, "--github-output", githubOutput,
+		], { encoding: "utf8", cwd: repository });
+		assert.equal(result.status, 0, result.stderr);
+		digests.push(/result_digest=(\S+)/.exec(readFileSync(githubOutput, "utf8"))?.[1]);
+	}
+	assert.notEqual(digests[0], digests[1], "a changed verdict must change the cache key");
+	assert.ok(digests.every(digest => /^\S+$/.test(digest)));
 });

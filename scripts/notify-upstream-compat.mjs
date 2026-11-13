@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { renderIssueBody, sanitizeReportText, sha256 } from "./lib/upstream-compat-core.mjs";
+import { renderIssueBody, sanitizeReportText, sha256, TERMINAL_CLASSIFICATIONS } from "./lib/upstream-compat-core.mjs";
 
 function parseArgs(argv) {
 	const result = {};
@@ -34,8 +34,14 @@ const byTitle = new Map(existing.map(issue => [issue.title, issue]));
 const temporary = mkdtempSync(join(tmpdir(), "dsh-upstream-notify-"));
 const actions = [];
 try {
-	for (const report of aggregate.reports) {
-		if (["SKIPPED", "PREPARED"].includes(report.classification)) continue;
+	for (const entry of aggregate.reports) {
+		/* Delivery follows the EFFECTIVE verdict: a cached (SKIPPED) result
+		 * still owes an issue until its fingerprint has actually been
+		 * delivered — testing was skipped, notification was not. */
+		const report = entry.classification === "SKIPPED"
+			? { ...entry, classification: entry.previousClassification, reason: entry.previousReason ?? entry.reason }
+			: entry;
+		if (report.classification === "PREPARED" || !TERMINAL_CLASSIFICATIONS.includes(report.classification)) continue;
 		const tag = sanitizeReportText(report.tag, 100);
 		if (!/^dsh-v[0-9A-Za-z.-]+$/.test(tag)) throw new Error(`Unsafe report tag: ${tag}`);
 		const title = `[upstream-compat] ${tag}`;

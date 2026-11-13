@@ -20,13 +20,14 @@ import {
 	extractSupportedVersions,
 	sanitizeReportText,
 	sha256,
+	TERMINAL_CLASSIFICATIONS,
 } from "./lib/upstream-compat-core.mjs";
 
 const source = fileURLToPath(new URL("../", import.meta.url));
 
 function parseArgs(argv) {
 	const [command, ...rest] = argv;
-	if (!command) throw new Error("Expected a command: prepare, run, reuse, cache, or aggregate");
+	if (!command) throw new Error("Expected a command: prepare, run, reuse, cache, inspect, or aggregate");
 	const values = { command };
 	for (let index = 0; index < rest.length; index++) {
 		const arg = rest[index];
@@ -242,15 +243,21 @@ function reuse(args) {
 
 function cache(args) {
 	required(args, "report", "cacheDirectory");
-	const report = JSON.parse(readFileSync(absolute(args.report, "report"), "utf8"));
+	const reportPath = absolute(args.report, "report");
+	const report = JSON.parse(readFileSync(reportPath, "utf8"));
 	if (["PREPARED", "INFRA_ERROR", "SKIPPED"].includes(report.classification)) {
 		console.log(`Not caching ${report.classification}`);
 		return report;
 	}
 	const directory = absolute(args.cacheDirectory, "cache directory");
 	mkdirSync(directory, { recursive: true });
-	cpSync(absolute(args.report, "report"), join(directory, "report.json"));
-	console.log(`Cached ${report.classification} report at ${directory}`);
+	cpSync(reportPath, join(directory, "report.json"));
+	/* The save key embeds this digest: a changed verdict changes the key, so
+	 * the immutable cache gains a fresh entry and later restores pick the new
+	 * verdict instead of the old one. */
+	const resultDigest = sha256(readFileSync(reportPath));
+	writeGithubOutput(args.githubOutput, "result_digest", resultDigest.slice(0, 16));
+	console.log(`Cached ${report.classification} report at ${directory} (result digest ${resultDigest.slice(0, 16)})`);
 	return report;
 }
 
@@ -269,14 +276,49 @@ function aggregate(args) {
 	const reports = findReports(absolute(args.reportsDirectory, "reports directory"));
 	const expectedCount = args.expectedCount === undefined ? reports.length : Number(args.expectedCount);
 	if (!Number.isInteger(expectedCount) || expectedCount < 0) throw new Error("--expected-count must be a non-negative integer");
-	const complete = reports.length === expectedCount;
+	const terminal = new Set(TERMINAL_CLASSIFICATIONS);
+	/* An intermediate (PREPARED), unknown, or malformed classification is an
+	 * infrastructure failure of the run that produced it, never a valid
+	 * verdict; SKIPPED borrows its recorded previous terminal state. */
+	const effectiveOf = (report) => {
+		if (report.classification === "SKIPPED" && terminal.has(report.previousClassification)) return report.previousClassification;
+		return terminal.has(report.classification) ? report.classification : "INFRA_ERROR";
+	};
+	const expectedTargets = args.expectedTargets === undefined ? null : JSON.parse(args.expectedTargets);
+	if (expectedTargets !== null && !Array.isArray(expectedTargets)) throw new Error("--expected-targets must be a JSON array");
+	const reportsByTag = new Map();
+	for (const { report } of reports) {
+		if (typeof report?.tag === "string") reportsByTag.set(report.tag, [...(reportsByTag.get(report.tag) ?? []), report]);
+	}
+	const problems = [];
+	if (expectedTargets !== null) {
+		for (const target of expectedTargets) {
+			const found = reportsByTag.get(target.tag) ?? [];
+			if (found.length === 0) problems.push({ tag: target.tag, problem: "missing-report" });
+			else if (found.length > 1) problems.push({ tag: target.tag, problem: "duplicate-report", count: found.length });
+			else {
+				const report = found[0];
+				if (report.version !== target.version || report.commit !== target.commit) problems.push({ tag: target.tag, problem: "target-mismatch" });
+				else if (!/^[a-f0-9]{40}$/i.test(String(report.pluginSha ?? ""))) problems.push({ tag: target.tag, problem: "missing-plugin-sha" });
+			}
+		}
+		for (const tag of reportsByTag.keys()) {
+			if (!expectedTargets.some(target => target.tag === tag)) problems.push({ tag, problem: "unexpected-report" });
+		}
+	}
+	for (const { report } of reports) {
+		if (!terminal.has(report.classification) && !(report.classification === "SKIPPED" && terminal.has(report.previousClassification))) {
+			problems.push({ tag: report.tag, problem: "invalid-classification", classification: report.classification });
+		}
+	}
+	const complete = reports.length === expectedCount && problems.length === 0;
 	const counts = {}, effectiveCounts = {};
 	for (const { report } of reports) {
 		counts[report.classification] = (counts[report.classification] ?? 0) + 1;
-		const effective = report.classification === "SKIPPED" ? report.previousClassification : report.classification;
+		const effective = effectiveOf(report);
 		effectiveCounts[effective] = (effectiveCounts[effective] ?? 0) + 1;
 	}
-	const value = { capturedAt: new Date().toISOString(), expectedCount, reportCount: reports.length, complete, counts, effectiveCounts, reports: reports.map(item => ({ artifactPath: item.path, ...item.report })) };
+	const value = { capturedAt: new Date().toISOString(), expectedCount, reportCount: reports.length, complete, ...(problems.length > 0 ? { problems } : {}), counts, effectiveCounts, reports: reports.map(item => ({ artifactPath: item.path, ...item.report })) };
 	writeFileSync(absolute(args.output, "output"), JSON.stringify(value, null, 2) + "\n");
 	const lines = [
 		"# Upstream compatibility watch",
@@ -286,20 +328,50 @@ function aggregate(args) {
 		...value.reports.map(({ tag, commit, classification, previousClassification, reason }) =>
 			`| \`${sanitizeReportText(tag)}\` | \`${sanitizeReportText(commit).slice(0, 12)}\` | **${sanitizeReportText(classification)}${previousClassification ? ` (${sanitizeReportText(previousClassification)})` : ""}** | ${sanitizeReportText(reason)} |`),
 		"",
-		...(complete ? [] : [`**INFRA_ERROR:** expected ${expectedCount} reports but received ${reports.length}.`, ""]),
+		...(complete ? [] : [
+			`**INFRA_ERROR:** expected ${expectedCount} valid reports but received ${reports.length}${problems.length > 0 ? ` with ${problems.length} validation problem(s): ${problems.map(problem => `${problem.tag ?? "?"}:${problem.problem}`).join(", ")}` : ""}.`,
+			"",
+		]),
 		"`NOT_VERIFIED` is not an incompatibility result. It means the stock runner or published dependency set could not test that version.",
 		"This report is not release or upgrade approval.",
 	];
 	const markdown = lines.join("\n") + "\n";
 	writeFileSync(absolute(args.markdown, "markdown"), markdown);
 	if (args.stepSummary) appendFileSync(absolute(args.stepSummary, "step summary"), markdown);
-	writeGithubOutput(args.githubOutput, "has_incompatible", String(Boolean(counts.INCOMPATIBLE)));
-	writeGithubOutput(args.githubOutput, "has_infra_error", String(Boolean(counts.INFRA_ERROR) || !complete));
-	writeGithubOutput(args.githubOutput, "has_not_verified", String(Boolean(counts.NOT_VERIFIED)));
+	/* Gate flags read the EFFECTIVE verdict: a cached (SKIPPED) result keeps
+	 * the verdict it recorded, and this run's skip bookkeeping travels only
+	 * through skipped_count. */
+	writeGithubOutput(args.githubOutput, "has_incompatible", String(Boolean(effectiveCounts.INCOMPATIBLE)));
+	writeGithubOutput(args.githubOutput, "has_infra_error", String(Boolean(effectiveCounts.INFRA_ERROR) || !complete));
+	writeGithubOutput(args.githubOutput, "has_not_verified", String(Boolean(effectiveCounts.NOT_VERIFIED)));
+	writeGithubOutput(args.githubOutput, "skipped_count", String(counts.SKIPPED ?? 0));
 	writeGithubOutput(args.githubOutput, "report_count", String(reports.length));
 	writeGithubOutput(args.githubOutput, "complete", String(complete));
 	console.log(markdown);
 	return value;
+}
+
+/**
+ * Validate a restored cache entry against the combination about to run: the
+ * cached report must belong to this exact comboDigest and carry a terminal
+ * classification. Only then may the run skip re-testing; a changed verdict or
+ * a stale entry forces a fresh run, whose save key embeds the new result
+ * digest so GitHub's immutable cache grows a fresh entry instead of serving
+ * the old verdict forever.
+ */
+function inspect(args) {
+	required(args, "cacheDirectory", "comboDigest");
+	const reportPath = join(absolute(args.cacheDirectory, "cache directory"), "report.json");
+	if (!existsSync(reportPath)) {
+		writeGithubOutput(args.githubOutput, "skip", "false");
+		return;
+	}
+	const report = JSON.parse(readFileSync(reportPath, "utf8"));
+	const terminal = new Set(TERMINAL_CLASSIFICATIONS);
+	const valid = report.comboDigest === args.comboDigest
+		&& (terminal.has(report.classification) || (report.classification === "SKIPPED" && terminal.has(report.previousClassification)));
+	writeGithubOutput(args.githubOutput, "skip", String(valid));
+	if (valid) writeGithubOutput(args.githubOutput, "cachedReport", reportPath);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -307,5 +379,6 @@ if (args.command === "prepare") prepare(args);
 else if (args.command === "run") run(args);
 else if (args.command === "reuse") reuse(args);
 else if (args.command === "cache") cache(args);
+else if (args.command === "inspect") inspect(args);
 else if (args.command === "aggregate") aggregate(args);
 else throw new Error(`Unknown command: ${args.command}`);

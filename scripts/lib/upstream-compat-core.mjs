@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 
 const DSH_TAG = /^dsh-v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
+/** Classifications a finished report must carry; PREPARED is intermediate, SKIPPED borrows its previous terminal state. */
+export const TERMINAL_CLASSIFICATIONS = ["COMPATIBLE", "INCOMPATIBLE", "NOT_VERIFIED", "INFRA_ERROR"];
+
 export function normalizeHarnessVersion(tag) {
 	if (typeof tag !== "string") return undefined;
 	return DSH_TAG.exec(tag)?.[1];

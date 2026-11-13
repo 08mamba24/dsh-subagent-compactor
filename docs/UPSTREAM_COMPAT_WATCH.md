@@ -71,3 +71,10 @@ node scripts/discover-upstream.mjs \
 ```
 
 After the workflow has been merged, open the workflow run in **Actions** and download `upstream-compat-summary`. Its JSON is the machine-readable verdict; its Markdown is also written to the run summary. Per-version artifacts contain the dependency manifest, lockfile, plan, and detailed report.
+
+## Result validation and delivery (2026-11-13 review fixes)
+
+- **Terminal-state validation:** `aggregate` no longer trusts report counts alone. It validates every discovered target against exactly one report (`tag`/`version`/`commit` matching, plugin SHA present), rejects intermediate (`PREPARED`), unknown, missing, duplicate, or unexpected reports as infrastructure failures, and emits `complete=true` only when every target holds a terminal verdict. Gate flags (`has_incompatible`, `has_not_verified`) read the **effective** verdict — a cached `SKIPPED` run keeps the verdict it recorded — while `skipped_count` reports this run's cache hits separately.
+- **Delivery decoupled from testing:** `notify` delivers the effective verdict of cached results too. A combination whose issue was never created (first manual run, or a failed earlier notification) gets its issue on the next scheduled run; an identical already-delivered fingerprint stays `unchanged`. Re-delivery never re-runs the stock suite.
+- **Cache refresh under immutability:** save keys embed the result digest (`v2-<combo>-<resultDigest>`). Restores use the key prefix and `inspect` validates the restored report against the exact combination; a changed verdict saves a fresh entry and later runs pick the new verdict, without needing to overwrite an existing cache key.
+- The watch remains local/unpushed in this branch; `schedule` activates only after merge to main.

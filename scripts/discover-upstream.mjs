@@ -86,6 +86,7 @@ const matrix = {
 	})),
 };
 writeGithubOutput(args.githubOutput, "matrix", JSON.stringify(matrix));
+writeGithubOutput(args.githubOutput, "expected_targets", JSON.stringify(candidates.map(({ tag, version, commit }) => ({ tag, version, commit }))));
 writeGithubOutput(args.githubOutput, "has_candidates", String(candidates.length > 0));
 writeGithubOutput(args.githubOutput, "candidate_count", String(candidates.length));
 console.log(JSON.stringify(result, null, 2));
