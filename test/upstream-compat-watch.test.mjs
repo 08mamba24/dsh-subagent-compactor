@@ -258,6 +258,13 @@ test("workflow keeps execution read-only and isolates issue write permission", (
 	assert.match(workflow, /restore-keys: dsh-upstream-compat-v2-/, "restore uses the prefix and lets inspect validate the entry");
 	assert.match(workflow, /upstream-compat.mjs inspect/, "a restored verdict is validated against the exact combination before skipping");
 	assert.match(workflow, /--expected-targets/, "aggregate validates reports against the discovered targets");
+	/* Saving must follow what this run executed (run.outcome), never the
+	 * pre-run skip decision: a forced recheck over a valid cache still saves
+	 * its fresh verdict. */
+	const saveBlocks = workflow.split("- name: Prepare a reusable result marker")[1] ?? "";
+	assert.match(saveBlocks, /steps\.run\.outcome == 'success'/, "the cache step saves only what this run actually executed");
+	assert.doesNotMatch(saveBlocks, /inspect\.outputs\.skip != 'true'/, "a pre-run skip decision must never block saving a forced recheck's result");
+	assert.match(saveBlocks, /--plugin-sha/);
 });
 
 /** A gh stand-in that records every call and replays a configurable issue list. */

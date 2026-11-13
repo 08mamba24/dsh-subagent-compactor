@@ -138,7 +138,10 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
       - name: Prepare a reusable result marker
         id: cache
-        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
+        # Saving follows what THIS run executed: a forced recheck (skip=true,
+        # run executed) must save its fresh verdict under the new digest key;
+        # an ordinary cache hit (run skipped) must not save anything.
+        if: steps.prepare.outputs.ready == 'true' && steps.run.outcome == 'success' && steps.run.outputs.classification != 'INFRA_ERROR'
         env:
           REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
           CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
@@ -146,7 +149,7 @@ jobs:
       - name: Save the exact combination result
         # The key embeds the result digest: a changed verdict saves a fresh
         # entry; an identical one re-saves the same key harmlessly.
-        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip != 'true' && steps.run.outputs.classification != 'INFRA_ERROR'
+        if: steps.prepare.outputs.ready == 'true' && steps.run.outcome == 'success' && steps.run.outputs.classification != 'INFRA_ERROR'
         uses: actions/cache/save@v4
         with:
           path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
