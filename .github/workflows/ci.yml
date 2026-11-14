@@ -1,4 +1,4 @@
-# Validate the live-only distribution on an unmodified, pinned Harness tree.
+# Validate the distribution on both unmodified, pinned Harness contracts.
 # No host patches, release tags, npm publication, or deployment are performed.
 name: CI
 
@@ -13,9 +13,13 @@ permissions:
 
 jobs:
   stock:
-    name: stock Harness 0.2.2-rc.1 — full tracked suite
+    name: stock Harness ${{ matrix.harness }} — full tracked suite
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        harness: [0.2.2-rc.1, 0.2.2-rc.2]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -24,7 +28,28 @@ jobs:
           cache: npm
       - name: Install the unmodified npm runtime tree
         run: npm ci --include=dev
-      - name: Unit, batch, live integration, and preset suites
-        run: npm test
+      - name: Select isolated stock runtime
+        env:
+          HARNESS_TEST_VERSION: ${{ matrix.harness }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { mkdtempSync, readFileSync, appendFileSync } from 'node:fs';
+          import { tmpdir } from 'node:os';
+          import { join, resolve } from 'node:path';
+          import { spawnSync } from 'node:child_process';
+          let modules = resolve('node_modules');
+          if (process.env.HARNESS_TEST_VERSION === '0.2.2-rc.2') {
+            const scratch = mkdtempSync(join(tmpdir(), 'dsh-rc2-ci-'));
+            const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+            const dependencies = Object.entries(pkg.devDependencies).map(([name, version]) =>
+              `${name}@${name.startsWith('@deepseek-ai/dsh-') ? process.env.HARNESS_TEST_VERSION : version}`);
+            const installed = spawnSync('npm', ['install', '--prefix', scratch, '--ignore-scripts', '--no-save', '--package-lock=false', ...dependencies], { stdio: 'inherit' });
+            if (installed.status !== 0) process.exit(installed.status ?? 1);
+            modules = join(scratch, 'node_modules');
+          }
+          appendFileSync(process.env.GITHUB_ENV, `DSH_TEST_MODULES=${modules}\n`);
+          NODE
+      - name: Authorization, unit, batch, live integration, and preset suites
+        run: node scripts/test-installed-runtime.mjs --modules "$DSH_TEST_MODULES"
       - name: Check the source distribution contents
         run: npm pack --dry-run

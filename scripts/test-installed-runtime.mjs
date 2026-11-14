@@ -5,8 +5,8 @@ import { constants, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const version = "0.2.2-rc.1";
-const tests = ["unit.test.mjs", "batch.test.mjs", "integration.test.mjs", "preset-integration.test.mjs"];
+const supportedVersions = new Set(["0.2.2-rc.1", "0.2.2-rc.2"]);
+const tests = ["authorization.test.mjs", "unit.test.mjs", "batch.test.mjs", "integration.test.mjs", "preset-integration.test.mjs"];
 const modulesRequired = [
 	"cordis", "cordis-plugin-loader", "cordis-plugin-timer", "schemastery",
 	"dsh-agent", "dsh-agent-loop", "dsh-agent-preset", "dsh-agent-preset-registry",
@@ -27,6 +27,8 @@ try {
 	}
 	const modules = realpathSync(args[1]);
 	if (!statSync(modules).isDirectory()) throw new Error(`Not a module directory: ${modules}`);
+	const version = JSON.parse(readFileSync(join(modules, "@deepseek-ai/dsh-subagent/package.json"), "utf8")).version;
+	if (!supportedVersions.has(version)) throw new Error(`Unsupported test runtime: ${version}`);
 	for (const name of modulesRequired) {
 		const directory = join(modules, "@deepseek-ai", name);
 		if (!statSync(directory).isDirectory()) throw new Error(`Missing module directory: ${directory}`);
@@ -40,7 +42,7 @@ try {
 	const source = fileURLToPath(new URL("../", import.meta.url));
 	scratch = mkdtempSync(join(tmpdir(), "dsh-subagent-compactor-tests-"));
 	for (const directory of ["test", "harness", "agents"]) mkdirSync(join(scratch, directory));
-	for (const file of ["index.js", "package.json", ...tests.map((name) => `test/${name}`)]) {
+	for (const file of ["index.js", "package.json", "test/runtime-fixture.mjs", ...tests.map((name) => `test/${name}`)]) {
 		copyFileSync(join(source, file), join(scratch, file));
 	}
 	symlinkSync(modules, join(scratch, "node_modules"), "dir");
