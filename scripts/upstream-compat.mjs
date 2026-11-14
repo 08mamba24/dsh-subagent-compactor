@@ -17,6 +17,7 @@ import {
 	buildComboDigest,
 	classifyInstallFailure,
 	classifyRunnerResult,
+	evaluateTestEvidence,
 	extractSupportedVersions,
 	sanitizeReportText,
 	sha256,
@@ -308,13 +309,9 @@ function aggregate(args) {
 		}
 	}
 	/* A COMPATIBLE verdict (this run or cached) must carry executed-test
-	 * evidence: exit code 0 and a parsed spec footer of a non-empty,
-	 * non-fully-skipped, zero-failure suite. */
-	const hasEvidence = (report) => report.testExitCode === 0
-		&& report.testSummary !== null && typeof report.testSummary === "object"
-		&& Number.isInteger(report.testSummary.tests) && report.testSummary.tests > 0
-		&& report.testSummary.fail === 0
-		&& Number.isInteger(report.testSummary.skipped) && report.testSummary.skipped < report.testSummary.tests;
+	 * evidence under the same shared rule the classifier and the cache
+	 * inspector use — see evaluateTestEvidence in the core module. */
+	const hasEvidence = (report) => report.testExitCode === 0 && evaluateTestEvidence(report.testSummary).ok;
 	for (const { report } of reports) {
 		if (!terminal.has(report.classification) && !(report.classification === "SKIPPED" && terminal.has(report.previousClassification))) {
 			problems.push({ tag: report.tag, problem: "invalid-classification", classification: report.classification });
@@ -386,8 +383,14 @@ function inspect(args) {
 	}
 	const report = JSON.parse(readFileSync(reportPath, "utf8"));
 	const terminal = new Set(TERMINAL_CLASSIFICATIONS);
+	/* Cache inspection reuses the shared evidence rule: a cached COMPATIBLE
+	 * without executed-test evidence forces a re-run instead of a skip. */
+	const evidenceOk = (report.classification === "COMPATIBLE" || (report.classification === "SKIPPED" && report.previousClassification === "COMPATIBLE"))
+		? report.testExitCode === 0 && evaluateTestEvidence(report.testSummary).ok
+		: true;
 	const valid = report.comboDigest === args.comboDigest
-		&& (terminal.has(report.classification) || (report.classification === "SKIPPED" && terminal.has(report.previousClassification)));
+		&& (terminal.has(report.classification) || (report.classification === "SKIPPED" && terminal.has(report.previousClassification)))
+		&& evidenceOk;
 	writeGithubOutput(args.githubOutput, "skip", String(valid));
 	if (valid) writeGithubOutput(args.githubOutput, "cachedReport", reportPath);
 }

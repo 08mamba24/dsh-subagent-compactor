@@ -76,12 +76,12 @@ export function classifyInstallFailure(output = "") {
 }
 
 /**
- * Parse a complete node --test spec footer. Anything less than all four
+ * Parse a complete node --test spec footer. Anything less than all six
  * counters is not evidence that a suite ran.
  */
 export function parseTestSummary(output = "") {
 	const summary = {};
-	for (const label of ["tests", "pass", "fail", "skipped"]) {
+	for (const label of ["tests", "pass", "fail", "cancelled", "skipped", "todo"]) {
 		const value = new RegExp(`^\\u2139\\s+${label}\\s+(\\d+)\\s*$`, "m").exec(output)?.[1];
 		if (value === undefined) return undefined;
 		summary[label] = Number(value);
@@ -89,17 +89,48 @@ export function parseTestSummary(output = "") {
 	return summary;
 }
 
+/**
+ * The single shared rule for executed-test evidence, reused verbatim by the
+ * classifier, the aggregation validator, and the cache inspector — no layer
+ * may accept what another rejects. A suite genuinely passed only when the
+ * footer is complete and consistent (non-negative integers,
+ * tests = pass + fail + cancelled + skipped + todo), at least one test
+ * actually passed, nothing failed, was cancelled, or is still TODO, and not
+ * everything was skipped.
+ */
+export function evaluateTestEvidence(summary) {
+	if (summary === undefined || summary === null || typeof summary !== "object") {
+		return { ok: false, reason: "runner produced no test evidence" };
+	}
+	const counters = ["tests", "pass", "fail", "cancelled", "skipped", "todo"];
+	if (!counters.every(name => Number.isInteger(summary[name]) && summary[name] >= 0)) {
+		return { ok: false, reason: "test evidence is incomplete or malformed" };
+	}
+	if (summary.tests !== summary.pass + summary.fail + summary.cancelled + summary.skipped + summary.todo) {
+		return { ok: false, reason: "test evidence counters are inconsistent" };
+	}
+	if (summary.tests === 0 || summary.pass === 0) {
+		return { ok: false, reason: "runner did not execute a passing, non-empty suite" };
+	}
+	if (summary.fail > 0 || summary.cancelled > 0 || summary.todo > 0 || summary.skipped >= summary.tests) {
+		return { ok: false, reason: "runner did not execute a fully passing suite" };
+	}
+	return { ok: true };
+}
+
 export function classifyRunnerResult({ status, output = "", error } = {}) {
 	if (error || status === null || status === undefined) return { classification: "INFRA_ERROR", reason: "runner failed to start" };
 	if (/Unsupported test runtime:/i.test(output)) return { classification: "NOT_VERIFIED", reason: "runner unsupported" };
 	const testSummary = parseTestSummary(output);
+	/* A test-entry or module load failure is an environment problem, not a
+	 * product compatibility assertion: it stays unverified with its source. */
+	if (testSummary === undefined && /\bERR_MODULE_NOT_FOUND\b|Cannot find module|^\s*SyntaxError:/im.test(output)) {
+		return { classification: "NOT_VERIFIED", reason: "test entry failed to load" };
+	}
+	const evidence = evaluateTestEvidence(testSummary);
 	if (status === 0) {
-		/* Exit code 0 alone proves nothing: an empty output, a zero-test run,
-		 * or a fully-skipped run is an unverified result, never COMPATIBLE. */
-		if (testSummary === undefined) return { classification: "NOT_VERIFIED", reason: "runner produced no test evidence" };
-		if (testSummary.tests === 0 || testSummary.fail > 0 || testSummary.skipped >= testSummary.tests) {
-			return { classification: "NOT_VERIFIED", reason: "runner did not execute a passing, non-empty suite", testSummary };
-		}
+		/* Exit code 0 alone proves nothing: evidence is the only currency. */
+		if (!evidence.ok) return { classification: "NOT_VERIFIED", reason: evidence.reason, ...(testSummary !== undefined ? { testSummary } : {}) };
 		return { classification: "COMPATIBLE", reason: "stock compatibility suite passed", testSummary };
 	}
 	return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };

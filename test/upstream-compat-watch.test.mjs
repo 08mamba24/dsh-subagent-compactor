@@ -102,15 +102,29 @@ test("recognizes both the fixed-version and supportedVersions runner contracts",
 });
 
 test("a zero-exit runner without executed-test evidence is never COMPATIBLE", () => {
+	const footer = (over = {}) => Object.entries({ tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0, ...over })
+		.map(([label, value]) => `\u2139 ${label} ${value}`).join("\n") + "\n";
 	/* Exit code 0 alone proves nothing: empty output, a zero-test run, and a
 	 * fully-skipped run must all stay unverified instead of passing. */
 	assert.equal(classifyRunnerResult({ status: 0, output: "" }).classification, "NOT_VERIFIED");
-	assert.equal(classifyRunnerResult({ status: 0, output: "\u2139 tests 0\n\u2139 pass 0\n\u2139 fail 0\n\u2139 skipped 0\n" }).classification, "NOT_VERIFIED");
-	assert.equal(classifyRunnerResult({ status: 0, output: "\u2139 tests 10\n\u2139 pass 0\n\u2139 fail 0\n\u2139 skipped 10\n" }).classification, "NOT_VERIFIED");
-	const real = classifyRunnerResult({ status: 0, output: "\u2139 tests 10\n\u2139 pass 10\n\u2139 fail 0\n\u2139 skipped 0\n" });
+	assert.equal(classifyRunnerResult({ status: 0, output: footer({ tests: 0, pass: 0 }) }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 0, output: footer({ pass: 0, skipped: 10 }) }).classification, "NOT_VERIFIED");
+	/* All-TODO is Node's recorded "not actually finished" state: zero real
+	 * passes must never certify compatibility (review 2026-11-14). */
+	assert.equal(classifyRunnerResult({ status: 0, output: footer({ pass: 0, todo: 10 }) }).classification, "NOT_VERIFIED");
+	/* Cancelled, contradictory counters, and an incomplete footer are not evidence either. */
+	assert.equal(classifyRunnerResult({ status: 0, output: footer({ cancelled: 2 }) }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 0, output: footer({ fail: 1 }) }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 0, output: "\u2139 tests 10\n\u2139 pass 10\n\u2139 fail 0\n\u2139 skipped 0\n" }).classification, "NOT_VERIFIED");
+	const real = classifyRunnerResult({ status: 0, output: footer() });
 	assert.equal(real.classification, "COMPATIBLE");
-	assert.deepEqual(real.testSummary, { tests: 10, pass: 10, fail: 0, skipped: 0 });
-	assert.equal(classifyRunnerResult({ status: 1, output: "Error: Cannot find module" }).classification, "INCOMPATIBLE");
+	assert.deepEqual(real.testSummary, { tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0 });
+	/* A failing assertion inside a TODO body is a real failure, not a pass. */
+	assert.equal(classifyRunnerResult({ status: 1, output: footer({ pass: 0, fail: 10, todo: 0 }) }).classification, "INCOMPATIBLE");
+	/* A module/entry load failure is an environment problem, not a product
+	 * compatibility verdict. */
+	assert.equal(classifyRunnerResult({ status: 1, output: "node:internal/modules/cjs/loader Error: Cannot find module 'x'" }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 1, output: "Error [ERR_MODULE_NOT_FOUND]: Cannot find module" }).classification, "NOT_VERIFIED");
 });
 
 test("classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly", () => {
@@ -136,10 +150,10 @@ test("classifies unavailable packages, infrastructure failures, unsupported runn
 		classification: "NOT_VERIFIED",
 		reason: "runner produced no test evidence",
 	});
-	assert.deepEqual(classifyRunnerResult({ status: 0, output: "\u2139 tests 92\n\u2139 pass 92\n\u2139 fail 0\n\u2139 skipped 0\n" }), {
+	assert.deepEqual(classifyRunnerResult({ status: 0, output: "\u2139 tests 92\n\u2139 pass 92\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n" }), {
 		classification: "COMPATIBLE",
 		reason: "stock compatibility suite passed",
-		testSummary: { tests: 92, pass: 92, fail: 0, skipped: 0 },
+		testSummary: { tests: 92, pass: 92, fail: 0, cancelled: 0, skipped: 0, todo: 0 },
 	});
 });
 
@@ -346,16 +360,45 @@ test("aggregate rejects a COMPATIBLE report without executed-test evidence or wi
 	assert.match(readFileSync(evidenceless.githubOutput, "utf8"), /has_infra_error=true/);
 
 	const foreign = temporary(t), foreignReports = join(foreign, "reports");
-	writeReport(foreignReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "c".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, skipped: 0 } });
+	writeReport(foreignReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "c".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0 } });
 	const foreignRun = runAggregate(t, foreignReports, targetFixture, "b".repeat(40));
 	assert.equal(foreignRun.result.status, 0, foreignRun.result.stderr);
 	assert.equal(JSON.parse(readFileSync(foreignRun.output, "utf8")).complete, false, "a report from a different plugin SHA must not validate against this run");
 
 	const sound = temporary(t), soundReports = join(sound, "reports");
-	writeReport(soundReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, skipped: 0 } });
+	writeReport(soundReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0 } });
 	const soundRun = runAggregate(t, soundReports, targetFixture, "b".repeat(40));
 	assert.equal(soundRun.result.status, 0, soundRun.result.stderr);
 	assert.equal(JSON.parse(readFileSync(soundRun.output, "utf8")).complete, true, "evidence-backed COMPATIBLE with the exact plugin SHA validates");
+});
+
+test("aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite", t => {
+	/* A cached/forged COMPATIBLE whose footer records zero real passes
+	 * (all TODO) must be rejected by aggregation AND by cache inspection —
+	 * no layer may accept what another rejects. */
+	const todoDirectory = temporary(t), todoReports = join(todoDirectory, "reports");
+	writeReport(todoReports, "rc1", { tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40), classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 10, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 10 } });
+	const todoRun = runAggregate(t, todoReports, targetFixture, "b".repeat(40));
+	assert.equal(todoRun.result.status, 0, todoRun.result.stderr);
+	assert.equal(JSON.parse(readFileSync(todoRun.output, "utf8")).complete, false, "a TODO-only suite never validates as COMPATIBLE");
+
+	const cacheDirectory = join(todoDirectory, "cache");
+	mkdirSync(cacheDirectory, { recursive: true });
+	writeFileSync(join(cacheDirectory, "report.json"), JSON.stringify({ comboDigest: "d".repeat(64), classification: "COMPATIBLE", testExitCode: 0, testSummary: { tests: 10, pass: 0, fail: 0, cancelled: 0, skipped: 0, todo: 10 } }));
+	const githubOutput = join(todoDirectory, "inspect-out.txt");
+	const inspectResult = spawnSync(process.execPath, [join(repository, "scripts/upstream-compat.mjs"), "inspect",
+		"--cache-directory", cacheDirectory, "--combo-digest", "d".repeat(64), "--github-output", githubOutput,
+	], { encoding: "utf8", cwd: repository });
+	assert.equal(inspectResult.status, 0, inspectResult.stderr);
+	assert.match(readFileSync(githubOutput, "utf8"), /skip=false/, "cache inspection reuses the same evidence rule and refuses to skip on a TODO-only cached verdict");
+
+	writeFileSync(join(cacheDirectory, "report.json"), JSON.stringify({ comboDigest: "d".repeat(64), classification: "COMPATIBLE", testExitCode: 0, testSummary: { tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0 } }));
+	const soundOutput = join(todoDirectory, "inspect-sound.txt");
+	const soundInspect = spawnSync(process.execPath, [join(repository, "scripts/upstream-compat.mjs"), "inspect",
+		"--cache-directory", cacheDirectory, "--combo-digest", "d".repeat(64), "--github-output", soundOutput,
+	], { encoding: "utf8", cwd: repository });
+	assert.equal(soundInspect.status, 0, soundInspect.stderr);
+	assert.match(readFileSync(soundOutput, "utf8"), /skip=true/);
 });
 
 test("aggregate gate flags read the effective verdict, not this run's skip bookkeeping", t => {
