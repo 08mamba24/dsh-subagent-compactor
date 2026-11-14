@@ -119,12 +119,55 @@ test("a zero-exit runner without executed-test evidence is never COMPATIBLE", ()
 	const real = classifyRunnerResult({ status: 0, output: footer() });
 	assert.equal(real.classification, "COMPATIBLE");
 	assert.deepEqual(real.testSummary, { tests: 10, pass: 10, fail: 0, cancelled: 0, skipped: 0, todo: 0 });
-	/* A failing assertion inside a TODO body is a real failure, not a pass. */
-	assert.equal(classifyRunnerResult({ status: 1, output: footer({ pass: 0, fail: 10, todo: 0 }) }).classification, "INCOMPATIBLE");
+	/* A plain failing suite (real TODO bodies stay todo-counted by Node and
+	 * are already rejected above by pass===0): ordinary failures with an
+	 * assertion trace are the product verdict path. */
+	assert.equal(classifyRunnerResult({ status: 1, output: footer({ pass: 0, fail: 10, todo: 0 }) + "AssertionError [ERR_ASSERTION]: boom" }).classification, "INCOMPATIBLE");
 	/* A module/entry load failure is an environment problem, not a product
 	 * compatibility verdict. */
 	assert.equal(classifyRunnerResult({ status: 1, output: "node:internal/modules/cjs/loader Error: Cannot find module 'x'" }).classification, "NOT_VERIFIED");
 	assert.equal(classifyRunnerResult({ status: 1, output: "Error [ERR_MODULE_NOT_FOUND]: Cannot find module" }).classification, "NOT_VERIFIED");
+});
+
+/** Run a REAL node --test child process over a throwaway entry file and
+ * classify its genuine spec output — no fabricated footers here. */
+function classifyRealRun(t, entrySource) {
+	const directory = temporary(t);
+	const entry = join(directory, "entry.test.mjs");
+	writeFileSync(entry, entrySource);
+	/* Strip NODE_TEST_CONTEXT: nested under our own --test run, the child
+	 * would otherwise enter the subtest protocol mode and exit 0 silently. */
+	const childEnv = { ...process.env };
+	delete childEnv.NODE_TEST_CONTEXT;
+	const run = spawnSync(process.execPath, ["--test", "--test-reporter=spec", "--test-reporter-destination=stdout", entry], { encoding: "utf8", cwd: directory, env: childEnv });
+	return { classification: classifyRunnerResult({ status: run.status, output: `${run.stdout ?? ""}${run.stderr ?? ""}` }).classification, output: `${run.stdout ?? ""}${run.stderr ?? ""}`, status: run.status };
+}
+
+test("a real load-failure entry is never attributed to the product, but real assertion failures are", t => {
+	/* A missing local test dependency: node --test still prints a complete
+	 * footer with fail=1 — the verdict must stay unverified, not INCOMPATIBLE. */
+	const missing = classifyRealRun(t, "import \"./missing-local-dep.mjs\";\nimport test from \"node:test\";\ntest(\"loads\", () => {});\n");
+	assert.equal(missing.status, 1);
+	assert.match(missing.output, /Cannot find module|ERR_MODULE_NOT_FOUND/);
+	assert.equal(missing.classification, "NOT_VERIFIED", "a dependency load failure is an environment fault, not a product verdict");
+
+	/* A syntax error in the entry itself. */
+	const syntax = classifyRealRun(t, "this is not valid javascript !!!\n");
+	assert.equal(syntax.status, 1);
+	assert.match(syntax.output, /SyntaxError/);
+	assert.equal(syntax.classification, "NOT_VERIFIED");
+
+	/* A genuine assertion failure stays INCOMPATIBLE even when its message
+	 * text mentions a load-error keyword (review counterexample). */
+	const assertion = classifyRealRun(t, "import assert from \"node:assert/strict\";\nimport test from \"node:test\";\ntest(\"fails\", () => { assert.fail(\"expected 'Cannot find module' to be absent\"); });\n");
+	assert.equal(assertion.status, 1);
+	assert.match(assertion.output, /AssertionError/);
+	assert.equal(assertion.classification, "INCOMPATIBLE");
+
+	/* A plain passing control on the same real path. */
+	const passing = classifyRealRun(t, "import test from \"node:test\";\ntest(\"passes\", () => {});\n");
+	assert.equal(passing.status, 0);
+	assert.equal(passing.classification, "COMPATIBLE");
 });
 
 test("classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly", () => {
@@ -140,10 +183,14 @@ test("classifies unavailable packages, infrastructure failures, unsupported runn
 		classification: "NOT_VERIFIED",
 		reason: "runner unsupported",
 	});
-	assert.deepEqual(classifyRunnerResult({ status: 1, output: "not ok 3 - direct child compaction" }), {
+	assert.deepEqual(classifyRunnerResult({ status: 1, output: "\u2716 direct child compaction [fail]\n  AssertionError [ERR_ASSERTION]: expected 2 to equal 3" }), {
 		classification: "INCOMPATIBLE",
 		reason: "stock compatibility suite failed",
 	});
+	/* A failure with neither an assertion trace nor a loader fault is not
+	 * attributable: it must not become a compatibility claim. */
+	assert.equal(classifyRunnerResult({ status: 1, output: "Error: something exploded" }).classification, "NOT_VERIFIED");
+	assert.equal(classifyRunnerResult({ status: 1, output: "\u2716 odd [fail]\n  Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'x'" }).classification, "NOT_VERIFIED");
 	/* Exit code 0 without a complete spec footer is not evidence: the same
 	 * call now stays unverified instead of passing (2026-11-13 review). */
 	assert.deepEqual(classifyRunnerResult({ status: 0, output: "tests 92\npass 92\nfail 0" }), {

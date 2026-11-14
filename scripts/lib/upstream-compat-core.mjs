@@ -122,10 +122,20 @@ export function classifyRunnerResult({ status, output = "", error } = {}) {
 	if (error || status === null || status === undefined) return { classification: "INFRA_ERROR", reason: "runner failed to start" };
 	if (/Unsupported test runtime:/i.test(output)) return { classification: "NOT_VERIFIED", reason: "runner unsupported" };
 	const testSummary = parseTestSummary(output);
-	/* A test-entry or module load failure is an environment problem, not a
-	 * product compatibility assertion: it stays unverified with its source. */
-	if (testSummary === undefined && /\bERR_MODULE_NOT_FOUND\b|Cannot find module|^\s*SyntaxError:/im.test(output)) {
-		return { classification: "NOT_VERIFIED", reason: "test entry failed to load" };
+	/* Attribute any failure BEFORE naming a verdict — node --test prints a
+	 * complete footer even when the test entry itself never loaded, so the
+	 * footer alone says nothing about WHY it failed. Only an AssertionError is
+	 * a product compatibility failure; loader faults stay unverified; an
+	 * unattributable origin never becomes a compatibility claim. */
+	const hasFailure = status !== 0 || (testSummary !== undefined && (testSummary.fail > 0 || testSummary.cancelled > 0));
+	if (hasFailure) {
+		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(output)) {
+			return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
+		}
+		if (/\bERR_MODULE_NOT_FOUND\b|Cannot find module|^\s*SyntaxError:/im.test(output)) {
+			return { classification: "NOT_VERIFIED", reason: "test entry failed to load", ...(testSummary !== undefined ? { testSummary } : {}) };
+		}
+		return { classification: "NOT_VERIFIED", reason: "test failure origin could not be attributed", ...(testSummary !== undefined ? { testSummary } : {}) };
 	}
 	const evidence = evaluateTestEvidence(testSummary);
 	if (status === 0) {
@@ -133,7 +143,7 @@ export function classifyRunnerResult({ status, output = "", error } = {}) {
 		if (!evidence.ok) return { classification: "NOT_VERIFIED", reason: evidence.reason, ...(testSummary !== undefined ? { testSummary } : {}) };
 		return { classification: "COMPATIBLE", reason: "stock compatibility suite passed", testSummary };
 	}
-	return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
+	return { classification: "NOT_VERIFIED", reason: "test failure origin could not be attributed" };
 }
 
 export function sanitizeReportText(value, limit = 500) {
