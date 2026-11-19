@@ -4,7 +4,7 @@
 
 在 DSH Desktop 的父会话中，手动压缩**直接子智能体**的历史——仍 live 的直接压缩；已结算的*可续接*子智能体会先被唤醒恢复再压缩。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
-**状态：1.3.3 本地兼容候选，待独立 Review；尚未 push、打 tag 或发布。** 候选面向原版 Harness **0.2.2-rc.1 与 0.2.2-rc.2**，无需修改 Desktop 应用源码。此前 1.3.2 与 rc.2 不兼容；它在 rc.1 上的历史验收继续保留。
+**状态：v1.3.3 已于 2026-11-14 合入并推送 tag。** 支持原版 Harness **0.2.2-rc.1 与 0.2.2-rc.2**，无需修改 Desktop 应用源码。此前 1.3.2 与 rc.2 不兼容；这两个运行时均请使用 v1.3.3。
 
 ## 安装
 
@@ -12,10 +12,11 @@
 
 | 版本 | Git 来源 |
 | --- | --- |
+| **推荐：1.3.3，支持 rc.1 与 rc.2** | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.3.3` |
 | 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
 | 此前 1.3.2 源码，仅限 rc.1 | `https://github.com/08mamba24/dsh-subagent-compactor.git#20981ebade6a260bd4a497916b450baeebe5372d` |
 
-1.3.3 候选仅在本地 `fix/rc1-rc2-compat` 分支。上表 Git 来源均为此前公开版本，不包含本次候选；当前没有 `v1.3.3` tag，也没有更新日用安装。
+`v1.3.3` tag 固定到已审查的插件代码 [`7117d438`](https://github.com/08mamba24/dsh-subagent-compactor/commit/7117d438947f19fcc12abd374ce86746079031b9)。通过 Git 安装分发，未发布 npm 包或创建 GitHub Release。推送 tag 不会自动升级已有的 Desktop 安装。
 
 确认 `@local/dsh-subagent-compactor` 已启用且版本正确。替换已有安装后，完整退出并重新打开 Desktop，让新命令定义生效。如果此前从本地目录安装过同名包，先移除旧安装来源，再添加 Git 来源。
 
@@ -96,7 +97,9 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 验证与测试
 
-1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；历史 1.3.2 基线为 **92/92**（unit 35、batch 40、integration 3、preset 14）。1.3.3 候选在两个运行时各通过 **109/109 项测试**（authorization 14、unit 35、batch 40、integration 3、preset 17），包括默认 8 槽下的 16 个 settled 成员与直接父级边界检查。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+[v1.3.3 合入后的 CI](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/43545680782) 在原版 Harness rc.1、rc.2 上各通过 **110/110 项测试**，零失败、零跳过，两套打包检查均通过。覆盖默认 8 槽下的 16 个 settled 成员及直接父级授权边界。此前的验证记录继续保留：1.2.0 预览时点 **46/46**、1.3.2 的 rc.1 基线 **92/92**，以及 v1.3.3 最后一项审查回归加入前各运行时的 **109/109**。
+
+历史隔离验收中，安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
 
 Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
 

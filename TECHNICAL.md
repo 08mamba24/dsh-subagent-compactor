@@ -1,6 +1,6 @@
-# Technical contract: 1.3.3 rc.1/rc.2 compatibility candidate
+# Technical contract: 1.3.3 rc.1/rc.2 compatibility
 
-This branch compacts the caller's **runtime-owned direct children** through the child's existing compaction engine — live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. Its module-level test runtimes are stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`; the candidate is local and awaits independent review. Plugin installation and enablement are sufficient on that runtime; the legacy host maintenance patch is not part of this implementation.
+Version 1.3.3 compacts the caller's **runtime-owned direct children** through the child's existing compaction engine: live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. The reviewed code is available at Git tag `v1.3.3`. Its module-level test runtimes are stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`. Plugin installation and enablement are sufficient on those runtimes; the legacy host maintenance patch is not part of this implementation.
 
 ## Entry points
 
@@ -98,17 +98,17 @@ Command results identify the child session and its summary sequence explicitly. 
 
 ## Composition requirements and scope
 
-`commands`, `tools`, `agents`, and `subagents` are required injections. `agentPresets` and `compaction` are resolved dynamically to select the correct engine. Catalog listing also relies on `sessionQuery` and the `subagentCatalog` projection provided by normal subagent-capable compositions; a missing catalog produces an explicit listing error. Single-child live compaction does not require catalog discovery.
+`commands`, `tools`, `agents`, and `subagents` are required injections. `agentPresets` and `compaction` are resolved dynamically to select the correct engine. rc.1 discovers direct children through `subagents.listChildren`. rc.2 uses `sessionQuery` and its `subagentCatalog` projection for discovery and authorization of every target, including single-child live compaction. A missing required catalog produces an explicit error.
 
-Scope is manual live-child compaction. Automatic end hooks, member deletion, handoff, and direct compaction of settled sessions are absent. The files in [host-patch/](host-patch/README.md), [COLD_COMPACTION_PLAN.md](docs/COLD_COMPACTION_PLAN.md), and [HOST_MAINTENANCE_REQUIREMENTS.md](docs/HOST_MAINTENANCE_REQUIREMENTS.md) describe only the older unreleased 1.1.0 candidate. Its cold APIs, `compact_all_subagents` tool, report syntax, and durable batch receipts do not apply to this branch.
+Scope is manual compaction of live direct children and settled continuable direct children through resume. Automatic end hooks, member deletion, handoff, and the legacy cold-maintenance path are absent. The files in [host-patch/](host-patch/README.md), [COLD_COMPACTION_PLAN.md](docs/COLD_COMPACTION_PLAN.md), and [HOST_MAINTENANCE_REQUIREMENTS.md](docs/HOST_MAINTENANCE_REQUIREMENTS.md) describe only the older unreleased 1.1.0 candidate. Its cold APIs, `compact_all_subagents` tool, report syntax, and durable batch receipts do not apply to this version.
 
 ## Verification
 
-The four tracked suites cover the single-child contract, concurrent batches, real runtime integration, and preset engine lookup. Run them with Node 24.9.0 or newer:
+The five tracked suites cover authorization, the single-child contract, concurrent batches, real runtime integration, and preset engine lookup. Run them with Node 24.9.0 or newer:
 
 ```sh
 npm ci --include=dev
 npm test
 ```
 
-See [docs/VALIDATION.md](docs/VALIDATION.md) for the current 92-test npm run, the 16-target capacity regression, historical installed-runtime runs, settle-and-resume evidence, isolated bundled Web UI journey, and limits on that evidence.
+See [docs/VALIDATION.md](docs/VALIDATION.md) for the post-merge 110/110 CI results on each runtime, the 16-target capacity regression, historical installed-runtime runs, settle-and-resume evidence, isolated bundled Web UI journey, and limits on that evidence.

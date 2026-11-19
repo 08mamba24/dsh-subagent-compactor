@@ -4,7 +4,7 @@
 
 Manually compact the history of **direct subagents** from their parent session in DSH Desktop — children that are still live, and settled *continuable* children by resuming them first. The plugin uses each child's existing compaction engine and keeps the child usable on the same session ID.
 
-**Status: 1.3.3 local compatibility candidate, pending independent review; not pushed, tagged or released.** This candidate targets stock Harness **0.2.2-rc.1 and 0.2.2-rc.2** without changing Desktop application code. The previous 1.3.2 implementation is incompatible with rc.2; its rc.1 validation remains historical evidence.
+**Status: v1.3.3 merged and tagged on 2026-11-14.** It supports stock Harness **0.2.2-rc.1 and 0.2.2-rc.2** without changing Desktop application code. The previous 1.3.2 implementation is incompatible with rc.2; use v1.3.3 for either runtime.
 
 ## Install
 
@@ -12,10 +12,11 @@ Open **Plugins → Add plugin**, paste a Git source, and select **Install → En
 
 | Version | Git source |
 | --- | --- |
+| **Recommended: 1.3.3, rc.1 and rc.2** | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.3.3` |
 | Published 1.0.1, single live-child compaction | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
 | Previous 1.3.2 source, rc.1 only | `https://github.com/08mamba24/dsh-subagent-compactor.git#20981ebade6a260bd4a497916b450baeebe5372d` |
 
-The 1.3.3 candidate exists only on the local `fix/rc1-rc2-compat` branch. The Git sources above refer to older public versions; neither is this candidate. There is no `v1.3.3` tag or daily-profile deployment.
+The `v1.3.3` tag pins the reviewed plugin code at [`7117d438`](https://github.com/08mamba24/dsh-subagent-compactor/commit/7117d438947f19fcc12abd374ce86746079031b9). Git installation is the distribution method; no npm package or GitHub Release is published. Tagging the source does not update an existing Desktop installation.
 
 Confirm that `@local/dsh-subagent-compactor` is enabled and shows the intended version. After replacing an existing installation, fully quit and reopen Desktop to load the new command definition. If the same package was installed from a local directory, remove that installation source before adding the Git source.
 
@@ -96,7 +97,9 @@ The old candidate combined cold compaction with a host maintenance patch. The 1.
 
 ## Validation and tests
 
-Both the recorded installed-runtime validation and a clean npm dependency-tree run passed **46/46 tracked tests at the 1.2.0 preview point** (unit 25, batch 15, integration 1, preset 5); the historical 1.3.2 baseline passed **92/92** (unit 35, batch 40, integration 3, preset 14) on stock Harness `0.2.2-rc.1`. The 1.3.3 candidate passes **109/109 tests on each runtime** (authorization 14, unit 35, batch 40, integration 3, preset 17), including a 16-settled-child batch under the default eight-slot limit and direct-parent boundary checks. An isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
+The [post-merge v1.3.3 CI run](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/43545680782) passed **110/110 tests on each of stock Harness rc.1 and rc.2**, with zero failures or skips and a successful package dry run for both. Coverage includes a 16-settled-child batch under the default eight-slot limit and direct-parent authorization. Earlier validation records remain available: **46/46** at the 1.2.0 preview point, **92/92** for 1.3.2 on rc.1, and **109/109** per runtime before the final v1.3.3 review regression was added.
+
+The historical isolated run of the application's bundled Web UI compacted two live children, read both summaries back from disk, continued both original IDs, and confirmed the checkpoints in subsequent model requests.
 
 The Web UI run used a local synthetic model endpoint. It verifies the command and persistence path, not real-model summary quality or operation of the user's daily Electron window. See [docs/VALIDATION.md](docs/VALIDATION.md) and the [live-only acceptance summary](docs/acceptance/2026-11-10-live-only/acceptance.md).
 

@@ -1,5 +1,11 @@
 # Validation record
 
+## Published Git tag: v1.3.3 (2026-11-14)
+
+[PR #7](https://github.com/08mamba24/dsh-subagent-compactor/pull/7) merged at `7117d438947f19fcc12abd374ce86746079031b9`; the annotated [`v1.3.3` tag](https://github.com/08mamba24/dsh-subagent-compactor/tree/v1.3.3) resolves to that commit. The [post-merge push CI run](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/43545680782) tested this exact commit on stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`: **110 tests, 110 passed, zero failed or skipped on each runtime**. Both `npm pack --dry-run` checks passed. The earlier 109-test candidate runs below predate the final review regression and remain unchanged as historical records.
+
+Install from the Git tag using the [current instructions](../README.md#install). This publication covers plugin source; it does not establish a daily-profile upgrade, a new native Electron-window acceptance, real-model summary quality, an npm package, or a GitHub Release.
+
 ## Historical branch: 1.3.2 concurrent-resume correction preview
 
 Recorded: **2026-11-10**. Runtime: **stock Harness 0.2.2-rc.1**. This is an unreleased branch preview; the published tag remains `v1.0.1`. Plugin installation and enablement use existing host services. No host maintenance patch or application-source change is required: live children compact directly, and settled continuable children resume through the host's own continuation lifecycle with bounded capacity waiting. The 46/46 record below is the **1.2.0 preview point** (live-only scope); 1.3.0, 1.3.1 and 1.3.2 evidence follows at the end.
