@@ -39,7 +39,7 @@ function runtime({ resident = true, entries = [{ id: "child", mode: "continuable
 			if (name === "compaction") return { compactNow() { calls.compact++; return Promise.resolve({ shadowedSeqs: [1], shadowedTokenCount: 10, summarySeq: 3 }); } };
 		},
 		on(type, fn) { const x = { type, fn }; listeners.add(x); return () => listeners.delete(x); },
-		commands: { register(x) { command = x; return () => {}; } },
+		commands: { register(x) { if (x.name === "subagent-compact") command = x; return () => {}; } },
 		tools: { register(x) { tool = x; return () => {}; } },
 		effect(factory) { for (const dispose of factory()) disposers.push(dispose); }
 	};

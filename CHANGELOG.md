@@ -1,5 +1,16 @@
 # Changelog / 变更日志
 
+## 1.3.4 — Unreleased / 未发布 (2026-11-21)
+
+- Add `/subagent-compact-all`, a no-argument entry point for the existing batch operation. It uses the stock UI path that releases the input box during execution; no application patch is required.
+  新增无参数批量入口 `/subagent-compact-all`，复用原版 UI 在命令执行期间释放输入框的路径，无需修改应用源码。
+- Await the full batch in the command handler so the host records its actual completion result. Authorization, capacity waiting, cancellation, per-target locks, and summary provenance stay on the shared batch path.
+  命令处理函数等待整批完成后返回真实结果，授权、容量等待、取消、目标锁和摘要溯源均复用已有批量路径。
+- Preserve `/subagent-compact` listing, single-ID compaction, and `all` / `--all` aliases with their input descriptor and existing host waiting behavior.
+  保留 `/subagent-compact` 裸命令列表、单 ID 压缩及 `all` / `--all` 别名，保留其参数声明及宿主原有等待行为。
+- This entry describes the source branch, not a published tag or an installed update. Validation status is tracked in [docs/VALIDATION.md](docs/VALIDATION.md).
+  本条记录描述源码分支，不代表已发布 tag 或已更新安装；验证进度见 [docs/VALIDATION.md](docs/VALIDATION.md)。
+
 ## 1.3.3 — 2026-11-14 (Git tag / Git 标签)
 
 - Adapt the rc.2 direct catalog through SessionQuery with disposal and explicit projection failures; preserve rc.1 listChildren and runtime ownership. No recursive descendants enter a direct-child batch.

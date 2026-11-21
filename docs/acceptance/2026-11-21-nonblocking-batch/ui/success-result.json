@@ -1,0 +1,225 @@
+{
+  "name": "success",
+  "label": "NOINPUT-SUCCESS",
+  "seed": {
+    "parentSessionId": "session-41c24f93-9342-4527-b859-fb5d64524f75",
+    "childSessionIds": [
+      "9f11a319-6fd0-4096-8ced-1a0a11fbf039",
+      "84c2f1fa-bfcd-4af0-9586-041f272c3dc4"
+    ],
+    "allInactive": true
+  },
+  "running": {
+    "name": "success",
+    "label": "NOINPUT-SUCCESS",
+    "command": "/subagent-compact-all",
+    "editable": true,
+    "draft": "Draft retained during NOINPUT-SUCCESS",
+    "commandRun": [
+      {
+        "type": "command/run",
+        "seq": 22,
+        "time": 1795249663353,
+        "data": {
+          "commandId": "cmd-b00f236d-1",
+          "name": "subagent-compact-all",
+          "args": "",
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "held": [
+      {
+        "id": 4,
+        "summarizing": true,
+        "maintenance": false,
+        "arrivedAt": 1795249663399,
+        "finished": true,
+        "sawCheckpoint": false,
+        "finishedAt": 1795249699860,
+        "kind": "success"
+      },
+      {
+        "id": 5,
+        "summarizing": true,
+        "maintenance": false,
+        "arrivedAt": 1795249663403,
+        "finished": true,
+        "sawCheckpoint": false,
+        "finishedAt": 1795249699860,
+        "kind": "success"
+      }
+    ],
+    "at": 1795249699780
+  },
+  "done": {
+    "type": "command/done",
+    "seq": 23,
+    "time": 1795249699881,
+    "data": {
+      "commandId": "cmd-b00f236d-1",
+      "kind": "success",
+      "text": "Batch compaction of the caller's direct-subagent snapshot (live children compacted directly; settled continuable children resumed first):\n9f11a319-6fd0-4096-8ced-1a0a11fbf039: resumed from settled state and compacted — replaced 4 items (~5835 tokens; summary at session-seq 23)\n84c2f1fa-bfcd-4af0-9586-041f272c3dc4: resumed from settled state and compacted — replaced 4 items (~5835 tokens; summary at session-seq 23)\nSummary (completed) — total 2: compacted 2 (2 after resume), nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0."
+    }
+  },
+  "draftAfter": "Draft retained during NOINPUT-SUCCESS",
+  "diskSummaries": [
+    {
+      "id": "9f11a319-6fd0-4096-8ced-1a0a11fbf039",
+      "summaries": [
+        {
+          "type": "compaction/summary",
+          "seq": 23,
+          "time": 1795249699865,
+          "data": {
+            "compactionId": "2b7945fe-a69d-4a10-ae7e-ed8f5241328a",
+            "sourceCommandId": "cmd-b00f236d-1",
+            "summary": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "rawOutput": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "llmStreamCall": true,
+            "shadowedRange": {
+              "start": 8,
+              "end": 11
+            },
+            "shadowedSeqs": [
+              8,
+              9,
+              10,
+              11
+            ],
+            "shadowedTokenCount": 5835,
+            "provider": "deepseek-official",
+            "model": "deepseek-flash",
+            "maxTokens": 65536,
+            "usage": {
+              "inputTokens": 12,
+              "outputTokens": 4,
+              "totalTokens": 16
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "84c2f1fa-bfcd-4af0-9586-041f272c3dc4",
+      "summaries": [
+        {
+          "type": "compaction/summary",
+          "seq": 23,
+          "time": 1795249699862,
+          "data": {
+            "compactionId": "d013ea2b-d0e0-4c60-b5d7-cd0cc1a15b55",
+            "sourceCommandId": "cmd-b00f236d-1",
+            "summary": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "rawOutput": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "llmStreamCall": true,
+            "shadowedRange": {
+              "start": 8,
+              "end": 11
+            },
+            "shadowedSeqs": [
+              8,
+              9,
+              10,
+              11
+            ],
+            "shadowedTokenCount": 5835,
+            "provider": "deepseek-official",
+            "model": "deepseek-flash",
+            "maxTokens": 65536,
+            "usage": {
+              "inputTokens": 12,
+              "outputTokens": 4,
+              "totalTokens": 16
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "id": 4,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249663399,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249699860,
+      "kind": "success"
+    },
+    {
+      "id": 5,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249663403,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249699860,
+      "kind": "success"
+    },
+    {
+      "id": 6,
+      "summarizing": false,
+      "maintenance": true,
+      "arrivedAt": 1795249699923,
+      "finished": true,
+      "sawCheckpoint": true,
+      "finishedAt": 1795249699923,
+      "kind": "success"
+    },
+    {
+      "id": 7,
+      "summarizing": false,
+      "maintenance": true,
+      "arrivedAt": 1795249699931,
+      "finished": true,
+      "sawCheckpoint": true,
+      "finishedAt": 1795249699932,
+      "kind": "success"
+    },
+    {
+      "id": 8,
+      "summarizing": false,
+      "maintenance": false,
+      "arrivedAt": 1795249699971,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249699971,
+      "kind": "success"
+    },
+    {
+      "id": 9,
+      "summarizing": false,
+      "maintenance": false,
+      "arrivedAt": 1795249699999,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249699999,
+      "kind": "success"
+    }
+  ],
+  "completedAt": 1795249700185
+}

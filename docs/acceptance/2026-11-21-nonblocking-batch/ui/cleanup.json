@@ -1,0 +1,11 @@
+{
+  "webPid": 91267,
+  "childExit": {
+    "code": 0,
+    "signal": null
+  },
+  "fakePort": 63073,
+  "fakeClosed": true,
+  "browserClosed": true,
+  "errors": []
+}

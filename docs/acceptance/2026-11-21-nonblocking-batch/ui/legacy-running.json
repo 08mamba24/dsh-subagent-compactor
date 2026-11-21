@@ -1,0 +1,33 @@
+{
+  "name": "legacy",
+  "label": "LEGACY-ALL-1795249829188",
+  "command": "/subagent-compact all",
+  "editable": true,
+  "draft": "/subagent-compact all",
+  "commandRun": [
+    {
+      "type": "command/run",
+      "seq": 21,
+      "time": 1795249829946,
+      "data": {
+        "commandId": "cmd-b00f236d-5",
+        "name": "subagent-compact",
+        "args": " all",
+        "source": {
+          "kind": "user"
+        }
+      }
+    }
+  ],
+  "held": [
+    {
+      "id": 27,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249829973,
+      "finished": false,
+      "sawCheckpoint": false
+    }
+  ],
+  "at": 1795249830422
+}

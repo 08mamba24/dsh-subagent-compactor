@@ -565,7 +565,7 @@ test("preset: real /subagent-compact persists a summary and resumes the same chi
  * live window. A serial batch fails the "child 2 settles first" and
  * "simultaneous" interleavings by arriving after child 2's reclamation.
  */
-async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
+async function batchWindowScenario({ delayOne = 0, delayTwo = 0, commandLine = "/subagent-compact all" } = {}) {
 	const fake = fakeMessagesServer();
 	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-batch-"));
 	const baseURL = await fake.start();
@@ -594,8 +594,9 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 		await Promise.all(activations.map((_, index) => firsts[index].arrived()));
 		assertPreset(ctx, parent, ctx.agents.get(ids[0]));
 		assertPreset(ctx, parent, ctx.agents.get(ids[1]));
-		const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(35_000));
+		const command = ctx.commands.execute(parent, commandLine, [], AbortSignal.timeout(35_000));
 		await journal.wait(({ sessionId, event }) => sessionId === parent.id && event.type === "command/run", "batch command admission");
+		assert.equal(journal.entries.some(({ sessionId, event }) => sessionId === parent.id && event.type === "command/done"), false, "no completion receipt while the children are still busy");
 		/* Release both held turns; each responds on its configured delay. The
 		 * batch is already parked on both idle waits at this point. */
 		for (const first of firsts) first.release();
@@ -604,6 +605,18 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 		}
 		const execution = await deadline(command, "batch command result");
 		assert.equal(execution.result.kind, "success", JSON.stringify(execution.result));
+		// Command lifecycle appends are buffered; flush the parent before
+		// reading its JSONL, independently of each child's summary barrier.
+		await ctx.sessions.flush(parent.session);
+		const runs = persistedEvents(storageRoot, parent.id).filter((event) => event.type === "command/run");
+		const dones = persistedEvents(storageRoot, parent.id).filter((event) => event.type === "command/done");
+		assert.equal(runs.length, 1);
+		assert.equal(dones.length, 1);
+		assert.equal(runs[0].data.name, commandLine.slice(1).split(" ")[0]);
+		assert.equal(runs[0].data.commandId, execution.commandId);
+		assert.equal(dones[0].data.commandId, execution.commandId);
+		assert.equal(dones[0].data.kind, execution.result.kind);
+		assert.equal(dones[0].data.text, execution.result.text);
 		assert.match(execution.result.text, /Summary \(completed\) — total 2: compacted 2/);
 		assert.match(execution.result.text, new RegExp(`${ids[0]}: compacted[\\s\\S]*${ids[1]}: compacted`), "per-item lines keep the catalog order regardless of completion order");
 		for (const id of ids) {
@@ -627,6 +640,8 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 }
 
 test("preset: /subagent-compact all compacts every live child through isolated preset engines", { timeout: 45_000 }, () => batchWindowScenario());
+
+test("preset: /subagent-compact-all persists one true completion after both child summaries", { timeout: 45_000 }, () => batchWindowScenario({ commandLine: "/subagent-compact-all" }));
 
 test("preset: batch catches the child that settles before its catalog predecessor", { timeout: 45_000 }, () => batchWindowScenario({ delayOne: 600 }));
 

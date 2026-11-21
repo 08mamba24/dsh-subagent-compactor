@@ -1,0 +1,128 @@
+✖ standalone batch awaits real completion and shares locks with parameter commands and tools (3.344917ms)
+✖ standalone batch cancel clears its wait and releases the shared lock (0.440667ms)
+✖ standalone batch unload clears its wait and releases the shared lock (0.266333ms)
+✖ standalone batch reports partial failure and does not hide successful children (0.291875ms)
+✖ standalone batch accepts blank input and rejects supplied arguments before reading children (0.700083ms)
+✖ apply registers separate batch and parameter commands with the tool in one effect (3.503333ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 0
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 111.931541
+
+✖ failing tests:
+
+test at test/batch.test.mjs:440:1
+✖ standalone batch awaits real completion and shares locks with parameter commands and tools (3.344917ms)
+  AssertionError [ERR_ASSERTION]: the standalone batch command must be registered
+      at Object.invokeAll (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:98:10)
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:446:22)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/batch.test.mjs:461:42
+✖ standalone batch cancel clears its wait and releases the shared lock (0.440667ms)
+  AssertionError [ERR_ASSERTION]: the standalone batch command must be registered
+      at Object.invokeAll (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:98:10)
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:466:22)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/batch.test.mjs:461:42
+✖ standalone batch unload clears its wait and releases the shared lock (0.266333ms)
+  AssertionError [ERR_ASSERTION]: the standalone batch command must be registered
+      at Object.invokeAll (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:98:10)
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:466:22)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/batch.test.mjs:479:1
+✖ standalone batch reports partial failure and does not hide successful children (0.291875ms)
+  AssertionError [ERR_ASSERTION]: the standalone batch command must be registered
+      at Object.invokeAll (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:98:10)
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:482:25)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/batch.test.mjs:489:1
+✖ standalone batch accepts blank input and rejects supplied arguments before reading children (0.700083ms)
+  AssertionError [ERR_ASSERTION]: the standalone batch command must be registered
+      at Object.invokeAll (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:98:10)
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/batch.test.mjs:493:26)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/unit.test.mjs:142:1
+✖ apply registers separate batch and parameter commands with the tool in one effect (3.503333ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+  
+      at TestContext.<anonymous> (file://<BASELINE_CHECKOUT>/test/unit.test.mjs:144:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

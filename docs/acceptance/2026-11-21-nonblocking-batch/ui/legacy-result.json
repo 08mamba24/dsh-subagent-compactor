@@ -1,0 +1,138 @@
+{
+  "name": "legacy",
+  "label": "LEGACY-ALL-1795249829188",
+  "seed": {
+    "parentSessionId": "session-264bb2c7-fc9e-4226-8453-a09a232d0076",
+    "childSessionIds": [
+      "8a4a319c-b86f-4b98-9208-b9c16823910a"
+    ],
+    "allInactive": true
+  },
+  "running": {
+    "name": "legacy",
+    "label": "LEGACY-ALL-1795249829188",
+    "command": "/subagent-compact all",
+    "editable": true,
+    "draft": "/subagent-compact all",
+    "commandRun": [
+      {
+        "type": "command/run",
+        "seq": 21,
+        "time": 1795249829946,
+        "data": {
+          "commandId": "cmd-b00f236d-5",
+          "name": "subagent-compact",
+          "args": " all",
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "held": [
+      {
+        "id": 27,
+        "summarizing": true,
+        "maintenance": false,
+        "arrivedAt": 1795249829973,
+        "finished": true,
+        "sawCheckpoint": false,
+        "finishedAt": 1795249830485,
+        "kind": "success"
+      }
+    ],
+    "at": 1795249830422
+  },
+  "done": {
+    "type": "command/done",
+    "seq": 22,
+    "time": 1795249830506,
+    "data": {
+      "commandId": "cmd-b00f236d-5",
+      "kind": "success",
+      "text": "Batch compaction of the caller's direct-subagent snapshot (live children compacted directly; settled continuable children resumed first):\n8a4a319c-b86f-4b98-9208-b9c16823910a: resumed from settled state and compacted — replaced 4 items (~5837 tokens; summary at session-seq 23)\nSummary (completed) — total 1: compacted 1 (1 after resume), nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0."
+    }
+  },
+  "draftAfter": "",
+  "diskSummaries": [
+    {
+      "id": "8a4a319c-b86f-4b98-9208-b9c16823910a",
+      "summaries": [
+        {
+          "type": "compaction/summary",
+          "seq": 23,
+          "time": 1795249830487,
+          "data": {
+            "compactionId": "8971615c-0017-4630-a754-d35b2d565855",
+            "sourceCommandId": "cmd-b00f236d-5",
+            "summary": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "rawOutput": [
+              {
+                "type": "text",
+                "text": "Checkpoint: synthetic Web acceptance kept ledger facts, sources and next actions. Continue the assigned task."
+              }
+            ],
+            "llmStreamCall": true,
+            "shadowedRange": {
+              "start": 8,
+              "end": 11
+            },
+            "shadowedSeqs": [
+              8,
+              9,
+              10,
+              11
+            ],
+            "shadowedTokenCount": 5837,
+            "provider": "deepseek-official",
+            "model": "deepseek-flash",
+            "maxTokens": 65536,
+            "usage": {
+              "inputTokens": 12,
+              "outputTokens": 4,
+              "totalTokens": 16
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "requests": [
+    {
+      "id": 27,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249829973,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249830485,
+      "kind": "success"
+    },
+    {
+      "id": 28,
+      "summarizing": false,
+      "maintenance": true,
+      "arrivedAt": 1795249830527,
+      "finished": true,
+      "sawCheckpoint": true,
+      "finishedAt": 1795249830527,
+      "kind": "success"
+    },
+    {
+      "id": 29,
+      "summarizing": false,
+      "maintenance": false,
+      "arrivedAt": 1795249830557,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249830557,
+      "kind": "success"
+    }
+  ],
+  "completedAt": 1795249830839
+}
