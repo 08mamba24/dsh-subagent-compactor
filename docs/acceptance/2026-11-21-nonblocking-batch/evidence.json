@@ -1,0 +1,146 @@
+{
+  "baseline": "b374e45fb0d5a57d3627d25f7f93260712b488c7",
+  "node": "24.22.3",
+  "tests": {
+    "0.2.2-rc.1": {
+      "passed": 116,
+      "failed": 0,
+      "skipped": 0,
+      "log": "rc1-suite.log"
+    },
+    "0.2.2-rc.2": {
+      "passed": 116,
+      "failed": 0,
+      "skipped": 0,
+      "log": "rc2-suite.log"
+    }
+  },
+  "negativeControl": {
+    "baseline": "b374e45",
+    "expectedFailures": 6,
+    "log": "red-focused.log",
+    "scope": "new registration and standalone batch tests"
+  },
+  "initialTestFailure": {
+    "log": "initial-parent-log-assertion-failure.log",
+    "cause": "New test read parent JSONL before the host buffered command lifecycle had been flushed. Fixed the test with ctx.sessions.flush(parent.session). Product child-summary durability was unchanged."
+  },
+  "uiAcceptance": {
+    "status": "passed",
+    "runtime": {
+      "version": "0.2.2-rc.5",
+      "buildCommit": "3f85d888b1297107937d9bd5b853f7e733e179a4",
+      "buildDirty": false,
+      "node": "24.21.0",
+      "electron": "44.7.0"
+    },
+    "surface": "stock bundled Web UI, headless Chromium driven by Playwright 1.61.1",
+    "scenarios": [
+      "success",
+      "failure with trailing spaces",
+      "menu",
+      "legacy all compatibility",
+      "legacy actual editing negative control"
+    ],
+    "newCommand": {
+      "typing": true,
+      "deletion": true,
+      "clipboardPaste": true,
+      "draftSurvivesCompletion": true,
+      "noEarlyCommandDone": true,
+      "successAndErrorCards": true,
+      "successfulSummariesPersistedWithCommandId": true
+    },
+    "legacyCommand": {
+      "contentEditable": false,
+      "phaseWhilePending": "submitting",
+      "typing": false,
+      "deletion": false,
+      "clipboardPaste": false,
+      "rawPlaywrightIsEditable": true,
+      "probeCaveat": "Playwright isEditable heuristic returned true for a role=textbox even with contenteditable=false; actual editing and DOM establish the negative control."
+    },
+    "cleanup": {
+      "webPid": 91267,
+      "childExit": {
+        "code": 0,
+        "signal": null
+      },
+      "fakePort": 63073,
+      "fakeClosed": true,
+      "browserClosed": true,
+      "errors": []
+    },
+    "browser": {
+      "pageErrors": [],
+      "blockedRequests": [],
+      "heldCount": 0,
+      "requestCount": 39
+    }
+  },
+  "dailyInstall": "unchanged",
+  "files": {
+    "AGENTS.md": "a21a894e33b29f0daec164a0bd4f34e8757b7d5e45b5524232970c4aed73f0cf",
+    "acceptance.md": "8d96690276ad6d1cd846ec8bad1ee9419f9e227ccb789a2f60486a444ae3257e",
+    "initial-parent-log-assertion-failure.log": "d40fbb5698cb42066afa3514d67d68383966d05af101561217a848a51619c621",
+    "rc1-suite.log": "708d3b786fd59cf161e82824d95ec8cac0344be07a561fbbb7e4af5d724513ce",
+    "rc2-suite.log": "baf9f2d6cc7fbe556fcc7a1b606cfad1ba87e03f66fb7e422ff01bb750f8d6fd",
+    "red-focused.log": "086a3b3dfa53ca782507178daccd69b91eb517765e9ad1188dc9207989953f08",
+    "ui/browser-hygiene.json": "0e37653a5090ec8cc458bbf6fec0963c43425938f1072711f6637cf0c8b3c9f4",
+    "ui/cleanup.json": "13cef2252e570c8545d027e4b78fd716aad524843ae31e16a61f5ee60e1ff298",
+    "ui/failure-result.json": "2e7e548b0e15b792982ac902d8ba34e118ec75625c5fc50741bbe4e8e7f43804",
+    "ui/failure-running.json": "87bf1cb49cfcb61878580d618cf2a37f48ad95b6e8759a2f59c35dec8c270ca2",
+    "ui/failure-running.png": "0c4e006e2488dd209199fea5fe7e0d777883d2612c244ecd3bd5ec2b0c581170",
+    "ui/failure-settled.png": "b441a105d2c9a37bd417d74d3f47a02b16f54ad336018b041aba4b2411284909",
+    "ui/journeys.mjs": "cb5a39ce659955402d2d0967e7ba84d29c00760133af84f6f602051cd94d62e2",
+    "ui/legacy-edit-pending.png": "b1c4647421267cb7c4cac1b05d278b7254b85514b70b36b9bac23d063d796c93",
+    "ui/legacy-edit-result.json": "234ca3133b632187c3a099cbaf30ad0efb685422503077fb0044c9921e639289",
+    "ui/legacy-edit-settled.png": "7e45de90c7e7311359ef81096116d796f330cab5a3dbe97f28a838d45756f4dc",
+    "ui/legacy-result.json": "96470ff55c5e4a5ac96c5e8560c7e4e3dac5a7939d6b7937a9189e158f890732",
+    "ui/legacy-running.json": "4c740c9b098c89e33227ff6f169edc9b833b7d32e652d4ce79eddea5c8f71dd2",
+    "ui/legacy-running.png": "7b1e78490b4882bf0a0cafac0cc7bfce3289d902657732e4f2e8ea6133c875e5",
+    "ui/legacy-settled.png": "835723fbb96aabbf36a8351c470e9d94cf549a33d6a385aa52dd841006cce2b4",
+    "ui/menu-result.json": "a9c504d84b9873a031664484e7aab63e2417658327e2e63d46c6a8c8ba1b5930",
+    "ui/menu-running.json": "ac2c1062b371e5c22dfe2b826956e683a78b603ba1d889c9d82d20b7cf79ba48",
+    "ui/menu-running.png": "d7ff81bea040fd4f891d625a206c29710dc54d47995bb2ecbcd4c6a9c1cf5e07",
+    "ui/menu-settled.png": "3f8982e9bae0d19bb083c2a176512fa3705f991f1f9151f0991129a98948274b",
+    "ui/results.jsonl": "860e742f6633a83a2d9b89c9e5edac8d7ba47a6df5ee3d4655ec3fa95bfcc74b",
+    "ui/success-result.json": "78e4712ceba953727aecbd40fc211c361a339e818da75b8c7d365ac0fdbe550c",
+    "ui/success-running.json": "80bf01d11e60be745ecb4afaa26145804c7149155b387159e1bbe88015afcb0f",
+    "ui/success-running.png": "3d947e587c81dd17f214eed3355d5546175dd9eb0ee93d88495a8dfd45e27719",
+    "ui/success-settled.png": "463a5443943c1442b5fe3f662e76e68c50e7fcaf20f3189d92bfeea326388704"
+  },
+  "redaction": {
+    "scope": "Repository log copies only; original logs are unchanged.",
+    "rules": [
+      {
+        "pattern": "/Users/[^/\\s]+/codespace/dsh-subagent-compactor(?=/|\\s|$)",
+        "replacement": "<PLUGIN_SOURCE>"
+      },
+      {
+        "pattern": "/private/tmp/dsh-compact-all-rc2-deps-[^/\\s)]+",
+        "replacement": "<RC2_DEPENDENCIES>"
+      },
+      {
+        "pattern": "/private/tmp/dsh-compact-all-red-[^/\\s)]+",
+        "replacement": "<BASELINE_CHECKOUT>"
+      },
+      {
+        "pattern": "/(?:private/)?var/folders/[^/]+/[^/]+/T/dsh-subagent-compactor-tests-[^/\\s)]+",
+        "replacement": "<ISOLATED_TEST_ROOT>"
+      }
+    ],
+    "preserved": [
+      "test names",
+      "result counts",
+      "timings",
+      "line count",
+      "relative test paths",
+      "stack line and column numbers"
+    ],
+    "hashAlgorithm": "SHA-256",
+    "hashesReferTo": "Path-redacted automated logs, synthetic UI snapshots, screenshots, interaction source, and acceptance documentation. evidence.json excludes its own hash."
+  },
+  "pluginVersion": "1.3.4",
+  "sourceSha256": "cd273040b0bc0605504b3475df767907cd0d0a8fecf16667deff2d8ccdf44711"
+}

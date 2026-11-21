@@ -6,6 +6,8 @@ Manually compact the history of **direct subagents** from their parent session i
 
 **Status: v1.3.3 merged and tagged on 2026-11-14.** It supports stock Harness **0.2.2-rc.1 and 0.2.2-rc.2** without changing Desktop application code. The previous 1.3.2 implementation is incompatible with rc.2; use v1.3.3 for either runtime.
 
+The current source branch adds `/subagent-compact-all` for **unreleased 1.3.4**. This command is not in the `v1.3.3` tag; the installation sources below still point to published versions.
+
 ## Install
 
 Open **Plugins → Add plugin**, paste a Git source, and select **Install → Enable now**:
@@ -29,12 +31,17 @@ Run commands in the parent session that created the children:
 ```text
 /subagent-compact
 /subagent-compact <subagent-session-id>
+/subagent-compact-all
 /subagent-compact all
 ```
 
-- **No argument:** lists the parent's persisted direct-child catalog. Each entry is marked `live` or `persisted (not loaded)`. The list is an observation, not a reservation.
-- **One session ID:** compacts that direct child. A still-live child is compacted through its idle window (`waitForIdle: true` by default). A settled *continuable* child is resumed first — the plugin sends one real maintenance wake message, compacts at the resume edge, and the wake is answered by a normal turn afterwards. Children that cannot resume (one-shot, external, or unrestorable) return an explicit refusal such as `not-resumable`.
-- **`all` or `--all`:** takes one catalog snapshot and starts all child attempts concurrently. Live children compact directly; settled continuable children wait for host capacity before resuming. Each admitted resume sends one wake message. Results retain catalog order. Settled non-continuable or unrestorable children are `skipped` with their reason; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
+- **`/subagent-compact` without an argument:** lists the parent's persisted direct-child catalog. Each entry is marked `live` or `persisted (not loaded)`. The list is an observation, not a reservation.
+- **`/subagent-compact <id>`:** compacts that direct child. A still-live child is compacted through its idle window (`waitForIdle: true` by default). A settled *continuable* child is resumed first — the plugin sends one real maintenance wake message, compacts at the resume edge, and the wake is answered by a normal turn afterwards. Children that cannot resume (one-shot, external, or unrestorable) return an explicit refusal such as `not-resumable`.
+- **`/subagent-compact-all` (recommended on the 1.3.4 source branch):** runs the batch with no arguments. The existing `/subagent-compact all` and `/subagent-compact --all` run the same batch and remain available, including on v1.3.3.
+
+The batch takes one catalog snapshot and starts all child attempts concurrently. Live children compact directly; settled continuable children wait for host capacity before resuming. Each admitted resume sends one wake message. Results retain catalog order. Settled non-continuable or unrestorable children are `skipped` with their reason; one child's failure does not hide the other results. Children created after the snapshot belong to the next run.
+
+The new no-argument command uses the stock command path that releases the input box while compaction runs, so you can continue editing. The handler still waits for the whole batch, and the host records its actual result when it finishes. The existing parameterized command retains the host's input-waiting behavior. No application patch is needed for the new entry point; see the [validation record](docs/VALIDATION.md) for its verification status.
 
 A successful two-child batch (both children had settled) ends with a result such as:
 

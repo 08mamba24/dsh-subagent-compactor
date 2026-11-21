@@ -1,6 +1,6 @@
-# Technical contract: 1.3.3 rc.1/rc.2 compatibility
+# Technical contract: 1.3.4 source branch
 
-Version 1.3.3 compacts the caller's **runtime-owned direct children** through the child's existing compaction engine: live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. The reviewed code is available at Git tag `v1.3.3`. Its module-level test runtimes are stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`. Plugin installation and enablement are sufficient on those runtimes; the legacy host maintenance patch is not part of this implementation.
+The plugin compacts the caller's **runtime-owned direct children** through the child's existing compaction engine: live children directly, and settled continuable children by resuming them through the normal continuation lifecycle first. The published baseline is Git tag `v1.3.3`, with stock Harness `0.2.2-rc.1` and `0.2.2-rc.2` as its module-level test runtimes. The unreleased 1.3.4 source branch adds a no-argument batch command using existing host services; the legacy host maintenance patch is not part of this implementation.
 
 ## Entry points
 
@@ -8,10 +8,17 @@ Version 1.3.3 compacts the caller's **runtime-owned direct children** through th
 | --- | --- |
 | `/subagent-compact` | Read the caller's durable direct-child catalog and mark each entry `live` or `persisted (not loaded)` |
 | `/subagent-compact <id>` | Compact one direct child — live directly, settled continuable via resume |
-| `/subagent-compact all` or `--all` | Compact every child from one catalog snapshot concurrently — live directly, settled continuable via resume |
+| `/subagent-compact-all` | Recommended batch entry point in 1.3.4: compact every child from one catalog snapshot concurrently, with no command input |
+| `/subagent-compact all` or `--all` | Existing batch aliases; run the same operation as `/subagent-compact-all` |
 | `compact_subagent({session_id})` | Run the single-child operation from a model turn |
 
 The model tool returns `text` and `outcome`; success also includes `target_session_id`, `summary_seq`, `replaced_items`, `replaced_tokens`, and `resumed: true` when a resume happened first. There is no batch model tool, report command, host-patch cold restore path, or plugin batch-receipt domain in this version.
+
+### Command lifetime and input
+
+`/subagent-compact-all` registers without an `input` descriptor. This selects the stock UI path also used by `/compact`: the input box is released while the command continues. The handler awaits the shared batch operation to completion, so Host execution and `command/done` retain the real result and initiating command ID. The plugin does not detach the work or return an early success receipt.
+
+`/subagent-compact` keeps its `input` descriptor because the stock UI needs it to claim lines containing `all`, `--all`, or a session ID. Removing the descriptor would break those forms. Its bare listing and parameterized operations remain available, with the host's existing input-waiting behavior. Both batch entry points use the same authorization, per-target locks, cancellation, capacity waiting, compaction, and result rendering.
 
 ## Single-child path and authorization
 

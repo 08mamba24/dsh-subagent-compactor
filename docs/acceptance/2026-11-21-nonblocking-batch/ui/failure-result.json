@@ -1,0 +1,96 @@
+{
+  "name": "failure",
+  "label": "NOINPUT-FAILURE",
+  "seed": {
+    "parentSessionId": "session-3381c472-19c2-4392-ad37-a73d758c8563",
+    "childSessionIds": [
+      "59d10666-625f-41f2-904f-1d96b91a418e"
+    ],
+    "allInactive": true
+  },
+  "running": {
+    "name": "failure",
+    "label": "NOINPUT-FAILURE",
+    "command": "/subagent-compact-all",
+    "editable": true,
+    "draft": "Draft retained during NOINPUT-FAILURE",
+    "commandRun": [
+      {
+        "type": "command/run",
+        "seq": 21,
+        "time": 1795249720247,
+        "data": {
+          "commandId": "cmd-b00f236d-2",
+          "name": "subagent-compact-all",
+          "args": "",
+          "source": {
+            "kind": "user"
+          }
+        }
+      }
+    ],
+    "held": [
+      {
+        "id": 12,
+        "summarizing": true,
+        "maintenance": false,
+        "arrivedAt": 1795249720276,
+        "finished": true,
+        "sawCheckpoint": false,
+        "finishedAt": 1795249720502,
+        "kind": "error"
+      }
+    ],
+    "at": 1795249720443
+  },
+  "done": {
+    "type": "command/done",
+    "seq": 22,
+    "time": 1795249720515,
+    "data": {
+      "commandId": "cmd-b00f236d-2",
+      "kind": "error",
+      "text": "Batch compaction of the caller's direct-subagent snapshot (live children compacted directly; settled continuable children resumed first):\n59d10666-625f-41f2-904f-1d96b91a418e: summary — Compaction could not produce a useful summary. The attempt is recorded in the subagent's session log. The wake message stays delivered and is answered by a normal turn.\nSummary (all-failed) — total 1: compacted 0, nothing-to-compact 0, skipped 0, failed 1, cancelled 0, not-started: 0."
+    }
+  },
+  "draftAfter": "Draft retained during NOINPUT-FAILURE",
+  "diskSummaries": [
+    {
+      "id": "59d10666-625f-41f2-904f-1d96b91a418e",
+      "summaries": []
+    }
+  ],
+  "requests": [
+    {
+      "id": 12,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249720276,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249720502,
+      "kind": "error"
+    },
+    {
+      "id": 13,
+      "summarizing": false,
+      "maintenance": true,
+      "arrivedAt": 1795249720535,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249720536,
+      "kind": "error"
+    },
+    {
+      "id": 14,
+      "summarizing": false,
+      "maintenance": false,
+      "arrivedAt": 1795249720565,
+      "finished": true,
+      "sawCheckpoint": false,
+      "finishedAt": 1795249720566,
+      "kind": "error"
+    }
+  ],
+  "completedAt": 1795249720794
+}

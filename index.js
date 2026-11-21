@@ -3,6 +3,8 @@
  * direct subagents, reusing the composition's compaction engine.
  *
  * Surfaces:
+ * - `/subagent-compact-all` — no-input batch entry point; the stock UI
+ *   releases the composer while the handler awaits the full batch result.
  * - `/subagent-compact` — no arguments: list the caller session's durable
  *   direct-subagent catalog; with `all` (or `--all`): compact every direct
  *   subagent in one catalog snapshot — live children directly, settled
@@ -31,7 +33,7 @@
  * which nothing was compacted reports `nothing-compacted` explicitly instead
  * of implying success.
  *
- * Both surfaces authorize direct parentage and exact runtime identities:
+ * All entry points authorize direct parentage and exact runtime identities:
  * rc.1 uses `agents.isOwnedBy`; rc.2 combines the creator's catalog with the
  * manager's live tree ownership, and checks direct creator identity at start.
  * Catalog membership alone never authorizes a live instance. Both versions
@@ -749,7 +751,7 @@ function batchCommandKind(outcome) {
 	return outcome === "completed" || outcome === "empty-catalog" ? "success" : "error";
 }
 
-function commandHandler(ctx, locks, config, active) {
+function commandHandler(ctx, locks, config, active, batchOnly = false) {
 	return (invocation) => {
 		const controller = new AbortController();
 		/* One fused signal for every branch, so the plugin's own unload abort
@@ -758,7 +760,8 @@ function commandHandler(ctx, locks, config, active) {
 		const signal = operationSignal(invocation.signal, controller.signal);
 		const operation = (async () => {
 			const raw = invocation.rawInput.trim();
-			if (raw.length === 0) {
+			if (batchOnly && raw.length > 0) return { kind: "error", text: "Usage: /subagent-compact-all (takes no arguments)" };
+			if (raw.length === 0 && !batchOnly) {
 				try {
 					return await listDirectChildren(ctx, invocation.agent, signal);
 				} catch (error) {
@@ -767,7 +770,7 @@ function commandHandler(ctx, locks, config, active) {
 				}
 			}
 			const parts = raw.split(/\s+/);
-			if (parts[0] === "all" || parts[0] === "--all") {
+			if (batchOnly || parts[0] === "all" || parts[0] === "--all") {
 				if (parts.length > 1) return { kind: "error", text: `${USAGE} ("all" takes no other arguments)` };
 				return compactAllSubagents(ctx, locks, config, invocation.agent, signal, invocation.commandId);
 			}
@@ -871,6 +874,14 @@ function apply(ctx, config = {}) {
 				hint: "[all | <subagent-session-id>]"
 			},
 			handler: commandHandler(ctx, locks, resolved, active)
+		});
+		yield ctx.commands.register({
+			definitionId: CommandDefinitionId("@local/dsh-subagent-compactor/all"),
+			name: "subagent-compact-all",
+			description: "Compact all direct subagents; settled continuable children are resumed first",
+			/* No input declaration: stock Harness releases the composer while
+			 * the handler still awaits the batch and records its real result. */
+			handler: commandHandler(ctx, locks, resolved, active, true)
 		});
 		const unregisterTool = ctx.tools.register(subagentCompactTool(ctx, locks, resolved, active));
 		yield () => unregisterTool();

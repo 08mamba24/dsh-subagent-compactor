@@ -139,11 +139,16 @@ test("plugin surface", () => {
 	for (const value of [0, -1, 1.5, 600_001, Infinity]) assert.throws(() => Config({ resumeCapacityTimeoutMs: value }));
 });
 
-test("apply registers command and tool inside one reversed-order effect", () => {
+test("apply registers separate batch and parameter commands with the tool in one effect", () => {
 	const harness = makeHarness({ agent: makeAgent() });
-	assert.equal(harness.registrations.commands.length, 1);
+	assert.equal(harness.registrations.commands.length, 2);
 	assert.equal(harness.registrations.tools.length, 1);
 	assert.equal(harness.command.name, "subagent-compact");
+	assert.ok(harness.command.input, "the original command must continue to claim arguments");
+	const batch = harness.registrations.commands.find((definition) => definition.name === "subagent-compact-all");
+	assert.ok(batch, "register the no-input batch command");
+	assert.equal(batch.input, undefined, "stock Harness detaches commands without an input declaration");
+	assert.notEqual(batch.definitionId, harness.command.definitionId);
 	assert.equal(harness.tool.name, "compact_subagent");
 	// cleanup disposer first yield => disposed last
 	assert.equal(typeof harness.registrations.effectDisposers[0], "function");

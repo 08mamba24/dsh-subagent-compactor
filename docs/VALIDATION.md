@@ -1,5 +1,15 @@
 # Validation record
 
+## 1.3.4 no-argument batch command candidate (2026-11-21)
+
+The source branch adds `/subagent-compact-all` without a command input descriptor and awaits the existing batch operation. Editing remains available while compaction runs, and the host publishes the actual result after completion. Existing listing, single-ID, `all`, and `--all` forms remain supported.
+
+All five tracked suites passed on each stock **rc.1 and rc.2** tree: **116/116, zero failed or skipped**, using Node 24.22.3 and isolated persistence. The six focused new behavior tests fail against the previous product source. `npm pack --dry-run` passed.
+
+The installed stock **rc.5 bundled Web UI** passed direct entry, trailing spaces with a failed summary, slash-menu selection, and the original `all` command. While summary responses were held, the new command allowed typing, deletion, and system clipboard paste, with no premature `command/done`. Releasing the barrier produced a matching success or error event and visible result card; successful child summaries were durable and linked to that command ID, and the draft survived. See the [dated acceptance record](acceptance/2026-11-21-nonblocking-batch/acceptance.md), screenshots, and synthetic event snapshots.
+
+The published v1.3.3 results below are baseline evidence. This candidate record does not establish a full rc.5 regression run, a Git tag, a daily Desktop update, native Electron-window acceptance, or real-model summary quality.
+
 ## Published Git tag: v1.3.3 (2026-11-14)
 
 [PR #7](https://github.com/08mamba24/dsh-subagent-compactor/pull/7) merged at `7117d438947f19fcc12abd374ce86746079031b9`; the annotated [`v1.3.3` tag](https://github.com/08mamba24/dsh-subagent-compactor/tree/v1.3.3) resolves to that commit. The [post-merge push CI run](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/43545680782) tested this exact commit on stock Harness `0.2.2-rc.1` and `0.2.2-rc.2`: **110 tests, 110 passed, zero failed or skipped on each runtime**. Both `npm pack --dry-run` checks passed. The earlier 109-test candidate runs below predate the final review regression and remain unchanged as historical records.
