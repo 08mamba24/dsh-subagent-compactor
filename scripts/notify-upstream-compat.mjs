@@ -70,6 +70,11 @@ try {
 					actions.push({ tag, action: "resolved", number: issue.number, classification: report.classification });
 					continue;
 				}
+				if (report.classification !== "COMPATIBLE" && issue.state === "CLOSED") {
+					gh(["issue", "reopen", String(issue.number), "--repo", args.repository]);
+					actions.push({ tag, action: "reopened", number: issue.number, classification: report.classification });
+					continue;
+				}
 				actions.push({ tag, action: "unchanged", number: issue.number, classification: report.classification });
 				continue;
 			}

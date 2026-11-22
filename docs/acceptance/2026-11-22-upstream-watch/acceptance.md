@@ -20,7 +20,8 @@ future rc.6/rc.7 changes promptly. Sources are this thread's messages
   carries the exact tag commit, plugin source SHA, lock/runner digests, package
   versions, exit status and full test counters. Runtime source was
   `5c5c56a68259a0ea3311b8d00ecb531eeb0a84b8`.
-- The watcher regression suite passed **24/24**. Future-version fixture tests
+- The initial watcher regression suite passed **24/24**; the review repair
+  below raises that to **27/27**. Future-version fixture tests
   run genuine `node --test` bodies through the candidate wrapper while proving
   the fixed runner still rejects an unknown version and candidate/package
   mismatches. These are synthetic wiring tests, not rc.6/rc.7 compatibility claims.
@@ -30,8 +31,10 @@ future rc.6/rc.7 changes promptly. Sources are this thread's messages
 - Notification tests cover a never-delivered cached anomaly, one issue per
   tag, recovery update/close, an identical later cached result causing no write,
   and a newly healthy version creating no issue.
-- `npm pack --dry-run`, YAML parsing, and the changed-file whitespace check
-  passed. The plugin product implementation (`index.js`) is unchanged from main.
+- `npm pack --dry-run`, YAML parsing, and the source/docs whitespace check
+  excluding archived `docs/acceptance/**/*.log` passed. Raw negative-control
+  logs retain their original whitespace; the full archived-log diff is not
+  claimed clean. The plugin product implementation (`index.js`) is unchanged from main.
 
 ## Negative controls
 
@@ -42,6 +45,22 @@ executing the synthetic test bodies. `notify-red.log` shows the old notifier
 creating healthy-version issues and failing to close recovery. `version-order-red.log`
 shows the old API-order window missing newer versions. Each failure is at its
 intended observable assertion before the corresponding implementation change.
+
+## Independent review repair
+
+Astra's review of `a5cf272` found that a successful issue edit followed by a
+transient reopen failure could leave the anomaly permanently closed: the next
+run saw the new fingerprint and incorrectly returned `unchanged`.
+
+The notifier now reconciles the desired issue state before treating identical
+content as delivered. Three stateful real-CLI regressions cover `INCOMPATIBLE`,
+`NOT_VERIFIED` and `INFRA_ERROR`: edit succeeds, reopen returns HTTP 502, the
+second call retries reopening, and a third identical call performs no write.
+All three fail on the old implementation at the expected CLOSED-versus-OPEN
+assertion (`reopen-retry-red.log`), then pass with the repair. The whole watcher
+suite passes **27/27** (`watch-reopen-green.log`). The existing compatible/open
+close-retry branch was also inspected; it already reconciles state before
+deduplication. No product/runtime implementation, dependency or UI changed.
 
 ## Activation and limits
 

@@ -28,6 +28,14 @@
       "cancelled": 0,
       "skipped": 0,
       "todo": 0
+    },
+    "watch-reopen-green.log": {
+      "tests": 27,
+      "pass": 27,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0
     }
   },
   "reports": [
@@ -226,5 +234,18 @@
     "notify-red.log": "old notifier creates a healthy issue and leaves recovery open",
     "version-order-red.log": "old window follows API order and misses newer tags"
   },
-  "activation": "Not established by this dated local record; consult the PR and remote Actions receipts."
+  "activation": "Not established by this dated local record; consult the PR and remote Actions receipts.",
+  "reviewRepair": {
+    "reviewFact": "local-review:0001795314570515-000452-70d47913:changes_requested",
+    "reviewedHead": "a5cf2720a434734af1d1021bf5c770db10ca9ea4",
+    "finding": "Anomaly issue stays closed after edit succeeds and reopen fails; identical-fingerprint deduplication skips the retry.",
+    "coveredClassifications": [
+      "INCOMPATIBLE",
+      "NOT_VERIFIED",
+      "INFRA_ERROR"
+    ],
+    "redLog": "reopen-retry-red.log",
+    "greenLog": "watch-reopen-green.log",
+    "whitespaceCheckScope": "Source/docs excluding archived docs/acceptance/**/*.log; raw negative logs retain original whitespace."
+  }
 }

@@ -568,6 +568,50 @@ test("notify leaves a newly compatible version in Actions without creating an is
 	assert.doesNotMatch(readFileSync(gh.record, "utf8"), /issue (create|edit|close|reopen)/);
 });
 
+for (const classification of ["INCOMPATIBLE", "NOT_VERIFIED", "INFRA_ERROR"]) {
+	test(`notify retries a failed reopen after editing ${classification}, then stays quiet`, t => {
+		const directory = temporary(t), bin = join(directory, "bin");
+		const issuePath = join(directory, "issue.json"), callsPath = join(directory, "calls.jsonl");
+		mkdirSync(bin);
+		writeFileSync(issuePath, JSON.stringify({ number: 7, title: "[upstream-compat] dsh-v0.2.2-rc.6", state: "CLOSED", body: "previous recovered result" }));
+		writeFileSync(join(bin, "gh"), `#!${process.execPath}
+const fs = require("node:fs");
+const issuePath = ${JSON.stringify(issuePath)}, callsPath = ${JSON.stringify(callsPath)}, marker = ${JSON.stringify(join(directory, "failed-once"))};
+const args = process.argv.slice(2), issue = JSON.parse(fs.readFileSync(issuePath, "utf8"));
+fs.appendFileSync(callsPath, JSON.stringify(args) + "\\n");
+if (args[1] === "list") { console.log(JSON.stringify([issue])); process.exit(0); }
+if (args[1] === "edit") issue.body = fs.readFileSync(args[args.indexOf("--body-file") + 1], "utf8");
+if (args[1] === "reopen") {
+  if (!fs.existsSync(marker)) { fs.writeFileSync(marker, "1"); console.error("HTTP 502 transient fixture"); process.exit(1); }
+  issue.state = "OPEN";
+}
+fs.writeFileSync(issuePath, JSON.stringify(issue));
+`);
+		chmodSync(join(bin, "gh"), 0o755);
+		const aggregate = join(directory, "aggregate.json");
+		writeFileSync(aggregate, JSON.stringify({ reports: [{ tag: "dsh-v0.2.2-rc.6", classification, reason: "synthetic anomaly", firstFailure: "synthetic failure" }] }));
+		const invoke = attempt => spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"),
+			"--aggregate", aggregate, "--repository", "example/invalid", "--run-url", `https://example.invalid/runs/${attempt}`, "--output", join(directory, `output-${attempt}.json`),
+		], { encoding: "utf8", cwd: repository, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
+		const first = invoke(1);
+		assert.equal(first.status, 1, first.stderr);
+		assert.match(first.stderr, /HTTP 502/);
+		const edited = JSON.parse(readFileSync(issuePath, "utf8"));
+		assert.equal(edited.state, "CLOSED");
+		assert.match(edited.body, /upstream-compat-fingerprint:/, "the body committed before reopen failed");
+		const second = invoke(2);
+		assert.equal(second.status, 0, second.stderr);
+		assert.equal(JSON.parse(readFileSync(issuePath, "utf8")).state, "OPEN", "identical content must still retry a failed state change");
+		assert.equal(JSON.parse(readFileSync(join(directory, "output-2.json"), "utf8")).actions[0].action, "reopened");
+		const third = invoke(3);
+		assert.equal(third.status, 0, third.stderr);
+		assert.equal(JSON.parse(readFileSync(join(directory, "output-3.json"), "utf8")).actions[0].action, "unchanged");
+		const calls = readFileSync(callsPath, "utf8").trim().split("\n").map(line => JSON.parse(line));
+		assert.equal(calls.filter(args => args[1] === "edit").length, 1);
+		assert.equal(calls.filter(args => args[1] === "reopen").length, 2, "retry once, then no duplicate write on the quiet third run");
+	});
+}
+
 test("cache emits a result digest so a changed verdict gets a fresh cache key", t => {
 	const directory = temporary(t);
 	const digests = [];
