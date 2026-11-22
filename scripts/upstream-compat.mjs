@@ -166,7 +166,8 @@ async function prepare(args) {
 	const install = await runCommand("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
 		cwd: dependenciesDirectory,
 		env: safeEnvironment(home),
-		timeoutMs: commandTimeout(args, 8 * 60_000),
+		// All three commands share one 25-minute job: 18 minutes plus 7 for its other steps.
+		timeoutMs: commandTimeout(args, 6 * 60_000),
 	});
 	const common = { ...baseReport(args), preparedAt: new Date().toISOString(), dependencies };
 	if (install.error || install.status !== 0) {
@@ -230,7 +231,7 @@ async function run(args) {
 	const install = await runCommand("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], {
 		cwd: plan.dependenciesDirectory,
 		env: safeEnvironment(plan.home),
-		timeoutMs: commandTimeout(args, 10 * 60_000),
+		timeoutMs: commandTimeout(args, 6 * 60_000),
 	});
 	if (install.error || install.status !== 0) {
 		const result = classifyInstallFailure(install.output || install.error?.message);
@@ -245,7 +246,7 @@ async function run(args) {
 	const runtime = await runCommand(process.execPath, [join(source, "scripts/test-installed-runtime.mjs"), "--modules", join(plan.dependenciesDirectory, "node_modules"), "--candidate-version", plan.version], {
 		cwd: source,
 		env: safeEnvironment(plan.home),
-		timeoutMs: commandTimeout(args, 10 * 60_000),
+		timeoutMs: commandTimeout(args, 6 * 60_000),
 	});
 	const result = classifyRunnerResult({ status: runtime.status, output: runtime.output, error: runtime.error });
 	return saveReport(reportPath, {
@@ -295,7 +296,14 @@ function cache(args) {
 
 function findReports(directory) {
 	const reports = [];
-	for (const entry of readdirSync(directory, { withFileTypes: true })) {
+	let entries;
+	try { entries = readdirSync(directory, { withFileTypes: true }); }
+	catch (error) {
+		// download-artifact creates no directory when its pattern matches zero artifacts.
+		if (error.code === "ENOENT") return reports;
+		throw error;
+	}
+	for (const entry of entries) {
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) reports.push(...findReports(path));
 		else if (entry.name === "report.json" && statSync(path).isFile()) reports.push({ path, report: JSON.parse(readFileSync(path, "utf8")) });
@@ -319,11 +327,14 @@ function aggregate(args) {
 	const expectedTargets = args.expectedTargets === undefined ? null : JSON.parse(args.expectedTargets);
 	if (expectedTargets !== null && !Array.isArray(expectedTargets)) throw new Error("--expected-targets must be a JSON array");
 	if (args.pluginSha !== undefined && !/^[a-f0-9]{40}$/i.test(args.pluginSha)) throw new Error("--plugin-sha must be an exact 40-character hash");
-	const reportsByTag = new Map();
-	for (const { report } of reports) {
-		if (typeof report?.tag === "string") reportsByTag.set(report.tag, [...(reportsByTag.get(report.tag) ?? []), report]);
-	}
 	const problems = [];
+	if (reports.length !== expectedCount) problems.push({ problem: "report-count-mismatch", expected: expectedCount, actual: reports.length });
+	if (expectedTargets !== null && expectedTargets.length !== expectedCount) problems.push({ problem: "target-count-mismatch", expected: expectedCount, actual: expectedTargets.length });
+	const reportsByTag = new Map();
+	for (const { path, report } of reports) {
+		if (typeof report?.tag === "string" && report.tag.length > 0) reportsByTag.set(report.tag, [...(reportsByTag.get(report.tag) ?? []), report]);
+		else problems.push({ problem: "unowned-report", artifactPath: path });
+	}
 	if (expectedTargets !== null) {
 		for (const target of expectedTargets) {
 			const found = reportsByTag.get(target.tag) ?? [];

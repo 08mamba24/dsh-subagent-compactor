@@ -394,6 +394,80 @@ test("a hung runtime settles an infrastructure report and stops descendants befo
 	assert.equal(readFileSync(heartbeat, "utf8"), before, "the descendant must stop writing after the timed-out runtime settles");
 });
 
+function workflowJobs() {
+	const source = readFileSync(join(repository, ".github/workflows/upstream-compat.yml"), "utf8").split("\njobs:\n")[1];
+	const headers = [...source.matchAll(/^  ([\w-]+):\s*$/gm)];
+	return Object.fromEntries(headers.map((header, index) => {
+		const block = source.slice(header.index, headers[index + 1]?.index);
+		return [header[1], {
+			needs: (/^    needs: (.+)$/m.exec(block)?.[1] ?? "").replace(/[\[\]\s]/g, "").split(",").filter(Boolean),
+			condition: /^    if: (.+)$/m.exec(block)?.[1] ?? "true",
+			minutes: Number(/^    timeout-minutes: (\d+)$/m.exec(block)?.[1]),
+		}];
+	}));
+}
+
+for (const outcome of ["failure", "cancelled"]) {
+	test(`the ${outcome} dependency chain can reach notification while permission gates remain closed elsewhere`, () => {
+		const jobs = workflowJobs();
+		const results = { discover: "success", compatibility: outcome, aggregate: "success" };
+		const parents = id => jobs[id].needs.flatMap(parent => [parent, ...parents(parent)]);
+		const ready = (id, { event = "workflow_dispatch", ref = "refs/heads/main", notify = true, candidates = "true", aggregate = "success" } = {}) => {
+			const states = { ...results, aggregate };
+			const success = () => parents(id).every(parent => states[parent] === "success");
+			const condition = jobs[id].condition;
+			// Model GitHub's documented implicit success() and transitive needs rule.
+			// This evaluates the actual job expression; it is not a hosted Actions run.
+			if (!/\b(?:always|success|failure|cancelled)\s*\(/.test(condition) && !success()) return false;
+			const needs = Object.fromEntries(jobs[id].needs.map(parent => [parent, { result: states[parent], outputs: { has_candidates: candidates } }]));
+			return Function("always", "success", "failure", "cancelled", "github", "inputs", "needs", `return (${condition});`)(
+				() => true, success, () => parents(id).some(parent => states[parent] === "failure"), () => parents(id).some(parent => states[parent] === "cancelled"),
+				{ event_name: event, ref }, { notify }, needs,
+			);
+		};
+		assert.equal(ready("aggregate"), true, "aggregate can finish after the compatibility ancestor fails");
+		assert.equal(ready("notify"), true, "a successful aggregate must still deliver the failed ancestor's alert");
+		assert.equal(ready("notify", { event: "schedule", notify: false }), true);
+		for (const blocked of [{ event: "pull_request" }, { ref: "refs/heads/feature" }, { notify: false }, { candidates: "false" }, { aggregate: "failure" }])
+			assert.equal(ready("notify", blocked), false, JSON.stringify(blocked));
+	});
+}
+
+test("slow prepare and install leave a hung runtime enough time to settle before the shared job limit", t => {
+	const { directory, env } = candidateFixture(t);
+	const entry = join(directory, "scripts/upstream-compat.mjs"), source = readFileSync(entry, "utf8");
+	const minutes = [...source.matchAll(/commandTimeout\(args, (\d+) \* 60_000\)/g)].map(match => Number(match[1]));
+	assert.equal(minutes.length, 3, "prepare, install and runtime share one compatibility job");
+	const scale = 600, jobLimit = workflowJobs().compatibility.minutes * scale;
+	// Scale only the three production constants in a copied CLI. Exercise its real
+	// serial prepare/install/run/report path without adding production test knobs.
+	writeFileSync(entry, source.replace(/commandTimeout\(args, (\d+) \* 60_000\)/g, (_, value) => `commandTimeout(args, ${Number(value) * scale})`));
+	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module", devDependencies: {} }));
+	writeFileSync(join(directory, "bin/npm"), `#!${process.execPath}
+import { writeFileSync } from "node:fs";
+const prepare = process.argv.includes("--package-lock-only");
+setTimeout(() => {
+  if (prepare) writeFileSync("package-lock.json", '{"lockfileVersion":3,"packages":{}}');
+  console.log(prepare ? "slow prepare completed" : "slow install completed");
+}, prepare ? ${minutes[0] * scale * 0.85} : ${minutes[1] * scale * 0.85});
+`);
+	writeFileSync(join(directory, "scripts/test-installed-runtime.mjs"), 'const supportedVersions = new Set(["99.0.0-rc.1"]); console.log("hung runtime started"); setInterval(() => {}, 1000);\n');
+	const report = join(directory, "report.json"), start = performance.now();
+	const prepared = spawnSync(process.execPath, [entry, "prepare", "--tag", "dsh-v99.0.0-rc.1", "--version", "99.0.0-rc.1", "--commit", "a".repeat(40), "--plugin-sha", "b".repeat(40), "--scratch", directory, "--report", report], { encoding: "utf8", env, timeout: 20_000, killSignal: "SIGTERM" });
+	assert.equal(prepared.status, 0, prepared.stderr);
+	assert.match(prepared.stdout, /slow prepare completed/, prepared.stderr);
+	assert.equal(JSON.parse(readFileSync(report, "utf8")).classification, "PREPARED");
+	const run = spawnSync(process.execPath, [entry, "run", "--plan", join(directory, "plan.json"), "--report", report], { encoding: "utf8", env, timeout: 20_000, killSignal: "SIGTERM" });
+	const elapsed = performance.now() - start, verdict = JSON.parse(readFileSync(report, "utf8"));
+	t.diagnostic(JSON.stringify({ stageMinutes: minutes, scaledElapsedMs: Math.round(elapsed), scaledJobLimitMs: jobLimit, classification: verdict.classification }));
+	assert.equal(run.status, 0, run.stderr);
+	assert.match(run.stdout, /slow install completed[\s\S]*hung runtime started/);
+	assert.equal(verdict.classification, "INFRA_ERROR");
+	assert.match(verdict.reason, /timed out/);
+	assert.ok(elapsed < jobLimit, `terminal report took ${Math.round(elapsed)}ms; the outer job ends at ${jobLimit}ms`);
+	assert.ok(minutes.reduce((sum, value) => sum + value, 0) + 5 <= workflowJobs().compatibility.minutes, "leave at least five minutes for setup, caching and artifact upload");
+});
+
 test("workflow keeps execution read-only and isolates issue write permission", () => {
 	const workflow = readFileSync(join(repository, ".github/workflows/upstream-compat.yml"), "utf8");
 	assert.match(workflow, /cron: "23 \* \* \* \*"/);
@@ -436,7 +510,7 @@ function writeReport(reports, name, report) {
 
 const targetFixture = [{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40) }];
 
-function runAggregate(t, reports, expectedTargets, pluginSha) {
+function runAggregate(t, reports, expectedTargets, pluginSha, expectedCount = expectedTargets.length) {
 	const directory = temporary(t);
 	const output = join(directory, "summary.json"), markdown = join(directory, "summary.md"), githubOutput = join(directory, "github-output.txt");
 	const args = [
@@ -445,12 +519,36 @@ function runAggregate(t, reports, expectedTargets, pluginSha) {
 		"--output", output,
 		"--markdown", markdown,
 		"--github-output", githubOutput,
-		"--expected-count", String(expectedTargets.length),
+		"--expected-count", String(expectedCount),
 		"--expected-targets", JSON.stringify(expectedTargets),
 		...(pluginSha !== undefined ? ["--plugin-sha", pluginSha] : []),
 	];
 	const result = spawnSync(process.execPath, args, { encoding: "utf8", cwd: repository });
 	return { result, output, markdown, githubOutput };
+}
+
+for (const fault of ["missing-directory", "tagless-extra", "count-mismatch", "healthy"]) {
+	test(`aggregate-to-notify preserves the existing issue correctly for ${fault}`, t => {
+		const directory = temporary(t), reports = join(directory, "reports");
+		const healthy = { ...targetFixture[0], classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 1, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0 } };
+		if (fault !== "missing-directory") writeReport(reports, "rc1", healthy);
+		if (fault === "tagless-extra") {
+			const { tag, ...unowned } = healthy;
+			writeReport(reports, "unowned", unowned);
+		}
+		const { result, output, githubOutput } = runAggregate(t, reports, targetFixture, targetFixture[0].pluginSha, fault === "count-mismatch" ? 2 : 1);
+		assert.equal(result.status, 0, result.stderr);
+		const existing = [{ number: 7, title: `[upstream-compat] ${healthy.tag}`, state: "OPEN", body: "previous anomaly" }];
+		const gh = fakeGh(t, directory, existing), notification = join(directory, "notification.json");
+		const notified = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"), "--aggregate", output, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", notification], { encoding: "utf8", env: gh.env });
+		assert.equal(notified.status, 0, notified.stderr);
+		const actions = JSON.parse(readFileSync(notification, "utf8")).actions;
+		const valid = fault === "healthy";
+		assert.deepEqual(actions.map(({ classification, action }) => ({ classification, action })), [{ classification: valid ? "COMPATIBLE" : "INFRA_ERROR", action: valid ? "resolved" : "updated" }], "an invalid report collection cannot resolve the previous anomaly");
+		assert.equal(/issue close/.test(readFileSync(gh.record, "utf8")), valid);
+		assert.equal(JSON.parse(readFileSync(output, "utf8")).complete, valid);
+		assert.match(readFileSync(githubOutput, "utf8"), new RegExp(`has_infra_error=${!valid}`), "notification delivery does not turn the gate green");
+	});
 }
 
 test("aggregate refuses to call a PREPARED-only run complete", t => {
