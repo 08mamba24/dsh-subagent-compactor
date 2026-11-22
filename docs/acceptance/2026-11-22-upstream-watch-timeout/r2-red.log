@@ -1,0 +1,176 @@
+✖ the failure dependency chain can reach notification while permission gates remain closed elsewhere (2.233417ms)
+✖ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.295875ms)
+✖ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (15776.376667ms)
+ℹ {"stageMinutes":[8,10,10],"scaledElapsedMs":15757,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✖ aggregate-to-notify preserves the existing issue correctly for missing-directory (69.572333ms)
+✖ aggregate-to-notify preserves the existing issue correctly for tagless-extra (452.723834ms)
+✖ aggregate-to-notify preserves the existing issue correctly for count-mismatch (488.737166ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (422.168584ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 1
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17300.750834
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:411:2
+✖ the failure dependency chain can reach notification while permission gates remain closed elsewhere (2.233417ms)
+  AssertionError [ERR_ASSERTION]: a successful aggregate must still deliver the failed ancestor's alert
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:429:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:411:2
+✖ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.295875ms)
+  AssertionError [ERR_ASSERTION]: a successful aggregate must still deliver the failed ancestor's alert
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:429:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:436:1
+✖ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (15776.376667ms)
+  AssertionError [ERR_ASSERTION]: terminal report took 15757ms; the outer job ends at 15000ms
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:467:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:531:2
+✖ aggregate-to-notify preserves the existing issue correctly for missing-directory (69.572333ms)
+  AssertionError [ERR_ASSERTION]: node:fs:1630
+    const result = binding.readdir(
+                           ^
+  
+  Error: ENOENT: no such file or directory, scandir '/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-upstream-watch-test-OxfY9b/reports'
+      at readdirSync (node:fs:1630:26)
+      at findReports (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/scripts/upstream-compat.mjs:298:22)
+      at aggregate (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/scripts/upstream-compat.mjs:308:18)
+      at file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/scripts/upstream-compat.mjs:447:40
+      at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+      at async node:internal/modules/esm/loader:647:26
+      at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'scandir',
+    path: '/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-upstream-watch-test-OxfY9b/reports'
+  }
+  
+  Node.js v24.22.3
+  
+  
+  1 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:540:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at node:internal/test_runner/test:1305:31
+      at node:internal/process/task_queues:151:7
+      at AsyncResource.runInAsyncScope (node:async_hooks:227:14)
+      at AsyncResource.runMicrotask (node:internal/process/task_queues:148:8) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:531:2
+✖ aggregate-to-notify preserves the existing issue correctly for tagless-extra (452.723834ms)
+  AssertionError [ERR_ASSERTION]: an invalid report collection cannot resolve the previous anomaly
+  + actual - expected
+  
+    [
+      {
+  +     action: 'resolved',
+  +     classification: 'COMPATIBLE'
+  -     action: 'updated',
+  -     classification: 'INFRA_ERROR'
+      }
+    ]
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:547:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { classification: 'COMPATIBLE', action: 'resolved' } ],
+    expected: [ { classification: 'INFRA_ERROR', action: 'updated' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:531:2
+✖ aggregate-to-notify preserves the existing issue correctly for count-mismatch (488.737166ms)
+  AssertionError [ERR_ASSERTION]: an invalid report collection cannot resolve the previous anomaly
+  + actual - expected
+  
+    [
+      {
+  +     action: 'resolved',
+  +     classification: 'COMPATIBLE'
+  -     action: 'updated',
+  -     classification: 'INFRA_ERROR'
+      }
+    ]
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:547:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { classification: 'COMPATIBLE', action: 'resolved' } ],
+    expected: [ { classification: 'INFRA_ERROR', action: 'updated' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

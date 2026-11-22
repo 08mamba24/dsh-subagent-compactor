@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -364,6 +364,110 @@ test("the watcher executes an unknown candidate instead of stopping at the basel
 	assert.equal(verdict.testSummary.pass, 5, "real node --test bodies ran in the synthetic fixture");
 });
 
+test("a hung runtime settles an infrastructure report and stops descendants before the job deadline", async t => {
+	const { directory, modules, env } = candidateFixture(t);
+	const heartbeat = join(directory, "heartbeat"), pidFile = join(directory, "runner-pid");
+	const nested = `import { appendFileSync } from "node:fs"; setInterval(() => appendFileSync(${JSON.stringify(heartbeat)}, "."), 20);`;
+	writeFileSync(join(directory, "scripts/test-installed-runtime.mjs"), `import { spawn } from "node:child_process"; import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); console.error("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: fixture export removed"); console.log("runtime fixture started"); spawn(process.execPath, ["--input-type=module", "-e", ${JSON.stringify(nested)}], { stdio: "inherit" }); setInterval(() => {}, 1000);\n`);
+	const report = join(directory, "report.json"), plan = join(directory, "plan.json");
+	const identity = { tag: "dsh-v99.0.0-rc.1", version: "99.0.0-rc.1", commit: "a".repeat(40), pluginSha: "b".repeat(40) };
+	writeFileSync(plan, JSON.stringify({ ...identity, runnerSupportsVersion: false, dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
+	writeFileSync(report, JSON.stringify({ ...identity, classification: "PREPARED" }));
+	const child = spawn(process.execPath, [join(directory, "scripts/upstream-compat.mjs"), "run", "--plan", plan, "--report", report, "--timeout-ms", "600"], { env, detached: process.platform !== "win32" });
+	let output = "", guardExpired = false;
+	child.stdout.on("data", chunk => output += chunk);
+	child.stderr.on("data", chunk => output += chunk);
+	const stop = pid => { try { process.platform === "win32" ? process.kill(pid, "SIGKILL") : process.kill(-pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } };
+	t.after(() => { stop(child.pid); try { stop(Number(readFileSync(pidFile, "utf8"))); } catch (error) { if (error.code !== "ENOENT") throw error; } });
+	const guard = setTimeout(() => { guardExpired = true; stop(child.pid); }, 5000);
+	await new Promise((resolve, reject) => { child.on("close", resolve); child.on("error", reject); }).finally(() => clearTimeout(guard));
+	const verdict = JSON.parse(readFileSync(report, "utf8"));
+	assert.equal(verdict.classification, "INFRA_ERROR", "a runtime deadline must settle INFRA_ERROR instead of leaving PREPARED");
+	assert.equal(guardExpired, false, "the command must finish before the outer job guard");
+	assert.match(verdict.reason, /timed out/);
+	assert.match(verdict.firstFailure, /ERR_PACKAGE_PATH_NOT_EXPORTED/, "keep the original loader diagnostic ahead of the later timeout");
+	assert.match(output, /runtime fixture started/, "partial runtime output must survive the timeout");
+	assert.match(verdict.outputTail, /runtime fixture started/);
+	assert.equal(verdict.pluginSha, identity.pluginSha);
+	const before = readFileSync(heartbeat, "utf8");
+	await new Promise(resolve => setTimeout(resolve, 100));
+	assert.equal(readFileSync(heartbeat, "utf8"), before, "the descendant must stop writing after the timed-out runtime settles");
+});
+
+function workflowJobs() {
+	const source = readFileSync(join(repository, ".github/workflows/upstream-compat.yml"), "utf8").split("\njobs:\n")[1];
+	const headers = [...source.matchAll(/^  ([\w-]+):\s*$/gm)];
+	return Object.fromEntries(headers.map((header, index) => {
+		const block = source.slice(header.index, headers[index + 1]?.index);
+		return [header[1], {
+			needs: (/^    needs: (.+)$/m.exec(block)?.[1] ?? "").replace(/[\[\]\s]/g, "").split(",").filter(Boolean),
+			condition: /^    if: (.+)$/m.exec(block)?.[1] ?? "true",
+			minutes: Number(/^    timeout-minutes: (\d+)$/m.exec(block)?.[1]),
+		}];
+	}));
+}
+
+for (const outcome of ["failure", "cancelled"]) {
+	test(`the ${outcome} dependency chain can reach notification while permission gates remain closed elsewhere`, () => {
+		const jobs = workflowJobs();
+		const results = { discover: "success", compatibility: outcome, aggregate: "success" };
+		const parents = id => jobs[id].needs.flatMap(parent => [parent, ...parents(parent)]);
+		const ready = (id, { event = "workflow_dispatch", ref = "refs/heads/main", notify = true, candidates = "true", aggregate = "success" } = {}) => {
+			const states = { ...results, aggregate };
+			const success = () => parents(id).every(parent => states[parent] === "success");
+			const condition = jobs[id].condition;
+			// Model GitHub's documented implicit success() and transitive needs rule.
+			// This evaluates the actual job expression; it is not a hosted Actions run.
+			if (!/\b(?:always|success|failure|cancelled)\s*\(/.test(condition) && !success()) return false;
+			const needs = Object.fromEntries(jobs[id].needs.map(parent => [parent, { result: states[parent], outputs: { has_candidates: candidates } }]));
+			return Function("always", "success", "failure", "cancelled", "github", "inputs", "needs", `return (${condition});`)(
+				() => true, success, () => parents(id).some(parent => states[parent] === "failure"), () => parents(id).some(parent => states[parent] === "cancelled"),
+				{ event_name: event, ref }, { notify }, needs,
+			);
+		};
+		assert.equal(ready("aggregate"), true, "aggregate can finish after the compatibility ancestor fails");
+		assert.equal(ready("notify"), true, "a successful aggregate must still deliver the failed ancestor's alert");
+		assert.equal(ready("notify", { event: "schedule", notify: false }), true);
+		for (const blocked of [{ event: "pull_request" }, { ref: "refs/heads/feature" }, { notify: false }, { candidates: "false" }, { aggregate: "failure" }])
+			assert.equal(ready("notify", blocked), false, JSON.stringify(blocked));
+	});
+}
+
+test("slow prepare and install leave a hung runtime enough time to settle before the shared job limit", t => {
+	const { directory, env } = candidateFixture(t);
+	const entry = join(directory, "scripts/upstream-compat.mjs"), source = readFileSync(entry, "utf8");
+	const minutes = [...source.matchAll(/commandTimeout\(args, (\d+) \* 60_000\)/g)].map(match => Number(match[1]));
+	assert.equal(minutes.length, 3, "prepare, install and runtime share one compatibility job");
+	const scale = 600, jobLimit = workflowJobs().compatibility.minutes * scale;
+	// Scale only the three production constants in a copied CLI. Exercise its real
+	// serial prepare/install/run/report path without adding production test knobs.
+	writeFileSync(entry, source.replace(/commandTimeout\(args, (\d+) \* 60_000\)/g, (_, value) => `commandTimeout(args, ${Number(value) * scale})`));
+	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module", devDependencies: {} }));
+	writeFileSync(join(directory, "bin/npm"), `#!${process.execPath}
+import { writeFileSync } from "node:fs";
+const prepare = process.argv.includes("--package-lock-only");
+setTimeout(() => {
+  if (prepare) writeFileSync("package-lock.json", '{"lockfileVersion":3,"packages":{}}');
+  console.log(prepare ? "slow prepare completed" : "slow install completed");
+}, prepare ? ${minutes[0] * scale * 0.85} : ${minutes[1] * scale * 0.85});
+`);
+	writeFileSync(join(directory, "scripts/test-installed-runtime.mjs"), 'const supportedVersions = new Set(["99.0.0-rc.1"]); console.log("hung runtime started"); setInterval(() => {}, 1000);\n');
+	const report = join(directory, "report.json"), start = performance.now();
+	const prepared = spawnSync(process.execPath, [entry, "prepare", "--tag", "dsh-v99.0.0-rc.1", "--version", "99.0.0-rc.1", "--commit", "a".repeat(40), "--plugin-sha", "b".repeat(40), "--scratch", directory, "--report", report], { encoding: "utf8", env, timeout: 20_000, killSignal: "SIGTERM" });
+	assert.equal(prepared.status, 0, prepared.stderr);
+	assert.match(prepared.stdout, /slow prepare completed/, prepared.stderr);
+	assert.equal(JSON.parse(readFileSync(report, "utf8")).classification, "PREPARED");
+	const run = spawnSync(process.execPath, [entry, "run", "--plan", join(directory, "plan.json"), "--report", report], { encoding: "utf8", env, timeout: 20_000, killSignal: "SIGTERM" });
+	const elapsed = performance.now() - start, verdict = JSON.parse(readFileSync(report, "utf8"));
+	t.diagnostic(JSON.stringify({ stageMinutes: minutes, scaledElapsedMs: Math.round(elapsed), scaledJobLimitMs: jobLimit, classification: verdict.classification }));
+	assert.equal(run.status, 0, run.stderr);
+	assert.match(run.stdout, /slow install completed[\s\S]*hung runtime started/);
+	assert.equal(verdict.classification, "INFRA_ERROR");
+	assert.match(verdict.reason, /timed out/);
+	assert.ok(elapsed < jobLimit, `terminal report took ${Math.round(elapsed)}ms; the outer job ends at ${jobLimit}ms`);
+	assert.ok(minutes.reduce((sum, value) => sum + value, 0) + 5 <= workflowJobs().compatibility.minutes, "leave at least five minutes for setup, caching and artifact upload");
+});
+
 test("workflow keeps execution read-only and isolates issue write permission", () => {
 	const workflow = readFileSync(join(repository, ".github/workflows/upstream-compat.yml"), "utf8");
 	assert.match(workflow, /cron: "23 \* \* \* \*"/);
@@ -372,6 +476,7 @@ test("workflow keeps execution read-only and isolates issue write permission", (
 	assert.match(workflow, /permissions:\n  contents: read/);
 	assert.match(workflow, /notify:[\s\S]*?permissions:\n      contents: read\n      issues: write/);
 	assert.match(workflow, /persist-credentials: false/);
+	assert.doesNotMatch(workflow, /needs\.aggregate\.outputs\.complete == 'true'/, "incomplete reports must not suppress infrastructure notifications");
 	assert.match(workflow, /dsh-upstream-compat-v2-\$\{\{ steps.prepare.outputs.combo_digest \}\}-\$\{\{ steps.cache.outputs.result_digest \}\}/, "cache keys embed the result digest so a changed verdict gets a fresh entry");
 	assert.match(workflow, /restore-keys: dsh-upstream-compat-v2-/, "restore uses the prefix and lets inspect validate the entry");
 	assert.match(workflow, /upstream-compat.mjs inspect/, "a restored verdict is validated against the exact combination before skipping");
@@ -405,7 +510,7 @@ function writeReport(reports, name, report) {
 
 const targetFixture = [{ tag: "dsh-v0.2.2-rc1", version: "0.2.2-rc1", commit: "a".repeat(40), pluginSha: "b".repeat(40) }];
 
-function runAggregate(t, reports, expectedTargets, pluginSha) {
+function runAggregate(t, reports, expectedTargets, pluginSha, expectedCount = expectedTargets.length) {
 	const directory = temporary(t);
 	const output = join(directory, "summary.json"), markdown = join(directory, "summary.md"), githubOutput = join(directory, "github-output.txt");
 	const args = [
@@ -414,12 +519,36 @@ function runAggregate(t, reports, expectedTargets, pluginSha) {
 		"--output", output,
 		"--markdown", markdown,
 		"--github-output", githubOutput,
-		"--expected-count", String(expectedTargets.length),
+		"--expected-count", String(expectedCount),
 		"--expected-targets", JSON.stringify(expectedTargets),
 		...(pluginSha !== undefined ? ["--plugin-sha", pluginSha] : []),
 	];
 	const result = spawnSync(process.execPath, args, { encoding: "utf8", cwd: repository });
 	return { result, output, markdown, githubOutput };
+}
+
+for (const fault of ["missing-directory", "tagless-extra", "count-mismatch", "healthy"]) {
+	test(`aggregate-to-notify preserves the existing issue correctly for ${fault}`, t => {
+		const directory = temporary(t), reports = join(directory, "reports");
+		const healthy = { ...targetFixture[0], classification: "COMPATIBLE", reason: "stock compatibility suite passed", testExitCode: 0, testSummary: { tests: 1, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0 } };
+		if (fault !== "missing-directory") writeReport(reports, "rc1", healthy);
+		if (fault === "tagless-extra") {
+			const { tag, ...unowned } = healthy;
+			writeReport(reports, "unowned", unowned);
+		}
+		const { result, output, githubOutput } = runAggregate(t, reports, targetFixture, targetFixture[0].pluginSha, fault === "count-mismatch" ? 2 : 1);
+		assert.equal(result.status, 0, result.stderr);
+		const existing = [{ number: 7, title: `[upstream-compat] ${healthy.tag}`, state: "OPEN", body: "previous anomaly" }];
+		const gh = fakeGh(t, directory, existing), notification = join(directory, "notification.json");
+		const notified = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"), "--aggregate", output, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", notification], { encoding: "utf8", env: gh.env });
+		assert.equal(notified.status, 0, notified.stderr);
+		const actions = JSON.parse(readFileSync(notification, "utf8")).actions;
+		const valid = fault === "healthy";
+		assert.deepEqual(actions.map(({ classification, action }) => ({ classification, action })), [{ classification: valid ? "COMPATIBLE" : "INFRA_ERROR", action: valid ? "resolved" : "updated" }], "an invalid report collection cannot resolve the previous anomaly");
+		assert.equal(/issue close/.test(readFileSync(gh.record, "utf8")), valid);
+		assert.equal(JSON.parse(readFileSync(output, "utf8")).complete, valid);
+		assert.match(readFileSync(githubOutput, "utf8"), new RegExp(`has_infra_error=${!valid}`), "notification delivery does not turn the gate green");
+	});
 }
 
 test("aggregate refuses to call a PREPARED-only run complete", t => {
@@ -432,6 +561,27 @@ test("aggregate refuses to call a PREPARED-only run complete", t => {
 	assert.match(readFileSync(githubOutput, "utf8"), /has_infra_error=true/);
 	assert.equal(aggregate.effectiveCounts.INFRA_ERROR, 1);
 });
+
+for (const fault of ["PREPARED", "missing", "wrong-sha", "unexpected"]) {
+	test(`an incomplete ${fault} report still delivers one infrastructure alert for the discovered target`, t => {
+		const directory = temporary(t), reports = join(directory, "reports");
+		mkdirSync(reports);
+		if (fault !== "missing") writeReport(reports, "rc1", {
+			...targetFixture[0], pluginSha: (fault === "wrong-sha" ? "c" : "b").repeat(40), classification: fault === "PREPARED" ? "PREPARED" : "COMPATIBLE", reason: "dependency lock resolved",
+			...(fault === "unexpected" ? { testExitCode: 0, testSummary: { tests: 1, pass: 1, fail: 0, cancelled: 0, skipped: 0, todo: 0 } } : {}),
+		});
+		if (fault === "unexpected") writeReport(reports, "foreign", { ...targetFixture[0], tag: "dsh-v0.2.2-rc9", classification: "PREPARED" });
+		const { result, output } = runAggregate(t, reports, targetFixture, "b".repeat(40));
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(JSON.parse(readFileSync(output, "utf8")).complete, false, "the gate must remain red");
+		const gh = fakeGh(t, directory, []), notification = join(directory, "notification.json");
+		const notify = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"), "--aggregate", output, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", notification], { encoding: "utf8", env: gh.env });
+		assert.equal(notify.status, 0, notify.stderr);
+		const actions = JSON.parse(readFileSync(notification, "utf8")).actions;
+		assert.deepEqual(actions.map(({ tag, classification, action }) => ({ tag, classification, action })), [{ tag: targetFixture[0].tag, classification: "INFRA_ERROR", action: "created" }], "publish the monitored target's infrastructure fault, never a healthy or foreign-SHA verdict");
+		assert.match(readFileSync(gh.body, "utf8"), new RegExp("b".repeat(40)));
+	});
+}
 
 test("aggregate rejects missing, duplicate, and unknown-classification reports", t => {
 	const missing = temporary(t);

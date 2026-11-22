@@ -1,0 +1,26 @@
+✖ a hung runtime settles an infrastructure report and stops descendants before the job deadline (990.832208ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1038.391875
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:367:1
+✖ a hung runtime settles an infrastructure report and stops descendants before the job deadline (990.832208ms)
+  AssertionError [ERR_ASSERTION]: keep the original loader diagnostic ahead of the later timeout
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:388:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'Error: /opt/homebrew/Cellar/node@24/24.22.3_1/bin/node timed out after 600ms',
+    expected: /ERR_PACKAGE_PATH_NOT_EXPORTED/,
+    operator: 'match',
+    diff: 'simple'
+  }

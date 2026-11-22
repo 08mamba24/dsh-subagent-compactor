@@ -34,7 +34,7 @@ const byTitle = new Map(existing.map(issue => [issue.title, issue]));
 const temporary = mkdtempSync(join(tmpdir(), "dsh-upstream-notify-"));
 const actions = [];
 try {
-	for (const entry of aggregate.reports) {
+	for (const entry of aggregate.notificationReports ?? aggregate.reports) {
 		/* Delivery follows the EFFECTIVE verdict: a cached (SKIPPED) result
 		 * still owes an issue until its fingerprint has actually been
 		 * delivered — testing was skipped, notification was not. */

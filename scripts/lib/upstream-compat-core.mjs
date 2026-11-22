@@ -140,6 +140,8 @@ export function evaluateTestEvidence(summary) {
 }
 
 export function classifyRunnerResult({ status, output = "", error } = {}) {
+	if (error?.code === "ETIMEDOUT") return { classification: "INFRA_ERROR", reason: "runtime regression timed out" };
+	if (error?.code === "EINTR") return { classification: "INFRA_ERROR", reason: "runtime regression interrupted" };
 	if (error || status === null || status === undefined) return { classification: "INFRA_ERROR", reason: "runner failed to start" };
 	if (/Unsupported test runtime:/i.test(output)) return { classification: "NOT_VERIFIED", reason: "runner unsupported" };
 	const testSummary = parseTestSummary(output);
