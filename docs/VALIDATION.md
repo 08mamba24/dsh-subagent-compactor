@@ -1,5 +1,19 @@
 # Validation record
 
+## Upstream compatibility watch and rc.3–rc.5 (2026-11-22)
+
+The current source passed all five tracked suites on each stock rc.1–rc.5 tree:
+**116/116 per runtime, zero failed or skipped**. rc.3–rc.5 also traversed the
+watcher's real public-dependency prepare/run path and produced `COMPATIBLE`
+reports with exact source identities and executed-test evidence. The watcher
+regressions passed **27/27** after the independent-review repair, including future-version candidate execution,
+package mismatch rejection, semantic version ordering and anomaly/recovery
+deduplication and transient issue-reopen retry. See the [dated author acceptance record](acceptance/2026-11-22-upstream-watch/acceptance.md).
+
+Future RCs are attempted automatically in candidate mode; the fixed CI matrix
+is explicit. These local results do not by themselves establish schedule
+activation, future-version compatibility, a release or a daily installation update.
+
 ## 1.3.4 no-argument batch command candidate (2026-11-21)
 
 The source branch adds `/subagent-compact-all` without a command input descriptor and awaits the existing batch operation. Editing remains available while compaction runs, and the host publishes the actual result after completion. Existing listing, single-ID, `all`, and `--all` forms remain supported.

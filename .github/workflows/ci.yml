@@ -1,4 +1,4 @@
-# Validate the distribution on both unmodified, pinned Harness contracts.
+# Validate the distribution on unmodified, pinned Harness contracts.
 # No host patches, release tags, npm publication, or deployment are performed.
 name: CI
 
@@ -12,6 +12,17 @@ permissions:
   contents: read
 
 jobs:
+  watcher:
+    name: Upstream watcher regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      - run: npm run test:upstream-watch
+
   stock:
     name: stock Harness ${{ matrix.harness }} — full tracked suite
     runs-on: ubuntu-latest
@@ -19,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        harness: [0.2.2-rc.1, 0.2.2-rc.2]
+        harness: [0.2.2-rc.1, 0.2.2-rc.2, 0.2.2-rc.3, 0.2.2-rc.4, 0.2.2-rc.5]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -38,8 +49,8 @@ jobs:
           import { join, resolve } from 'node:path';
           import { spawnSync } from 'node:child_process';
           let modules = resolve('node_modules');
-          if (process.env.HARNESS_TEST_VERSION === '0.2.2-rc.2') {
-            const scratch = mkdtempSync(join(tmpdir(), 'dsh-rc2-ci-'));
+          if (process.env.HARNESS_TEST_VERSION !== '0.2.2-rc.1') {
+            const scratch = mkdtempSync(join(tmpdir(), 'dsh-stock-ci-'));
             const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
             const dependencies = Object.entries(pkg.devDependencies).map(([name, version]) =>
               `${name}@${name.startsWith('@deepseek-ai/dsh-') ? process.env.HARNESS_TEST_VERSION : version}`);

@@ -1,0 +1,296 @@
+# Discover new official DeepSeek Harness tags and test only exact, previously unseen combinations.
+# This workflow is independent from ci.yml's fixed compatibility matrix.
+name: Upstream compatibility watch
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/upstream-compat.yml
+      - scripts/**
+      - test/**
+      - index.js
+      - package.json
+      - package-lock.json
+  schedule:
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional exact official tag, for example dsh-v0.2.2-rc.3"
+        required: false
+        type: string
+      force_recheck:
+        description: "Ignore a matching cached result for this manual run"
+        required: false
+        default: false
+        type: boolean
+      notify:
+        description: "Publish anomaly/recovery issues (manual runs on main only)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-compat-watch
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    name: Discover official releases and tags
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.discover.outputs.matrix }}
+      expected_targets: ${{ steps.discover.outputs.expected_targets }}
+      has_candidates: ${{ steps.discover.outputs.has_candidates }}
+      candidate_count: ${{ steps.discover.outputs.candidate_count }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      - name: Test the watcher logic
+        run: node --test test/upstream-compat-watch.test.mjs
+      - name: Discover recent non-draft DSH tags, including prereleases
+        id: discover
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          args=(
+            --repository deepseek-ai/deepseek-harness
+            --limit 3
+            --output upstream-discovery.json
+            --github-output "$GITHUB_OUTPUT"
+          )
+          if [[ -n "$REQUESTED_TAG" ]]; then
+            args+=(--tag "$REQUESTED_TAG")
+          fi
+          node scripts/discover-upstream.mjs "${args[@]}"
+      - name: Upload discovery provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-discovery
+          path: upstream-discovery.json
+          if-no-files-found: error
+          retention-days: 30
+
+  compatibility:
+    name: Harness ${{ matrix.tag }}
+    needs: discover
+    if: needs.discover.outputs.has_candidates == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.18.0
+      - name: Resolve an exact public dependency lock without running package scripts
+        id: prepare
+        env:
+          SCRATCH: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}
+          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node scripts/upstream-compat.mjs prepare \
+            --version '${{ matrix.version }}' \
+            --tag '${{ matrix.tag }}' \
+            --commit '${{ matrix.commit }}' \
+            --plugin-sha '${{ github.sha }}' \
+            --scratch "$SCRATCH" \
+            --report "$REPORT" \
+            --run-url "$RUN_URL" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Restore the most recent cached verdict for this combination
+        id: restore
+        if: steps.prepare.outputs.ready == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
+          # The exact key stays unique so it never primary-hits; the prefix
+          # restores the newest stored verdict, which inspect validates below.
+          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-none
+          restore-keys: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-
+      - name: Validate the restored verdict against this exact combination
+        id: inspect
+        if: steps.prepare.outputs.ready == 'true'
+        env:
+          CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
+        run: node scripts/upstream-compat.mjs inspect --cache-directory "$CACHE_DIRECTORY" --combo-digest '${{ steps.prepare.outputs.combo_digest }}' --github-output "$GITHUB_OUTPUT"
+      - name: Run the isolated stock-runtime compatibility suite
+        id: run
+        if: steps.prepare.outputs.ready == 'true' && (steps.inspect.outputs.skip != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_recheck))
+        env:
+          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
+        run: |
+          node scripts/upstream-compat.mjs run \
+            --plan '${{ steps.prepare.outputs.plan }}' \
+            --report "$REPORT" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Record a deduplicated skip
+        id: reuse
+        if: steps.prepare.outputs.ready == 'true' && steps.inspect.outputs.skip == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.force_recheck)
+        env:
+          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
+        run: |
+          node scripts/upstream-compat.mjs reuse \
+            --cached-report '${{ steps.inspect.outputs.cachedReport }}' \
+            --report "$REPORT" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Prepare a reusable result marker
+        id: cache
+        # Saving follows what THIS run executed: a forced recheck (skip=true,
+        # run executed) must save its fresh verdict under the new digest key;
+        # an ordinary cache hit (run skipped) must not save anything.
+        if: steps.prepare.outputs.ready == 'true' && steps.run.outcome == 'success' && steps.run.outputs.classification != 'INFRA_ERROR'
+        env:
+          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
+          CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
+        run: node scripts/upstream-compat.mjs cache --report "$REPORT" --cache-directory "$CACHE_DIRECTORY" --github-output "$GITHUB_OUTPUT"
+      - name: Save the exact combination result
+        # The key embeds the result digest: a changed verdict saves a fresh
+        # entry; an identical one re-saves the same key harmlessly.
+        if: steps.prepare.outputs.ready == 'true' && steps.run.outcome == 'success' && steps.run.outputs.classification != 'INFRA_ERROR'
+        uses: actions/cache/save@v4
+        with:
+          path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}
+          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-${{ steps.cache.outputs.result_digest }}
+      - name: Upload this compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compat-${{ matrix.artifact }}
+          path: |
+            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json
+            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/plan.json
+            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/dependencies/package.json
+            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/dependencies/package-lock.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  aggregate:
+    name: Publish compatibility summary
+    needs: [discover, compatibility]
+    if: always() && needs.discover.outputs.has_candidates == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      has_incompatible: ${{ steps.aggregate.outputs.has_incompatible }}
+      has_infra_error: ${{ steps.aggregate.outputs.has_infra_error }}
+      has_not_verified: ${{ steps.aggregate.outputs.has_not_verified }}
+      report_count: ${{ steps.aggregate.outputs.report_count }}
+      complete: ${{ steps.aggregate.outputs.complete }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: upstream-compat-*
+          path: downloaded-reports
+      - name: Aggregate classifications without upgrading NOT_VERIFIED to incompatibility
+        id: aggregate
+        run: |
+          node scripts/upstream-compat.mjs aggregate \
+            --reports-directory "$GITHUB_WORKSPACE/downloaded-reports" \
+            --output "$GITHUB_WORKSPACE/upstream-compat-summary.json" \
+            --markdown "$GITHUB_WORKSPACE/upstream-compat-summary.md" \
+            --expected-count '${{ needs.discover.outputs.candidate_count }}' \
+            --expected-targets '${{ needs.discover.outputs.expected_targets }}' \
+            --plugin-sha '${{ github.sha }}' \
+            --step-summary "$GITHUB_STEP_SUMMARY" \
+            --github-output "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compat-summary
+          path: |
+            upstream-compat-summary.json
+            upstream-compat-summary.md
+          if-no-files-found: error
+          retention-days: 30
+
+  notify:
+    name: Update the unique upstream-version issues
+    needs: [discover, aggregate]
+    if: (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.notify)) && github.ref == 'refs/heads/main' && needs.discover.outputs.has_candidates == 'true' && needs.aggregate.outputs.complete == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: upstream-compat-summary
+          path: aggregate
+      - name: Publish anomalies and resolve recovered versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          node scripts/notify-upstream-compat.mjs \
+            --aggregate "$GITHUB_WORKSPACE/aggregate/upstream-compat-summary.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --run-url "$RUN_URL" \
+            --output "$GITHUB_WORKSPACE/upstream-compat-notification.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compat-notification
+          path: upstream-compat-notification.json
+          if-no-files-found: error
+          retention-days: 30
+
+  gate:
+    name: Classify the watch result
+    needs: [discover, aggregate]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Preserve the three-state verdict
+        env:
+          INCOMPATIBLE: ${{ needs.aggregate.outputs.has_incompatible }}
+          INFRA_ERROR: ${{ needs.aggregate.outputs.has_infra_error }}
+          NOT_VERIFIED: ${{ needs.aggregate.outputs.has_not_verified }}
+          DISCOVERY_RESULT: ${{ needs.discover.result }}
+          AGGREGATE_RESULT: ${{ needs.aggregate.result }}
+          HAS_CANDIDATES: ${{ needs.discover.outputs.has_candidates }}
+          EXPECTED_REPORTS: ${{ needs.discover.outputs.candidate_count }}
+          ACTUAL_REPORTS: ${{ needs.aggregate.outputs.report_count }}
+        run: |
+          if [[ "$DISCOVERY_RESULT" != "success" ]]; then
+            echo "Discovery did not complete successfully: $DISCOVERY_RESULT"
+            exit 1
+          fi
+          if [[ "$HAS_CANDIDATES" != "true" ]]; then
+            echo "No official DSH release or tag candidate was discovered."
+            exit 0
+          fi
+          if [[ "$AGGREGATE_RESULT" != "success" || "$EXPECTED_REPORTS" != "$ACTUAL_REPORTS" ]]; then
+            echo "Compatibility artifacts are incomplete (aggregate=$AGGREGATE_RESULT, expected=$EXPECTED_REPORTS, actual=$ACTUAL_REPORTS)."
+            exit 1
+          fi
+          if [[ "$NOT_VERIFIED" == "true" ]]; then
+            echo "::warning::At least one upstream version is NOT_VERIFIED; inspect the artifact before any upgrade decision."
+          fi
+          if [[ "$INCOMPATIBLE" == "true" || "$INFRA_ERROR" == "true" ]]; then
+            echo "Compatibility watch requires analysis (INCOMPATIBLE=$INCOMPATIBLE, INFRA_ERROR=$INFRA_ERROR)."
+            exit 1
+          fi
+          echo "No incompatible or infrastructure-error result was reported."

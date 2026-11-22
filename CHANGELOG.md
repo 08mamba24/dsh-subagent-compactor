@@ -1,5 +1,12 @@
 # Changelog / 变更日志
 
+## Upstream compatibility automation / 上游兼容性自动化 (2026-11-22)
+
+- Discover official Harness tags and releases hourly, including future RCs, and run isolated candidate regressions against exact versions. Keep fixed CI coverage on rc.1–rc.5; record executed-test evidence and distinguish incompatibility, unverified runs, and infrastructure errors.
+  每小时发现官方 Harness tag 与 release，包含后续 RC，针对精确版本执行隔离候选回归；固定 CI 覆盖 rc.1–rc.5，记录真实测试证据，区分不兼容、未验证与环境故障。
+- Deduplicate results and anomaly issues, close recovered issues, and allow an explicit manual notification run on main. PR runs have read-only permissions. Daily installations and published tags remain operator-managed.
+  结果和异常 issue 去重，恢复后关闭；main 上可明确选择手动通知，PR 运行仅有只读权限。日用安装和发布标签仍由 operator 管理。
+
 ## 1.3.4 — Unreleased / 未发布 (2026-11-21)
 
 - Add `/subagent-compact-all`, a no-argument entry point for the existing batch operation. It uses the stock UI path that releases the input box during execution; no application patch is required.

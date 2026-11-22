@@ -5,7 +5,7 @@ import { constants, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const supportedVersions = new Set(["0.2.2-rc.1", "0.2.2-rc.2"]);
+const supportedVersions = new Set(["0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.2-rc.4", "0.2.2-rc.5"]);
 const tests = ["authorization.test.mjs", "unit.test.mjs", "batch.test.mjs", "integration.test.mjs", "preset-integration.test.mjs"];
 const modulesRequired = [
 	"cordis", "cordis-plugin-loader", "cordis-plugin-timer", "schemastery",
@@ -22,13 +22,16 @@ try {
 	const [major, minor] = process.versions.node.split(".").map(Number);
 	if (major < 24 || (major === 24 && minor < 9)) throw new Error("Node >=24.9 is required.");
 	const args = process.argv.slice(2);
-	if (args.length !== 2 || args[0] !== "--modules" || !isAbsolute(args[1])) {
-		throw new Error("Usage: node scripts/test-installed-runtime.mjs --modules /absolute/node_modules");
+	const candidateVersion = args.length === 4 && args[2] === "--candidate-version" ? args[3] : undefined;
+	if ((args.length !== 2 && candidateVersion === undefined) || args[0] !== "--modules" || !isAbsolute(args[1])
+		|| (candidateVersion !== undefined && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(candidateVersion))) {
+		throw new Error("Usage: node scripts/test-installed-runtime.mjs --modules /absolute/node_modules [--candidate-version exact-version]");
 	}
 	const modules = realpathSync(args[1]);
 	if (!statSync(modules).isDirectory()) throw new Error(`Not a module directory: ${modules}`);
 	const version = JSON.parse(readFileSync(join(modules, "@deepseek-ai/dsh-subagent/package.json"), "utf8")).version;
-	if (!supportedVersions.has(version)) throw new Error(`Unsupported test runtime: ${version}`);
+	if (candidateVersion !== undefined && version !== candidateVersion) throw new Error(`Candidate runtime mismatch: expected ${candidateVersion}, found ${version}`);
+	if (!supportedVersions.has(version) && candidateVersion === undefined) throw new Error(`Unsupported test runtime: ${version}`);
 	for (const name of modulesRequired) {
 		const directory = join(modules, "@deepseek-ai", name);
 		if (!statSync(directory).isDirectory()) throw new Error(`Missing module directory: ${directory}`);

@@ -1,0 +1,32 @@
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (0.770708ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.162416ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.090584ms)
+✔ dedup digest changes for every compatibility identity input (0.276834ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.219416ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (0.644125ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (268.626834ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.205791ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.168416ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (33.678292ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (32.774625ms)
+✔ prepare CLI records the runner support decision before any runtime execution (544.664875ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (214.190625ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (301.119375ms)
+✔ workflow keeps execution read-only and isolates issue write permission (0.45225ms)
+✔ aggregate refuses to call a PREPARED-only run complete (32.287417ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (101.210084ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (97.485875ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (96.09425ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (32.068416ms)
+✔ notify delivers a cached verdict that was never delivered before (309.439ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (363.997375ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (316.379833ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (93.395958ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2885.02525

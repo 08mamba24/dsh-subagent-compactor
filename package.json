@@ -45,7 +45,8 @@
   },
   "scripts": {
     "test": "node --test --test-timeout=60000 test/authorization.test.mjs test/unit.test.mjs test/batch.test.mjs test/integration.test.mjs test/preset-integration.test.mjs",
-    "test:stock": "npm test"
+    "test:stock": "npm test",
+    "test:upstream-watch": "node --test test/upstream-compat-watch.test.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.1.0",
