@@ -368,7 +368,7 @@ test("a hung runtime settles an infrastructure report and stops descendants befo
 	const { directory, modules, env } = candidateFixture(t);
 	const heartbeat = join(directory, "heartbeat"), pidFile = join(directory, "runner-pid");
 	const nested = `import { appendFileSync } from "node:fs"; setInterval(() => appendFileSync(${JSON.stringify(heartbeat)}, "."), 20);`;
-	writeFileSync(join(directory, "scripts/test-installed-runtime.mjs"), `import { spawn } from "node:child_process"; import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); console.log("runtime fixture started"); spawn(process.execPath, ["--input-type=module", "-e", ${JSON.stringify(nested)}], { stdio: "inherit" }); setInterval(() => {}, 1000);\n`);
+	writeFileSync(join(directory, "scripts/test-installed-runtime.mjs"), `import { spawn } from "node:child_process"; import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); console.error("Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: fixture export removed"); console.log("runtime fixture started"); spawn(process.execPath, ["--input-type=module", "-e", ${JSON.stringify(nested)}], { stdio: "inherit" }); setInterval(() => {}, 1000);\n`);
 	const report = join(directory, "report.json"), plan = join(directory, "plan.json");
 	const identity = { tag: "dsh-v99.0.0-rc.1", version: "99.0.0-rc.1", commit: "a".repeat(40), pluginSha: "b".repeat(40) };
 	writeFileSync(plan, JSON.stringify({ ...identity, runnerSupportsVersion: false, dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
@@ -385,6 +385,7 @@ test("a hung runtime settles an infrastructure report and stops descendants befo
 	assert.equal(verdict.classification, "INFRA_ERROR", "a runtime deadline must settle INFRA_ERROR instead of leaving PREPARED");
 	assert.equal(guardExpired, false, "the command must finish before the outer job guard");
 	assert.match(verdict.reason, /timed out/);
+	assert.match(verdict.firstFailure, /ERR_PACKAGE_PATH_NOT_EXPORTED/, "keep the original loader diagnostic ahead of the later timeout");
 	assert.match(output, /runtime fixture started/, "partial runtime output must survive the timeout");
 	assert.match(verdict.outputTail, /runtime fixture started/);
 	assert.equal(verdict.pluginSha, identity.pluginSha);
