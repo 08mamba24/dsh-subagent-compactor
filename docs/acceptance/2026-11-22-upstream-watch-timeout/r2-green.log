@@ -1,0 +1,48 @@
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (1.624417ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.33375ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.178791ms)
+✔ dedup digest changes for every compatibility identity input (0.566541ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.438167ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (1.362333ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (557.297917ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.386958ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.33175ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (68.091209ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (68.572208ms)
+✔ prepare CLI records the runner support decision before any runtime execution (508.542666ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (397.027375ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (618.797125ms)
+✔ a hung runtime settles an infrastructure report and stops descendants before the job deadline (872.881208ms)
+✔ the failure dependency chain can reach notification while permission gates remain closed elsewhere (1.633834ms)
+✔ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.403167ms)
+✔ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (10348.464542ms)
+ℹ {"stageMinutes":[6,6,6],"scaledElapsedMs":10321,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✔ workflow keeps execution read-only and isolates issue write permission (0.582209ms)
+✔ aggregate-to-notify preserves the existing issue correctly for missing-directory (445.069875ms)
+✔ aggregate-to-notify preserves the existing issue correctly for tagless-extra (696.643709ms)
+✔ aggregate-to-notify preserves the existing issue correctly for count-mismatch (407.562875ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (676.065291ms)
+✔ aggregate refuses to call a PREPARED-only run complete (68.722792ms)
+✔ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (448.948ms)
+✔ an incomplete missing report still delivers one infrastructure alert for the discovered target (499.292292ms)
+✔ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (433.476084ms)
+✔ an incomplete unexpected report still delivers one infrastructure alert for the discovered target (462.539833ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (202.249208ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (209.556041ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (199.480583ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (66.725709ms)
+✔ notify delivers a cached verdict that was never delivered before (363.021375ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (486.738ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (341.48475ms)
+✔ notify retries a failed reopen after editing INCOMPATIBLE, then stays quiet (811.87675ms)
+✔ notify retries a failed reopen after editing NOT_VERIFIED, then stays quiet (803.081792ms)
+✔ notify retries a failed reopen after editing INFRA_ERROR, then stays quiet (811.036375ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (132.509917ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 39
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22096.843792

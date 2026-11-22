@@ -1,5 +1,6 @@
 {
   "runtimeSourceSha": "17a4aa7194505f0597acfa37b453af327ba32ee7",
+  "reviewRepairSourceSha": "857490646c1fac2eadcc4688bc0aec6ac306f823",
   "baseSha": "cdbbef4f2e7bbe47e60fe9e319eb103b01ac59f9",
   "originalRunId": 44985777841,
   "originalRunConclusion": "cancelled",
@@ -8,8 +9,8 @@
   "originalEffectiveClassification": "INFRA_ERROR",
   "originalNotifyJob": "skipped",
   "watcher": {
-    "tests": 32,
-    "pass": 32,
+    "tests": 39,
+    "pass": 39,
     "fail": 0,
     "skipped": 0
   },
@@ -22,6 +23,32 @@
   "alpha1Diagnostic": {
     "classification": "INFRA_ERROR",
     "purpose": "bounded loader diagnostic; not compatibility acceptance"
+  },
+  "reviewRepairNegativeControl": {
+    "sourceSha": "d6fed785ead6f840fd5dbdc534cb769dbad2b54b",
+    "tests": 7,
+    "intendedFailures": 6,
+    "healthyControlPasses": 1
+  },
+  "serialBudgetRegression": {
+    "millisecondsPerProductionMinute": 600,
+    "jobLimitMinutes": 25,
+    "stageLimitMinutes": [6, 6, 6],
+    "otherStepsReserveMinutes": 7,
+    "negativeTerminalMs": 15757,
+    "positiveTerminalMs": 10321,
+    "scaledJobLimitMs": 15000,
+    "classification": "INFRA_ERROR",
+    "kind": "copied CLI with scaled constants; real serial child commands"
+  },
+  "firstReviewHeadRemoteWatch": {
+    "runId": 44989017838,
+    "headSha": "d6fed785ead6f840fd5dbdc534cb769dbad2b54b",
+    "conclusion": "failure",
+    "alpha1Classification": "INFRA_ERROR",
+    "alpha1Reason": "runtime regression timed out",
+    "firstFailureCode": "ERR_PACKAGE_PATH_NOT_EXPORTED",
+    "notify": "skipped on pull_request"
   },
   "productFilesChanged": false,
   "scheduleTriggerObserved": false
