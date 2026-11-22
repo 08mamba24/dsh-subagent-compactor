@@ -119,7 +119,7 @@ npm test
 
 rc.2 的所有单目标入口还需要 `sessionQuery` 与 `subagentCatalog` 投影来核对直接创建者；不能只靠同树关系授权。
 
-测试其他已提取的原版模块树：`node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`。runner 仅接受 rc.1/rc.2，并检查所需 dsh 包版本一致；CI 分别运行两套依赖。这些模块级回归不代表新增原生 Electron 窗口验收。
+测试其他已提取的原版模块树：`node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`。固定 runner 与 CI 覆盖 rc.1 至 rc.5，并检查所需 dsh 包精确版本一致；监控通过 `--candidate-version <精确版本>` 测试新发现的版本，无需先将其加入固定矩阵。这些模块级回归不代表新增原生 Electron 窗口验收。
 
 五份受跟踪测试使用固定版本的原版运行时包、隔离临时存储和本地模拟模型服务，不发送外部模型请求。
 
@@ -127,9 +127,9 @@ rc.2 的所有单目标入口还需要 `sessionQuery` 与 `subagentCatalog` 投�
 
 [`upstream-compat.yml`](.github/workflows/upstream-compat.yml) 可发现 `deepseek-ai/deepseek-harness` 官方近期 release 与 tag，包含 prerelease 和 RC，并只测试尚未记录的精确组合；draft release 会被排除。每份报告都会记录 Harness tag 及其精确 commit、本仓精确 SHA、解析后的依赖锁摘要和 runner 摘要。
 
-监控与 `ci.yml` 的固定兼容矩阵相互独立，不会修改原有门禁。只有被 stock installed-runtime runner 接受的版本才会使用公开 npm 包、临时 HOME/DSH_HOME/JSONL 和回环合成模型执行测试；runner 不认识的新版本会标记为 `NOT_VERIFIED (runner unsupported)`，绝不冒充 `INCOMPATIBLE`。详见[监控设计与操作说明](docs/UPSTREAM_COMPAT_WATCH.md)。
+监控与 `ci.yml` 的固定兼容矩阵相互独立，不会修改原有门禁。每个候选版本（含后续 RC）都会尝试完整 stock installed-runtime 回归，使用公开 npm 包、临时 HOME/DSH_HOME/JSONL 和回环合成模型。依赖不可用或测试无法加载时标记为 `NOT_VERIFIED`，只有实际执行并通过才能判定兼容。异常按上游 tag 更新同一条 issue，恢复后关闭；正常版本保留在 Actions 中。详见[监控设计与操作说明](docs/UPSTREAM_COMPAT_WATCH.md)。
 
-只有 workflow 进入默认分支后，GitHub 才会按计划自动执行。功能分支或 Draft PR 只是审查材料，不代表监控已启用。手动运行可指定一个精确官方 tag，也可强制复查；这些动作都不会自动升级、发布、打 tag、安装插件或重启 Desktop。
+只有 workflow 进入默认分支后，GitHub 才会在每小时第 23 分钟按计划执行。PR 运行验证只读的发现、测试和报告路径。手动运行可指定精确官方 tag、强制复查，并在 main 上选择发送异常通知。运行不会自动升级、发布、打 tag、安装插件或重启 Desktop。
 
 ## 源码与许可证
 

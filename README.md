@@ -117,7 +117,7 @@ npm ci --include=dev
 npm test
 ```
 
-To test another extracted stock tree, run `node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`. The runner accepts only rc.1 or rc.2 and checks all required dsh packages agree on that version. CI runs both package trees. These module-level tests do not claim a new native Electron-window acceptance.
+To test another extracted stock tree, run `node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`. The fixed runner and CI cover rc.1 through rc.5 and check that all required dsh packages agree on the exact version. The watcher passes `--candidate-version <exact-version>` to test a newly discovered version before adding it to the fixed matrix. These module-level tests do not claim a new native Electron-window acceptance.
 
 The five tracked suites use pinned stock runtime packages, isolated temporary storage, and a local fake model endpoint. They make no external model requests.
 
@@ -125,9 +125,9 @@ The five tracked suites use pinned stock runtime packages, isolated temporary st
 
 [`upstream-compat.yml`](.github/workflows/upstream-compat.yml) can discover recent official `deepseek-ai/deepseek-harness` releases and tags, including prerelease and RC tags, then test only exact combinations that have not been recorded before. Draft releases are excluded. Every report records the Harness tag and tag commit, this repository's exact SHA, the resolved dependency-lock digest, and the runner digest.
 
-The watcher is separate from `ci.yml` and never changes its pinned compatibility matrix. A version accepted by the stock installed-runtime runner is tested with public npm packages in temporary HOME/DSH_HOME/JSONL storage and a loopback synthetic model. An unknown runner version is `NOT_VERIFIED (runner unsupported)`, not `INCOMPATIBLE`. See [the watch design and operator guide](docs/UPSTREAM_COMPAT_WATCH.md).
+The watcher is separate from `ci.yml` and never changes its pinned compatibility matrix. It attempts the full stock installed-runtime suite for every discovered candidate, including future RCs, using public npm packages, temporary HOME/DSH_HOME/JSONL storage and a loopback synthetic model. An unavailable dependency or a suite that cannot load is `NOT_VERIFIED`; only an executed passing suite establishes compatibility. Anomalies update one issue per upstream tag, and recovery closes it; healthy versions stay in Actions. See [the watch design and operator guide](docs/UPSTREAM_COMPAT_WATCH.md).
 
-Scheduled execution starts only after this workflow reaches the default branch. A feature branch or Draft PR is review material, not an active monitor. Manual runs can select an exact official tag and can force a recheck without enabling an automatic upgrade, release, tag, installation, or Desktop restart.
+Scheduled execution starts only after this workflow reaches the default branch, at minute 23 of each hour. PR runs validate the read-only discovery/test/report path. Manual runs can select an exact official tag, force a recheck, and opt into anomaly notifications on main. No run upgrades, releases, tags or installs the plugin, or restarts Desktop.
 
 ## Source and license
 

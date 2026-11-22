@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -289,7 +289,7 @@ test("prepare CLI records the runner support decision before any runtime executi
 	const fakeNpm = join(bin, "npm");
 	writeFileSync(fakeNpm, "#!/bin/sh\nprintf '%s\\n' '{\"lockfileVersion\":3,\"packages\":{}}' > package-lock.json\n");
 	chmodSync(fakeNpm, 0o755);
-	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.3", false]]) {
+	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.5", true], ["99.0.0-rc.1", false]]) {
 		const scratch = join(directory, version), report = join(scratch, "report.json");
 		const result = spawnSync(process.execPath, [
 			join(repository, "scripts/upstream-compat.mjs"), "prepare",
@@ -302,9 +302,60 @@ test("prepare CLI records the runner support decision before any runtime executi
 		], { encoding: "utf8", cwd: repository, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
 		assert.equal(result.status, 0, result.stderr);
 		const plan = JSON.parse(readFileSync(join(scratch, "plan.json"), "utf8"));
-		assert.deepEqual(plan.runnerSupportedVersions, ["0.2.2-rc.1"]);
+		assert.deepEqual(plan.runnerSupportedVersions, ["0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.2-rc.4", "0.2.2-rc.5"]);
 		assert.equal(plan.runnerSupportsVersion, expected);
 	}
+});
+
+/** A synthetic future package tree exercises the wrapper, not Harness compatibility. */
+function candidateFixture(t) {
+	const directory = temporary(t), modules = join(directory, "dependencies/node_modules");
+	for (const part of ["scripts/lib", "test", "bin", "home"]) mkdirSync(join(directory, part), { recursive: true });
+	for (const file of ["scripts/test-installed-runtime.mjs", "scripts/upstream-compat.mjs", "scripts/lib/upstream-compat-core.mjs"])
+		copyFileSync(join(repository, file), join(directory, file));
+	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module" }));
+	writeFileSync(join(directory, "index.js"), "");
+	writeFileSync(join(directory, "test/runtime-fixture.mjs"), "");
+	for (const name of ["authorization", "unit", "batch", "integration", "preset-integration"])
+		writeFileSync(join(directory, `test/${name}.test.mjs`), 'import test from "node:test"; test("synthetic runner probe", () => {});\n');
+	const pkg = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"));
+	for (const name of Object.keys(pkg.devDependencies)) {
+		const path = join(modules, name);
+		mkdirSync(path, { recursive: true });
+		writeFileSync(join(path, "package.json"), JSON.stringify({ name, version: name.startsWith("@deepseek-ai/dsh-") ? "99.0.0-rc.1" : "1.0.0" }));
+	}
+	writeFileSync(join(directory, "bin/npm"), "#!/bin/sh\nexit 0\n");
+	chmodSync(join(directory, "bin/npm"), 0o755);
+	return { directory, modules, env: { ...process.env, PATH: `${join(directory, "bin")}:${process.env.PATH}`, NODE_TEST_CONTEXT: undefined } };
+}
+
+test("candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages", t => {
+	const { directory, modules, env } = candidateFixture(t);
+	const entry = join(directory, "scripts/test-installed-runtime.mjs"), args = [entry, "--modules", modules];
+	const fixed = spawnSync(process.execPath, args, { encoding: "utf8", env });
+	assert.equal(fixed.status, 1);
+	assert.match(fixed.stderr, /Unsupported test runtime: 99\.0\.0-rc\.1/);
+	const candidate = spawnSync(process.execPath, [...args, "--candidate-version", "99.0.0-rc.1"], { encoding: "utf8", env });
+	assert.equal(candidate.status, 0, candidate.stderr);
+	assert.match(candidate.stdout, /tests 5/);
+	const mismatched = spawnSync(process.execPath, [...args, "--candidate-version", "99.0.0-rc.2"], { encoding: "utf8", env });
+	assert.equal(mismatched.status, 1);
+	assert.match(mismatched.stderr, /Candidate runtime mismatch/);
+	writeFileSync(join(modules, "@deepseek-ai/dsh-agent/package.json"), JSON.stringify({ name: "@deepseek-ai/dsh-agent", version: "99.0.0-rc.2" }));
+	const mixed = spawnSync(process.execPath, [...args, "--candidate-version", "99.0.0-rc.1"], { encoding: "utf8", env });
+	assert.equal(mixed.status, 1);
+	assert.match(mixed.stderr, /expected 99\.0\.0-rc\.1, found 99\.0\.0-rc\.2/);
+});
+
+test("the watcher executes an unknown candidate instead of stopping at the baseline allowlist", t => {
+	const { directory, modules, env } = candidateFixture(t), report = join(directory, "report.json");
+	const plan = join(directory, "plan.json");
+	writeFileSync(plan, JSON.stringify({ version: "99.0.0-rc.1", runnerSupportsVersion: false, runnerSupportedVersions: ["0.2.2-rc.1"], dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
+	const result = spawnSync(process.execPath, [join(directory, "scripts/upstream-compat.mjs"), "run", "--plan", plan, "--report", report], { encoding: "utf8", env });
+	assert.equal(result.status, 0, result.stderr);
+	const verdict = JSON.parse(readFileSync(report, "utf8"));
+	assert.equal(verdict.classification, "COMPATIBLE", result.stdout);
+	assert.equal(verdict.testSummary.pass, 5, "real node --test bodies ran in the synthetic fixture");
 });
 
 test("workflow keeps execution read-only and isolates issue write permission", () => {
@@ -330,14 +381,14 @@ test("workflow keeps execution read-only and isolates issue write permission", (
 
 /** A gh stand-in that records every call and replays a configurable issue list. */
 function fakeGh(t, directory, issues) {
-	const bin = join(directory, "bin"), record = join(directory, "gh-calls.log");
+	const bin = join(directory, "bin"), record = join(directory, "gh-calls.log"), body = join(directory, "gh-body.md");
 	mkdirSync(bin, { recursive: true });
 	/* The issue list travels through the environment so no shell quoting
 	 * can corrupt the JSON the real gh would print. */
-	writeFileSync(join(bin, "gh"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + record + "'\nif [ \"$1 $2\" = \"issue list\" ]; then printf '%s' \"$ISSUES_JSON\"; exit 0; fi\nif [ \"$1 $2\" = \"issue create\" ]; then echo \"https://example.invalid/issues/1\"; exit 0; fi\nexit 0\n");
+	writeFileSync(join(bin, "gh"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + record + "'\nif [ \"$1 $2\" = \"issue list\" ]; then printf '%s' \"$ISSUES_JSON\"; exit 0; fi\nfor arg do\n  if [ \"$prev\" = \"--body-file\" ]; then cp \"$arg\" '" + body + "'; fi\n  prev=$arg\ndone\nif [ \"$1 $2\" = \"issue create\" ]; then echo \"https://example.invalid/issues/1\"; exit 0; fi\nexit 0\n");
 	chmodSync(join(bin, "gh"), 0o755);
 	const withIssues = { ...process.env, ISSUES_JSON: JSON.stringify(issues), PATH: `${bin}:${process.env.PATH}` };
-	return { record, env: withIssues };
+	return { record, body, env: withIssues };
 }
 
 function writeReport(reports, name, report) {
@@ -474,7 +525,7 @@ test("notify delivers a cached verdict that was never delivered before", t => {
 	assert.match(readFileSync(record, "utf8"), /issue create/);
 });
 
-test("notify stays quiet for an already-delivered identical cached verdict", t => {
+test("notify updates and resolves a recovered issue, then stays quiet for the same cached verdict", t => {
 	const directory = temporary(t);
 	const existing = [{ number: 7, title: "[upstream-compat] dsh-v0.2.2-rc1", state: "OPEN", body: "old body without fingerprint" }];
 	const gh = fakeGh(t, directory, existing);
@@ -488,8 +539,27 @@ test("notify stays quiet for an already-delivered identical cached verdict", t =
 	], { encoding: "utf8", cwd: repository, env: gh.env });
 	assert.equal(result.status, 0, result.stderr);
 	const actions = JSON.parse(readFileSync(join(directory, "notification.json"), "utf8")).actions;
-	assert.deepEqual(actions.map(action => action.action), ["updated"], "an existing issue without the current fingerprint is updated, not skipped");
+	assert.deepEqual(actions.map(action => action.action), ["resolved"], "a healthy verdict resolves the existing anomaly");
 	assert.match(readFileSync(record, "utf8"), /issue edit/);
+	assert.match(readFileSync(record, "utf8"), /issue close/);
+	const second = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"),
+		"--aggregate", aggregatePath, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/2", "--output", join(directory, "repeat.json"),
+	], { encoding: "utf8", cwd: repository, env: { ...gh.env, ISSUES_JSON: JSON.stringify([{ ...existing[0], state: "CLOSED", body: readFileSync(gh.body, "utf8") }]) } });
+	assert.equal(second.status, 0, second.stderr);
+	assert.deepEqual(JSON.parse(readFileSync(join(directory, "repeat.json"), "utf8")).actions.map(action => action.action), ["unchanged"]);
+	assert.equal(readFileSync(record, "utf8").split("\n").filter(line => /issue (edit|close|create|reopen)/.test(line)).length, 2, "a later run URL alone does not trigger another issue write");
+});
+
+test("notify leaves a newly compatible version in Actions without creating an issue", t => {
+	const directory = temporary(t), gh = fakeGh(t, directory, []);
+	const aggregatePath = join(directory, "aggregate.json");
+	writeFileSync(aggregatePath, JSON.stringify({ reports: [{ tag: "dsh-v0.2.2-rc.5", classification: "COMPATIBLE", reason: "stock compatibility suite passed" }] }));
+	const result = spawnSync(process.execPath, [join(repository, "scripts/notify-upstream-compat.mjs"),
+		"--aggregate", aggregatePath, "--repository", "example/invalid", "--run-url", "https://example.invalid/runs/1", "--output", join(directory, "notification.json"),
+	], { encoding: "utf8", cwd: repository, env: gh.env });
+	assert.equal(result.status, 0, result.stderr);
+	assert.deepEqual(JSON.parse(readFileSync(join(directory, "notification.json"), "utf8")).actions.map(action => action.action), ["healthy"]);
+	assert.doesNotMatch(readFileSync(gh.record, "utf8"), /issue (create|edit|close|reopen)/);
 });
 
 test("cache emits a result digest so a changed verdict gets a fresh cache key", t => {

@@ -1,8 +1,16 @@
 # Discover new official DeepSeek Harness tags and test only exact, previously unseen combinations.
-# This workflow is independent from ci.yml's fixed rc.1 compatibility gate.
+# This workflow is independent from ci.yml's fixed compatibility matrix.
 name: Upstream compatibility watch
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/upstream-compat.yml
+      - scripts/**
+      - test/**
+      - index.js
+      - package.json
+      - package-lock.json
   schedule:
     - cron: "23 * * * *"
   workflow_dispatch:
@@ -13,6 +21,11 @@ on:
         type: string
       force_recheck:
         description: "Ignore a matching cached result for this manual run"
+        required: false
+        default: false
+        type: boolean
+      notify:
+        description: "Publish anomaly/recovery issues (manual runs on main only)"
         required: false
         default: false
         type: boolean
@@ -211,7 +224,7 @@ jobs:
   notify:
     name: Update the unique upstream-version issues
     needs: [discover, aggregate]
-    if: github.event_name == 'schedule' && github.ref == 'refs/heads/main' && needs.discover.outputs.has_candidates == 'true' && needs.aggregate.outputs.complete == 'true'
+    if: (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.notify)) && github.ref == 'refs/heads/main' && needs.discover.outputs.has_candidates == 'true' && needs.aggregate.outputs.complete == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -225,7 +238,7 @@ jobs:
         with:
           name: upstream-compat-summary
           path: aggregate
-      - name: Create or update one issue per upstream version
+      - name: Publish anomalies and resolve recovered versions
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

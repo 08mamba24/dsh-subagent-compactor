@@ -45,6 +45,11 @@ try {
 		const tag = sanitizeReportText(report.tag, 100);
 		if (!/^dsh-v[0-9A-Za-z.-]+$/.test(tag)) throw new Error(`Unsafe report tag: ${tag}`);
 		const title = `[upstream-compat] ${tag}`;
+		const issue = byTitle.get(title);
+		if (report.classification === "COMPATIBLE" && !issue) {
+			actions.push({ tag, action: "healthy", classification: report.classification });
+			continue;
+		}
 		const bodyPath = join(temporary, `${tag}.md`);
 		const fingerprint = sha256(JSON.stringify({
 			classification: report.classification,
@@ -58,13 +63,22 @@ try {
 		}));
 		const body = renderIssueBody({ ...report, runUrl: args.runUrl, fingerprint }) + "\n";
 		writeFileSync(bodyPath, body);
-		const issue = byTitle.get(title);
 		if (issue) {
 			if (issue.body?.includes(`<!-- upstream-compat-fingerprint:${fingerprint} -->`)) {
+				if (report.classification === "COMPATIBLE" && issue.state === "OPEN") {
+					gh(["issue", "close", String(issue.number), "--repo", args.repository]);
+					actions.push({ tag, action: "resolved", number: issue.number, classification: report.classification });
+					continue;
+				}
 				actions.push({ tag, action: "unchanged", number: issue.number, classification: report.classification });
 				continue;
 			}
 			gh(["issue", "edit", String(issue.number), "--repo", args.repository, "--title", title, "--body-file", bodyPath]);
+			if (report.classification === "COMPATIBLE") {
+				if (issue.state === "OPEN") gh(["issue", "close", String(issue.number), "--repo", args.repository]);
+				actions.push({ tag, action: "resolved", number: issue.number, classification: report.classification });
+				continue;
+			}
 			if (issue.state === "CLOSED") gh(["issue", "reopen", String(issue.number), "--repo", args.repository]);
 			actions.push({ tag, action: "updated", number: issue.number, classification: report.classification });
 		} else {

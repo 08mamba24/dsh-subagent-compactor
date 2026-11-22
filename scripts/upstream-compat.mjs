@@ -189,16 +189,6 @@ function run(args) {
 	required(args, "plan", "report");
 	const plan = JSON.parse(readFileSync(absolute(args.plan, "plan"), "utf8"));
 	const reportPath = absolute(args.report, "report");
-	if (!plan.runnerSupportsVersion) {
-		return saveReport(reportPath, {
-			...plan,
-			classification: "NOT_VERIFIED",
-			reason: "runner unsupported",
-			testedAt: new Date().toISOString(),
-			firstFailure: "",
-			outputTail: `Supported Harness versions: ${plan.runnerSupportedVersions.join(", ")}`,
-		}, args.githubOutput);
-	}
 	const install = runCommand("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], {
 		cwd: plan.dependenciesDirectory,
 		env: safeEnvironment(plan.home),
@@ -213,7 +203,7 @@ function run(args) {
 			outputTail: outputTail(install.output || install.error?.message || ""),
 		}, args.githubOutput);
 	}
-	const runtime = runCommand(process.execPath, [join(source, "scripts/test-installed-runtime.mjs"), "--modules", join(plan.dependenciesDirectory, "node_modules")], {
+	const runtime = runCommand(process.execPath, [join(source, "scripts/test-installed-runtime.mjs"), "--modules", join(plan.dependenciesDirectory, "node_modules"), "--candidate-version", plan.version], {
 		cwd: source,
 		env: safeEnvironment(plan.home),
 	});
@@ -221,6 +211,7 @@ function run(args) {
 	return saveReport(reportPath, {
 		...plan,
 		...result,
+		candidateRuntime: !plan.runnerSupportsVersion,
 		testedAt: new Date().toISOString(),
 		installedVersions: installedVersions(plan.dependenciesDirectory, plan.dependencies),
 		testExitCode: runtime.status,
