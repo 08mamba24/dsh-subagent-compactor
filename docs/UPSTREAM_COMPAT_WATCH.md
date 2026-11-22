@@ -14,7 +14,7 @@ There is deliberately no `release` trigger: a release event in this repository c
 
 ## Discovery and identity
 
-The discovery job reads both official GitHub releases and tags. It includes prereleases and RCs, excludes drafts, and enriches every selected release with the exact commit from its Git tag. The scheduled window contains the three most recent DSH tags; every new tag therefore enters the window even if it is published only as a tag.
+The discovery job reads both official GitHub releases and tags. It includes prereleases and RCs, excludes drafts, and enriches every selected release with the exact commit from its Git tag. The scheduled window contains the three highest DSH versions by semantic precedence, independent of API ordering; rc.10 sorts above rc.7, and a stable release above its own RCs. Newer versions enter the window even when published only as tags. Older backports outside that window can be selected manually by exact tag.
 
 A result is deduplicated by all of the following:
 

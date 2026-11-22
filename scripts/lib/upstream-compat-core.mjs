@@ -10,6 +10,27 @@ export function normalizeHarnessVersion(tag) {
 	return DSH_TAG.exec(tag)?.[1];
 }
 
+/** Semantic precedence, independent of GitHub's tag-list order (rc.10 > rc.7). */
+function compareVersions(a, b) {
+	const split = version => {
+		const dash = version.indexOf("-");
+		return [version.slice(0, dash < 0 ? undefined : dash).split(".").map(Number), dash < 0 ? null : version.slice(dash + 1).split(".")];
+	};
+	const [mainA, preA] = split(a), [mainB, preB] = split(b);
+	for (let index = 0; index < 3; index++) if (mainA[index] !== mainB[index]) return mainA[index] - mainB[index];
+	if (preA === null || preB === null) return Number(preA === null) - Number(preB === null);
+	for (let index = 0; index < Math.max(preA.length, preB.length); index++) {
+		const left = preA[index], right = preB[index];
+		if (left === right) continue;
+		if (left === undefined || right === undefined) return left === undefined ? -1 : 1;
+		const numberA = /^\d+$/.test(left), numberB = /^\d+$/.test(right);
+		if (numberA && numberB) { if (Number(left) !== Number(right)) return Number(left) - Number(right); }
+		else if (numberA !== numberB) return numberA ? -1 : 1;
+		else return left < right ? -1 : 1;
+	}
+	return 0;
+}
+
 export function selectUpstreamCandidates({ releases, tags, limit = 3, requestedTag } = {}) {
 	if (!Array.isArray(releases) || !Array.isArray(tags)) throw new TypeError("releases and tags must be arrays");
 	if (!Number.isInteger(limit) || limit < 1) throw new TypeError("limit must be a positive integer");
@@ -39,10 +60,10 @@ export function selectUpstreamCandidates({ releases, tags, limit = 3, requestedT
 			publishedAt: release?.published_at ?? null,
 			url: release?.html_url ?? `https://github.com/deepseek-ai/deepseek-harness/releases/tag/${encodeURIComponent(tag)}`,
 		});
-		if (!requestedTag && candidates.length >= limit) break;
 	}
 	if (requestedTag && candidates.length === 0) throw new Error(`Requested upstream tag not found or not testable: ${requestedTag}`);
-	return candidates;
+	candidates.sort((a, b) => compareVersions(b.version, a.version));
+	return requestedTag ? candidates : candidates.slice(0, limit);
 }
 
 export function sha256(value) {

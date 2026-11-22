@@ -75,6 +75,12 @@ test("manual tag selection remains exact and rejects non-DSH tags", () => {
 	assert.throws(() => selectUpstreamCandidates({ releases, tags, requestedTag: "dsh-v9.9.9" }), /not found/);
 });
 
+test("the candidate window orders future RCs numerically and the stable release above its RCs", () => {
+	const names = ["dsh-v0.2.2-rc.5", "dsh-v0.2.2-rc.7", "dsh-v0.2.2-rc.10", "dsh-v0.2.2-rc.6", "dsh-v0.2.2"];
+	const unorderedTags = names.map(name => ({ name, commit: { sha: "a".repeat(40) } }));
+	assert.deepEqual(selectUpstreamCandidates({ releases: [], tags: unorderedTags, limit: 3 }).map(item => item.tag), ["dsh-v0.2.2", "dsh-v0.2.2-rc.10", "dsh-v0.2.2-rc.7"]);
+});
+
 test("dedup digest changes for every compatibility identity input", () => {
 	const base = {
 		pluginSha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
