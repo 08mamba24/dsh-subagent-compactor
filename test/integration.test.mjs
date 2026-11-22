@@ -19,9 +19,10 @@
  *     cold resume may have replaced the Agent object;
  *  4. a different parent cannot compact someone else's child.
  *
- * Modules resolve from a DSH 0.2.2-rc.1 tree linked at ./node_modules.
+ * Modules resolve from a stock rc.1 or rc.2 tree linked at ./node_modules.
  */
 import test from "node:test";
+import { startActivation } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
@@ -137,7 +138,7 @@ async function bootComposition(baseURL, storageRoot, { resumeInactive = false } 
 		["@deepseek-ai/dsh-agent", {}],
 		["@deepseek-ai/dsh-agent-loop", { agents: [] }],
 		["@deepseek-ai/dsh-working-directory", {}],
-		["@deepseek-ai/dsh-subagent", {}],
+		["@deepseek-ai/dsh-subagent", { maxDepth: 3 }],
 		["@deepseek-ai/dsh-subagent-spawn-in-process", {}]
 	];
 	for (const [moduleName, config] of rows) {
@@ -176,7 +177,7 @@ test("integration: live-window compaction of a real continuable subagent", async
 		const parent = parentHandle.agent;
 
 		// 1. First activation runs to TRUE settlement, then the watcher reclaims the child.
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn",
 			label: "integration worker",
 			request: {
@@ -304,7 +305,7 @@ test("integration: resume-path compaction of a settled continuable subagent", as
 			sessionId: "resume-parent-1",
 			agentOptions: { provider: PROVIDER, model: MODEL }
 		})).agent;
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn",
 			label: "resume worker",
 			request: { prompt: [{ type: "text", text: "Please do the first task. " + "Background context line that the worker must keep. ".repeat(300) }], parent },
@@ -404,7 +405,7 @@ test("integration: cancelling in the resume admission gap leaves no unhandled re
 			sessionId: "gapcancel-parent-1",
 			agentOptions: { provider: PROVIDER, model: MODEL }
 		})).agent;
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn",
 			label: "gap cancel worker",
 			request: { prompt: [{ type: "text", text: "Initial task. " + "Context to compact. ".repeat(500) }], parent },

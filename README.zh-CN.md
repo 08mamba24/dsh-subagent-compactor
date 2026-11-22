@@ -4,7 +4,9 @@
 
 在 DSH Desktop 的父会话中，手动压缩**直接子智能体**的历史——仍 live 的直接压缩；已结算的*可续接*子智能体会先被唤醒恢复再压缩。插件调用子智能体已有的压缩引擎，压缩后仍可用原 session ID 继续对话。
 
-**状态：1.3.2 分支预览，尚未打 tag 或发布。** 当前已发布 tag 仍为 **v1.0.1**。本分支面向原版 Harness **0.2.2-rc.1**，安装并启用插件即可，无需修改 Desktop 应用源码或内置运行时。
+**状态：v1.3.3 已于 2026-11-14 合入并推送 tag。** 支持原版 Harness **0.2.2-rc.1 与 0.2.2-rc.2**，无需修改 Desktop 应用源码。此前 1.3.2 与 rc.2 不兼容；这两个运行时均请使用 v1.3.3。
+
+当前源码分支为**尚未发布的 1.3.4** 新增 `/subagent-compact-all`。`v1.3.3` tag 尚不包含该命令；下方安装来源仍指向已发布版本。
 
 ## 安装
 
@@ -12,10 +14,11 @@
 
 | 版本 | Git 来源 |
 | --- | --- |
+| **推荐：1.3.3，支持 rc.1 与 rc.2** | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.3.3` |
 | 已发布 1.0.1，压缩单个 live 子成员 | `https://github.com/08mamba24/dsh-subagent-compactor.git#v1.0.1` |
-| 本次 1.3.2 预览分支，批量压缩含结算恢复 | `https://github.com/08mamba24/dsh-subagent-compactor.git#fix/recheck-live-before-resume` |
+| 此前 1.3.2 源码，仅限 rc.1 | `https://github.com/08mamba24/dsh-subagent-compactor.git#20981ebade6a260bd4a497916b450baeebe5372d` |
 
-分支引用会随开发更新；需要固定版本时请使用完整 commit ID。本预览没有 `v1.3.2` 发布 tag。
+`v1.3.3` tag 固定到已审查的插件代码 [`7117d438`](https://github.com/08mamba24/dsh-subagent-compactor/commit/7117d438947f19fcc12abd374ce86746079031b9)。通过 Git 安装分发，未发布 npm 包或创建 GitHub Release。推送 tag 不会自动升级已有的 Desktop 安装。
 
 确认 `@local/dsh-subagent-compactor` 已启用且版本正确。替换已有安装后，完整退出并重新打开 Desktop，让新命令定义生效。如果此前从本地目录安装过同名包，先移除旧安装来源，再添加 Git 来源。
 
@@ -28,12 +31,17 @@ Desktop 插件管理器负责应用插件的 bundle 配置。无需手改 profil
 ```text
 /subagent-compact
 /subagent-compact <子智能体的session-id>
+/subagent-compact-all
 /subagent-compact all
 ```
 
-- **不带参数：**列出父会话的持久化直接子成员目录，标注 `live` 或 `persisted (not loaded)`。列表是即时观察，不会预留目标。
-- **一个 session ID：**压缩该直接子成员。仍 live 的成员走空闲窗口压缩（默认 `waitForIdle: true`）；已结算的*可续接*成员会先被恢复——插件发送一条真实的维护唤醒消息，在恢复边沿完成压缩，唤醒消息随后由一轮正常对话回应。无法恢复的成员（一次性、外部、持久状态不完整）返回明确拒绝，如 `not-resumable`。
-- **`all` 或 `--all`：**读取一次目录快照，同时启动所有目标的压缩尝试。live 成员直接压缩；已结算的可续接成员等待宿主容量允许后恢复，每次获准恢复只发送一条唤醒消息。按目录顺序返回结果。已结算但不可续接或不可恢复的成员带原因记为 `skipped`；单项失败不会吞掉其他结果。快照之后创建的成员属于下一次运行。
+- **`/subagent-compact` 不带参数：**列出父会话的持久化直接子成员目录，标注 `live` 或 `persisted (not loaded)`。列表是即时观察，不会预留目标。
+- **`/subagent-compact <id>`：**压缩该直接子成员。仍 live 的成员走空闲窗口压缩（默认 `waitForIdle: true`）；已结算的*可续接*成员会先被恢复——插件发送一条真实的维护唤醒消息，在恢复边沿完成压缩，唤醒消息随后由一轮正常对话回应。无法恢复的成员（一次性、外部、持久状态不完整）返回明确拒绝，如 `not-resumable`。
+- **`/subagent-compact-all`（1.3.4 源码分支推荐）：**不带参数执行批量压缩。原 `/subagent-compact all` 和 `/subagent-compact --all` 执行相同批量操作，继续保留；v1.3.3 安装仍使用这两个入口。
+
+批量压缩读取一次目录快照，同时启动所有目标的压缩尝试。live 成员直接压缩；已结算的可续接成员等待宿主容量允许后恢复，每次获准恢复只发送一条唤醒消息。按目录顺序返回结果。已结算但不可续接或不可恢复的成员带原因记为 `skipped`；单项失败不会吞掉其他结果。快照之后创建的成员属于下一次运行。
+
+新无参数命令沿用原版宿主的无参数命令路径，压缩期间输入框可继续编辑。处理函数仍等待整批结束，宿主随后记录真实结果。原带参数命令保留宿主原有的输入等待行为。新入口无需修改应用源码；验收进度见[验证记录](docs/VALIDATION.md)。
 
 两个子成员均成功时，回执类似：
 
@@ -82,7 +90,7 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 与未发布 1.1.0 候选的区别
 
-旧候选把冷压缩与宿主维护补丁配套使用。1.2.0 预览改用原版运行时能力、仅 live 压缩；本 1.3.2 分支保留该基础并新增可续接成员的结算恢复（下表为 1.2.0 的历史快照）：
+旧候选把冷压缩与宿主维护补丁配套使用。1.2.0 预览改用原版运行时能力、仅 live 压缩；当前分支保留该基础并新增可续接成员的结算恢复（下表为 1.2.0 的历史快照）：
 
 | 能力 | 未发布 1.1.0 候选 | 1.2.0 预览（历史） |
 | --- | --- | --- |
@@ -96,7 +104,9 @@ compact_subagent({ "session_id": "<子智能体的session-id>" })
 
 ## 验证与测试
 
-1.2.0 预览时点的安装包运行时验证及干净 npm 依赖树验证，在原版 Harness `0.2.2-rc.1` 上通过 **46/46 个受 Git 跟踪的测试**（unit 25、batch 15、integration 1、preset 5）；本 1.3.2 分支为 **92/92**（unit 35、batch 40、integration 3、preset 14）。隔离运行的安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
+[v1.3.3 合入后的 CI](https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/43545680782) 在原版 Harness rc.1、rc.2 上各通过 **110/110 项测试**，零失败、零跳过，两套打包检查均通过。覆盖默认 8 槽下的 16 个 settled 成员及直接父级授权边界。此前的验证记录继续保留：1.2.0 预览时点 **46/46**、1.3.2 的 rc.1 基线 **92/92**，以及 v1.3.3 最后一项审查回归加入前各运行时的 **109/109**。
+
+历史隔离验收中，安装包自带 Web UI 成功压缩两个 live 子会话，从磁盘读回两份摘要，随后以两个原 ID 续接，并确认后续模型请求包含 checkpoint。
 
 Web UI 验收使用本地合成模型服务，验证的是命令、持久化和续接机制，不评价真实模型摘要质量，也不代表用户日常 Electron 窗口已经验收。详见[验证记录](docs/VALIDATION.md)和[本次验收摘要](docs/acceptance/2026-11-10-live-only/acceptance.md)。
 
@@ -107,7 +117,11 @@ npm ci --include=dev
 npm test
 ```
 
-四份受跟踪测试使用固定版本的原版运行时包、隔离临时存储和本地模拟模型服务，不发送外部模型请求。
+rc.2 的所有单目标入口还需要 `sessionQuery` 与 `subagentCatalog` 投影来核对直接创建者；不能只靠同树关系授权。
+
+测试其他已提取的原版模块树：`node scripts/test-installed-runtime.mjs --modules /absolute/node_modules`。runner 仅接受 rc.1/rc.2，并检查所需 dsh 包版本一致；CI 分别运行两套依赖。这些模块级回归不代表新增原生 Electron 窗口验收。
+
+五份受跟踪测试使用固定版本的原版运行时包、隔离临时存储和本地模拟模型服务，不发送外部模型请求。
 
 ## 上游兼容性监控
 

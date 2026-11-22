@@ -1,0 +1,33 @@
+{
+  "name": "failure",
+  "label": "NOINPUT-FAILURE",
+  "command": "/subagent-compact-all",
+  "editable": true,
+  "draft": "Draft retained during NOINPUT-FAILURE",
+  "commandRun": [
+    {
+      "type": "command/run",
+      "seq": 21,
+      "time": 1795249720247,
+      "data": {
+        "commandId": "cmd-b00f236d-2",
+        "name": "subagent-compact-all",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    }
+  ],
+  "held": [
+    {
+      "id": 12,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249720276,
+      "finished": false,
+      "sawCheckpoint": false
+    }
+  ],
+  "at": 1795249720443
+}

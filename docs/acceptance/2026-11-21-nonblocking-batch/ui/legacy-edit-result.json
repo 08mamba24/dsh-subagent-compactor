@@ -1,0 +1,63 @@
+{
+  "label": "LEGACY-EDIT-CHECK-1795249983691",
+  "running": [
+    {
+      "type": "command/run",
+      "seq": 21,
+      "time": 1795249984441,
+      "data": {
+        "commandId": "cmd-b00f236d-7",
+        "name": "subagent-compact",
+        "args": " all",
+        "source": {
+          "kind": "user"
+        }
+      }
+    }
+  ],
+  "dom": {
+    "outerHTML": "<div contenteditable=\"false\" role=\"textbox\" aria-multiline=\"true\" data-composer-input=\"true\" class=\"JZLxKW_input\" data-phase=\"submitting\" data-placeholder=\"Message or run a task, / commands, @ files or sessions\" aria-label=\"Message or run a task, / commands, @ files or sessions\" data-lexical-editor=\"true\" style=\"user-select: text; white-space: pre-wrap; word-break: break-word;\"><p dir=\"auto\"><span data-lexical-text=\"true\">/subagent-compact all</span></p></div>",
+    "isContentEditable": false,
+    "attributes": {
+      "contenteditable": "false",
+      "role": "textbox",
+      "aria-multiline": "true",
+      "data-composer-input": "true",
+      "class": "JZLxKW_input",
+      "data-phase": "submitting",
+      "data-placeholder": "Message or run a task, / commands, @ files or sessions",
+      "aria-label": "Message or run a task, / commands, @ files or sessions",
+      "data-lexical-editor": "true",
+      "style": "user-select: text; white-space: pre-wrap; word-break: break-word;"
+    }
+  },
+  "before": "/subagent-compact all",
+  "afterTyping": "/subagent-compact all",
+  "afterDelete": "/subagent-compact all",
+  "afterPaste": "/subagent-compact all",
+  "pasted": "Legacy draft pasted while command pending",
+  "done": {
+    "type": "command/done",
+    "seq": 22,
+    "time": 1795249985596,
+    "data": {
+      "commandId": "cmd-b00f236d-7",
+      "kind": "success",
+      "text": "Batch compaction of the caller's direct-subagent snapshot (live children compacted directly; settled continuable children resumed first):\n68b13802-8131-4b23-bbc1-8950b5bf3deb: resumed from settled state and compacted \u2014 replaced 4 items (~5839 tokens; summary at session-seq 23)\nSummary (completed) \u2014 total 1: compacted 1 (1 after resume), nothing-to-compact 0, skipped 0, failed 0, cancelled 0, not-started: 0."
+    }
+  },
+  "afterDone": "",
+  "typingChanged": false,
+  "deletionWorked": false,
+  "pasteWorked": false,
+  "retainedAfterDone": false,
+  "completedAt": 1795249986357,
+  "seed": {
+    "parentSessionId": "session-5d37600b-1db5-4812-a92f-65effa1686ef",
+    "childSessionIds": [
+      "68b13802-8131-4b23-bbc1-8950b5bf3deb"
+    ],
+    "count": 1,
+    "allInactive": true
+  }
+}

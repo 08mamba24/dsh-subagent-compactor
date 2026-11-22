@@ -1,0 +1,41 @@
+{
+  "name": "success",
+  "label": "NOINPUT-SUCCESS",
+  "command": "/subagent-compact-all",
+  "editable": true,
+  "draft": "Draft retained during NOINPUT-SUCCESS",
+  "commandRun": [
+    {
+      "type": "command/run",
+      "seq": 22,
+      "time": 1795249663353,
+      "data": {
+        "commandId": "cmd-b00f236d-1",
+        "name": "subagent-compact-all",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    }
+  ],
+  "held": [
+    {
+      "id": 4,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249663399,
+      "finished": false,
+      "sawCheckpoint": false
+    },
+    {
+      "id": 5,
+      "summarizing": true,
+      "maintenance": false,
+      "arrivedAt": 1795249663403,
+      "finished": false,
+      "sawCheckpoint": false
+    }
+  ],
+  "at": 1795249699780
+}

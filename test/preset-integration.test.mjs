@@ -1,10 +1,11 @@
 /**
- * Official Desktop 0.2.2's bundled Harness 0.2.2-rc.1 preset acceptance,
+ * Stock Harness 0.2.2-rc.1 / rc.2 preset integration,
  * using only a loopback LLM and temporary JSONL storage. Resolve dependencies from an isolated scratch
  * package linked to the extracted official app tree; no installed profile,
  * credentials service, or user configuration is loaded.
  */
 import test from "node:test";
+import { startActivation, directCatalog } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -156,7 +157,7 @@ async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, p
 			["dsh-agent", {}],
 			["dsh-agent-loop", { agents: [] }],
 			["dsh-working-directory", {}],
-			["dsh-subagent", subagentConfig],
+			["dsh-subagent", { maxDepth: 3, ...subagentConfig }],
 			["dsh-subagent-spawn-in-process", {}],
 			["dsh-agent-preset-registry", { default: PRESET }]
 		];
@@ -216,8 +217,10 @@ function persistedEvents(root, childId) {
 			const path = join(directory, entry.name);
 			if (entry.isDirectory()) visit(path);
 			else if (entry.name.endsWith(".jsonl")) {
-				const text = readFileSync(path, "utf8");
-				if (text.includes(childId)) events.push(...text.trim().split("\n").map((line) => JSON.parse(line)));
+				const rows = readFileSync(path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+				// Parent catalogs also contain child ids. Only the JSONL header
+				// identifies whose events these are in a multilevel tree.
+				if (rows[0]?.type === "session" && rows[0].id === childId) events.push(...rows.slice(1));
 			}
 		}
 	};
@@ -266,7 +269,7 @@ async function capacityRuntime(t, options = {}) {
 	});
 	const parent = await createParent(ctx, "capacity-parent");
 	const start = async (marker, owner = parent) => {
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn", label: marker, delivery: "parent",
 			request: { parent: owner, prompt: [{ type: "text", text: `${marker}: review the corpus. ` + "Background context line that the worker must keep. ".repeat(300) }] },
 			signal: AbortSignal.timeout(50_000)
@@ -302,7 +305,7 @@ test("preset capacity: one batch resumes 16 settled children over default 8 slot
 	const { ctx, fake, storageRoot, journal, lifecycle, parent, seed } = await capacityRuntime(t);
 	const ids = [];
 	for (let i = 0; i < 16; i++) ids.push(await seed(`SCALE_${i}`));
-	assert.equal((await ctx.subagents.listChildren(parent.id)).length, 16);
+	assert.equal((await directCatalog(ctx, parent.id)).length, 16);
 	const execution = await deadline(ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(45_000)), "16-item batch", 50_000);
 	assert.equal(execution.result.kind, "success", execution.result.text);
 	assert.match(execution.result.text, /total 16: compacted 16 \(16 after resume\).*failed 0/);
@@ -419,7 +422,7 @@ test("preset capacity: a shared-pool grandchild outside the snapshot frees admis
 	const leaf = await start("LIVE_LEAF", ctx.agents.get(branch.childId)); await holdLeaf.arrived();
 	const holdSibling = fake.hold("LIVE_SIBLING");
 	const sibling = await start("LIVE_SIBLING"); await holdSibling.arrived();
-	assert.ok(!(await ctx.subagents.listChildren(parent.id)).some((entry) => entry.id === leaf.childId));
+	assert.ok(!(await directCatalog(ctx, parent.id)).some((entry) => entry.id === leaf.childId));
 	const denied = observeCapacityDenial(ctx);
 	const command = ctx.commands.execute(parent, `/subagent-compact ${id}`, [], AbortSignal.timeout(45_000));
 	await deadline(denied, "full shared pool");
@@ -510,7 +513,7 @@ test("preset: real /subagent-compact persists a summary and resumes the same chi
 		journal = sessionJournal(ctx);
 		const parent = await createParent(ctx, "preset-manual-parent");
 		const first = fake.hold("FIRST_MANUAL_TURN");
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn", label: "preset worker", delivery: "parent",
 			request: { parent, prompt: [{ type: "text", text: "FIRST_MANUAL_TURN: review the corpus. " + "Background context line that the worker must keep. ".repeat(300) }] },
 			signal: AbortSignal.timeout(25_000)
@@ -562,7 +565,7 @@ test("preset: real /subagent-compact persists a summary and resumes the same chi
  * live window. A serial batch fails the "child 2 settles first" and
  * "simultaneous" interleavings by arriving after child 2's reclamation.
  */
-async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
+async function batchWindowScenario({ delayOne = 0, delayTwo = 0, commandLine = "/subagent-compact all" } = {}) {
 	const fake = fakeMessagesServer();
 	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-batch-"));
 	const baseURL = await fake.start();
@@ -579,7 +582,7 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 		];
 		const activations = [];
 		for (let index = 0; index < prompts.length; index += 1) {
-			const activation = await ctx.subagents.startActivation({
+			const activation = await startActivation(ctx, {
 				provider: "spawn", label: `batch worker ${index + 1}`, delivery: "parent",
 				request: { parent, prompt: [{ type: "text", text: prompts[index] }] },
 				signal: AbortSignal.timeout(30_000)
@@ -591,8 +594,9 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 		await Promise.all(activations.map((_, index) => firsts[index].arrived()));
 		assertPreset(ctx, parent, ctx.agents.get(ids[0]));
 		assertPreset(ctx, parent, ctx.agents.get(ids[1]));
-		const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(35_000));
+		const command = ctx.commands.execute(parent, commandLine, [], AbortSignal.timeout(35_000));
 		await journal.wait(({ sessionId, event }) => sessionId === parent.id && event.type === "command/run", "batch command admission");
+		assert.equal(journal.entries.some(({ sessionId, event }) => sessionId === parent.id && event.type === "command/done"), false, "no completion receipt while the children are still busy");
 		/* Release both held turns; each responds on its configured delay. The
 		 * batch is already parked on both idle waits at this point. */
 		for (const first of firsts) first.release();
@@ -601,6 +605,18 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 		}
 		const execution = await deadline(command, "batch command result");
 		assert.equal(execution.result.kind, "success", JSON.stringify(execution.result));
+		// Command lifecycle appends are buffered; flush the parent before
+		// reading its JSONL, independently of each child's summary barrier.
+		await ctx.sessions.flush(parent.session);
+		const runs = persistedEvents(storageRoot, parent.id).filter((event) => event.type === "command/run");
+		const dones = persistedEvents(storageRoot, parent.id).filter((event) => event.type === "command/done");
+		assert.equal(runs.length, 1);
+		assert.equal(dones.length, 1);
+		assert.equal(runs[0].data.name, commandLine.slice(1).split(" ")[0]);
+		assert.equal(runs[0].data.commandId, execution.commandId);
+		assert.equal(dones[0].data.commandId, execution.commandId);
+		assert.equal(dones[0].data.kind, execution.result.kind);
+		assert.equal(dones[0].data.text, execution.result.text);
 		assert.match(execution.result.text, /Summary \(completed\) — total 2: compacted 2/);
 		assert.match(execution.result.text, new RegExp(`${ids[0]}: compacted[\\s\\S]*${ids[1]}: compacted`), "per-item lines keep the catalog order regardless of completion order");
 		for (const id of ids) {
@@ -625,6 +641,8 @@ async function batchWindowScenario({ delayOne = 0, delayTwo = 0 } = {}) {
 
 test("preset: /subagent-compact all compacts every live child through isolated preset engines", { timeout: 45_000 }, () => batchWindowScenario());
 
+test("preset: /subagent-compact-all persists one true completion after both child summaries", { timeout: 45_000 }, () => batchWindowScenario({ commandLine: "/subagent-compact-all" }));
+
 test("preset: batch catches the child that settles before its catalog predecessor", { timeout: 45_000 }, () => batchWindowScenario({ delayOne: 600 }));
 
 test("preset: batch catches both children when the second settles later", { timeout: 45_000 }, () => batchWindowScenario({ delayTwo: 600 }));
@@ -642,7 +660,7 @@ test("preset: native automatic child compaction works without loading this plugi
 		const parent = await createParent(ctx, "preset-native-parent");
 		assert.equal(ctx.commands.view(parent).get("subagent-compact"), undefined, "this composition does not register the plugin's command");
 		const first = fake.hold("FIRST_NATIVE_TURN");
-		const activation = await ctx.subagents.startActivation({
+		const activation = await startActivation(ctx, {
 			provider: "spawn", label: "native preset worker", delivery: "parent",
 			request: { parent, prompt: [{ type: "text", text: "FIRST_NATIVE_TURN: record the corpus findings. " + "Background context line that the worker must keep. ".repeat(300) }] },
 			signal: AbortSignal.timeout(25_000)
@@ -690,7 +708,7 @@ test("preset: /subagent-compact all resumes two settled children and compacts bo
 		const parent = await createParent(ctx, "preset-resume-parent");
 		const activations = [];
 		for (let index = 1; index <= 2; index += 1) {
-			const activation = await ctx.subagents.startActivation({
+			const activation = await startActivation(ctx, {
 				provider: "spawn", label: `settled worker ${index}`, delivery: "parent",
 				request: { parent, prompt: [{ type: "text", text: `SETTLED_WORKER_${index}: review the corpus. ` + "Background context line that the worker must keep. ".repeat(300) }] },
 				signal: AbortSignal.timeout(25_000)
@@ -760,7 +778,7 @@ test("preset: a mixed batch compacts the live child directly and resumes the set
 		ctx = await boot(baseURL, storageRoot, { plugin: true, auto: false });
 		journal = sessionJournal(ctx);
 		const parent = await createParent(ctx, "preset-mixed-parent");
-		const settledActivation = await ctx.subagents.startActivation({
+		const settledActivation = await startActivation(ctx, {
 			provider: "spawn", label: "mixed settled worker", delivery: "parent",
 			request: { parent, prompt: [{ type: "text", text: "MIXED_SETTLED: review the corpus. " + "Background context line that the worker must keep. ".repeat(300) }] },
 			signal: AbortSignal.timeout(25_000)
@@ -771,7 +789,7 @@ test("preset: a mixed batch compacts the live child directly and resumes the set
 		assert.notEqual(settled.stopReason, "error", JSON.stringify(settled));
 		assert.equal(ctx.agents.get(settledId), undefined, "the settled child is reclaimed before the batch");
 		const liveHold = fake.hold("MIXED_LIVE_TURN");
-		const liveActivation = await ctx.subagents.startActivation({
+		const liveActivation = await startActivation(ctx, {
 			provider: "spawn", label: "mixed live worker", delivery: "parent",
 			request: { parent, prompt: [{ type: "text", text: "MIXED_LIVE_TURN: review the ledger. " + "Background context line that the worker must keep. ".repeat(300) }] },
 			signal: AbortSignal.timeout(25_000)
@@ -808,4 +826,78 @@ test("preset: a mixed batch compacts the live child directly and resumes the set
 		await ctx?.fiber.dispose();
 		rmSync(storageRoot, { recursive: true, force: true });
 	}
+});
+
+/** Real tree boundaries: the host may authorize tree-wide messaging, this plugin may not. */
+test("stock direct-only: a root cannot wake its grandchild or another tree's child", { timeout: 60_000 }, async (t) => {
+	const { ctx, fake, parent, start, lifecycle, storageRoot, journal } = await capacityRuntime(t);
+	const branchGate = fake.hold("BOUNDARY_BRANCH");
+	const branch = await start("BOUNDARY_BRANCH"); await branchGate.arrived();
+	const branchAgent = ctx.agents.get(branch.childId);
+	const leaf = await start("BOUNDARY_LEAF", branchAgent); await leaf.result;
+	const foreign = await createParent(ctx, "boundary-other-root");
+	const attempted = [];
+	const send = ctx.subagents.sendMessage.bind(ctx.subagents);
+	ctx.subagents.sendMessage = (...args) => { attempted.push(args); return send(...args); };
+	const wakeCount = () => fake.requests.filter((r) => !r.summarizing && JSON.stringify(r.body.messages.at(-1)).includes("history-compaction maintenance")).length;
+	const command = (caller, id) => ctx.commands.execute(caller, `/subagent-compact ${id}`, [], AbortSignal.timeout(20_000));
+	for (const [caller, id] of [[parent, leaf.childId], [foreign, leaf.childId], [foreign, branch.childId], [parent, parent.id]]) {
+		const before = wakeCount();
+		const execution = await command(caller, id).catch((error) => ({ result: { kind: "error", text: error.message } }));
+		assert.equal(execution.result.kind, "error");
+		assert.equal(wakeCount(), before, "denial must precede maintenance admission");
+		assert.match(execution.result.text, /direct|parentage/);
+	}
+	if (typeof ctx.agents.isOwnedBy !== "function") assert.equal(attempted.length, 0, "rc.2 denies non-direct targets before calling its tree-wide send API");
+	assert.ok(!journal.entries.some(({ event }) => ["user/message", "agent/inbox/spliced"].includes(event.type) && JSON.stringify(event.data).includes("history-compaction maintenance")), "no maintenance was persisted before the intermediate parent authorizes it");
+	assert.equal(persistedEvents(storageRoot, leaf.childId).filter((e) => e.type === "compaction/summary").length, 0);
+	// The intermediate creator is allowed to compact this very same leaf.
+	const accepted = await command(branchAgent, leaf.childId);
+	assert.equal(accepted.result.kind, "success", accepted.result.text);
+	await lifecycle.ended(leaf.childId, 2);
+	assert.equal(wakeCount(), 1);
+	const summary = persistedEvents(storageRoot, leaf.childId).filter((e) => e.type === "compaction/summary");
+	assert.equal(summary.length, 1);
+	assert.equal(summary[0].data.sourceCommandId, accepted.commandId);
+	assert.ok(ctx.agents.get(branch.childId), "compacting a leaf does not stop its live parent");
+	branchGate.release(); await branch.result;
+});
+
+test("stock direct-only: the model tool refuses a settled grandchild before waking it", { timeout: 60_000 }, async (t) => {
+	const { ctx, fake, parent, start, lifecycle, storageRoot } = await capacityRuntime(t);
+	const gate = fake.hold("TOOL_BOUNDARY_BRANCH");
+	const branch = await start("TOOL_BOUNDARY_BRANCH"); await gate.arrived();
+	const owner = ctx.agents.get(branch.childId), leaf = await start("TOOL_BOUNDARY_LEAF", owner); await leaf.result;
+	const tool = ctx.tools.get("compact_subagent", parent);
+	const denied = await tool.execute({ session_id: leaf.childId }, { agent: parent, signal: AbortSignal.timeout(20_000) });
+	assert.equal(denied.outcome, "not-authorized");
+	assert.equal(fake.requests.filter((r) => JSON.stringify(r.body.messages.at(-1)).includes("history-compaction maintenance")).length, 0);
+	assert.equal(persistedEvents(storageRoot, leaf.childId).filter((e) => e.type === "compaction/summary").length, 0);
+	const accepted = await tool.execute({ session_id: leaf.childId }, { agent: owner, signal: AbortSignal.timeout(20_000) });
+	assert.equal(accepted.outcome, "compacted", accepted.text);
+	await lifecycle.ended(leaf.childId, 2);
+	gate.release(); await branch.result;
+});
+
+/** The root's batch must compact its branch while leaving the branch's leaf untouched. */
+test("stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold", { timeout: 60_000 }, async (t) => {
+	const { ctx, fake, parent, start, storageRoot, lifecycle } = await capacityRuntime(t);
+	const gate = fake.hold("DIRECT_BRANCH_BATCH");
+	const branch = await start("DIRECT_BRANCH_BATCH"); await gate.arrived();
+	const agent = ctx.agents.get(branch.childId), leaf = await start("NESTED_LEAF_BATCH", agent); await leaf.result;
+	assert.equal(ctx.agents.get(leaf.childId), undefined);
+	const waiting = Promise.withResolvers(), whenIdle = agent.whenIdle.bind(agent);
+	agent.whenIdle = () => { waiting.resolve(); return whenIdle(); };
+	const command = ctx.commands.execute(parent, "/subagent-compact all", [], AbortSignal.timeout(20_000));
+	await deadline(waiting.promise, "direct branch idle wait");
+	gate.release();
+	const execution = await command;
+	assert.equal(execution.result.kind, "success", execution.result.text);
+	assert.match(execution.result.text, /total 1: compacted 1,.*failed 0/);
+	await branch.result; await lifecycle.ended(branch.childId, 1);
+	const summaries = (id) => persistedEvents(storageRoot, id).filter((e) => e.type === "compaction/summary");
+	assert.equal(summaries(branch.childId).length, 1);
+	assert.equal(summaries(leaf.childId).length, 0);
+	assert.equal(ctx.agents.get(leaf.childId), undefined);
+	assert.equal(fake.requests.filter((r) => JSON.stringify(r.body.messages.at(-1)).includes("history-compaction maintenance")).length, 0);
 });

@@ -93,12 +93,18 @@ function makeBatchHarness({ children, live = new Map(), owned, engineFor, config
 	}
 	const command = registrations.commands.find((definition) => definition.name === "subagent-compact");
 	const invoke = (rawInput, signal) => command.handler({ rawInput, agent: caller, signal: signal ?? new AbortController().signal, commandId: "cmd-batch" });
-	return { ctx, caller, command, invoke, compactCalls, sendCalls, emit, registrations, live };
+	const invokeAll = (signal, rawInput = "") => {
+		const batch = registrations.commands.find((definition) => definition.name === "subagent-compact-all");
+		assert.ok(batch, "the standalone batch command must be registered");
+		return batch.handler({ rawInput, agent: caller, signal: signal ?? new AbortController().signal, commandId: "cmd-standalone-batch" });
+	};
+	return { ctx, caller, command, invoke, invokeAll, compactCalls, sendCalls, emit, registrations, live };
 }
 
 /** Admission is distinct from summary completion: only release() frees a slot. */
 function capacityHarness(config, ids = ["waiting-child"]) {
 	const denied = Promise.withResolvers();
+	const acceptedWakes = [];
 	let occupied = true;
 	const harness = withEngines(makeBatchHarness({
 		children: async () => ids.map((id) => ({ id, mode: "continuable" })),
@@ -111,17 +117,42 @@ function capacityHarness(config, ids = ["waiting-child"]) {
 			occupied = true;
 			harness.live.set(id, makeChild(id));
 			harness.emit("subagent/start", { id });
-			return `wake-${id}`;
+			const messageId = `wake-${id}`;
+			acceptedWakes.push(messageId);
+			return messageId;
 		} }
 	}), {});
 	return Object.assign(harness, {
-		denied: denied.promise,
+		denied: denied.promise, acceptedWakes,
 		release(emit = true) {
 			occupied = false;
 			// This occupant is outside the caller's direct-child snapshot.
 			if (emit) harness.emit("subagent/end", { id: "other-parent-child" });
 		}
 	});
+}
+
+/** Control timer delivery and monotonic time separately to model an early edge. */
+function capacityClock(t) {
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	let now = 0;
+	t.mock.method(performance, "now", () => now);
+	const scheduled = t.mock.method(globalThis, "setTimeout");
+	const cleared = t.mock.method(globalThis, "clearTimeout");
+	return {
+		scheduled, cleared,
+		async advance(timerMs, monotonicMs = timerMs) {
+			now += monotonicMs;
+			t.mock.timers.tick(timerMs);
+			await new Promise(setImmediate);
+		},
+		assertTimersCleared() {
+			for (const call of scheduled.mock.calls) assert.ok(
+				cleared.mock.calls.some(({ arguments: [handle] }) => handle === call.result),
+				"every capacity timer is cleared on completion or cancellation"
+			);
+		}
+	};
 }
 
 test("capacity: a global end outside the snapshot releases an awaiting resume", async () => {
@@ -162,7 +193,7 @@ test("capacity: periodic probe handles capacity changes with no end event", asyn
 });
 
 for (const stop of ["cancel", "unload"]) test(`capacity: ${stop} clears waits, listeners and target locks without a late wake`, async (t) => {
-	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const clock = capacityClock(t);
 	const h = capacityHarness();
 	const controller = new AbortController();
 	const result = h.invoke("all", controller.signal);
@@ -173,23 +204,62 @@ for (const stop of ["cancel", "unload"]) test(`capacity: ${stop} clears waits, l
 	else for (const dispose of [...h.registrations.effectDisposers].reverse()) await dispose();
 	assert.match((await result).text, /cancelled/);
 	assert.equal(h.registrations.listeners.length, 0);
+	clock.assertTimersCleared();
+	assert.equal(h.acceptedWakes.length, 0);
+	assert.equal(h.compactCalls.length, 0);
 	h.release();
-	t.mock.timers.tick(120_000);
-	await new Promise(setImmediate);
+	await clock.advance(120_000);
 	assert.equal(h.sendCalls.length, 1, "no admitted wake after cancellation or unload");
+	assert.equal(h.acceptedWakes.length, 0);
 	if (stop === "cancel") assert.equal((await h.invoke("waiting-child")).kind, "success", "the target lock is released");
 });
 
-test("capacity: timeout is a bounded, explicit failure and releases the lock", async () => {
+for (const earlyMs of [0, 0.5]) test(`capacity: timeout is bounded and cleans up (timer ${earlyMs}ms early)`, async (t) => {
+	const clock = capacityClock(t);
 	const h = capacityHarness({ resumeCapacityTimeoutMs: 20 });
-	const result = await h.invoke("all");
+	const attemptTimes = [];
+	const send = h.ctx.subagents.sendMessage;
+	h.ctx.subagents.sendMessage = (...args) => { attemptTimes.push(performance.now()); return send(...args); };
+	let settled = false;
+	const operation = h.invoke("all").finally(() => { settled = true; });
+	await h.denied;
+	await new Promise(setImmediate);
+	assert.deepEqual(attemptTimes, [0]);
+	assert.deepEqual(clock.scheduled.mock.calls.map((call) => call.arguments[1]), [20]);
+	await clock.advance(18);
+	assert.equal(settled, false, "the timeout cannot finish before its deadline");
+	assert.deepEqual(attemptTimes, [0], "a full pool cannot spin between timer/end hints");
+	// Deliver the 20ms timer at monotonic 19.5ms in the early case. One
+	// rejected probe is legal here; it must park on the remaining 1ms timer.
+	await clock.advance(2, 2 - earlyMs);
+	const expectedTimes = earlyMs === 0 ? [0] : [0, 19.5];
+	assert.deepEqual(attemptTimes, expectedTimes);
+	if (earlyMs !== 0) {
+		assert.equal(settled, false);
+		assert.deepEqual(clock.scheduled.mock.calls.map((call) => call.arguments[1]), [20, 1]);
+		await clock.advance(0, 0.25);
+		assert.deepEqual(attemptTimes, expectedTimes, "no extra probe before the remaining timer");
+		await clock.advance(1, 0.25);
+	}
+	const result = await operation;
+	assert.equal(performance.now(), 20, "termination occurs at the controlled monotonic deadline");
+	assert.equal(settled, true);
 	assert.equal(result.kind, "error");
 	assert.match(result.text, /waiting-child: capacity-timeout/);
 	assert.match(result.text, /active child limit: 1/);
-	assert.equal(h.sendCalls.length, 1, "no busy loop at full capacity");
+	assert.deepEqual(attemptTimes, expectedTimes, "no attempt is made at or beyond the deadline");
+	assert.equal(h.acceptedWakes.length, 0, "a rejected attempt is not an accepted maintenance wake");
+	assert.equal(h.compactCalls.length, 0);
+	assert.equal(h.live.get("waiting-child"), undefined);
 	assert.equal(h.registrations.listeners.length, 0);
+	clock.assertTimersCleared();
+	await clock.advance(1_000);
+	assert.deepEqual(attemptTimes, expectedTimes, "no timer or listener outlives the failed operation");
 	h.release();
 	assert.equal((await h.invoke("waiting-child")).kind, "success");
+	assert.equal(h.acceptedWakes.length, 1, "a new call can acquire the released target lock");
+	assert.equal(h.compactCalls.length, 1);
+	assert.equal(h.registrations.listeners.length, 0);
 });
 
 test("capacity: model tool and competing batches share admission and target locks", async () => {
@@ -366,6 +436,70 @@ function withEngines(harness, spec) {
 	};
 	return harness;
 }
+
+test("standalone batch awaits real completion and shares locks with parameter commands and tools", async () => {
+	const idle = Promise.withResolvers();
+	const entered = Promise.withResolvers();
+	const child = makeChild("child-a", { idle: () => { entered.resolve(); return idle.promise; } });
+	const h = withEngines(makeBatchHarness({ children: async () => [{ id: child.id, mode: "continuable" }], live: new Map([[child.id, child]]) }), {});
+	let settled = false;
+	const operation = h.invokeAll().finally(() => { settled = true; });
+	try {
+		await entered.promise;
+		assert.equal(settled, false, "the handler cannot report success while its child is busy");
+		assert.match((await h.invoke("all")).text, /busy-target/);
+		assert.match((await h.invoke(child.id)).text, /already in progress/);
+		assert.match((await h.registrations.tools[0].execute({ session_id: child.id }, { agent: h.caller, signal: new AbortController().signal })).text, /already in progress/);
+	} finally {
+		idle.resolve();
+	}
+	assert.equal((await operation).kind, "success");
+	assert.deepEqual(h.compactCalls, [{ id: child.id, sourceCommandId: "cmd-standalone-batch" }]);
+	assert.equal((await h.invoke(child.id)).kind, "success", "completion releases the shared target lock");
+});
+
+for (const stop of ["cancel", "unload"]) test(`standalone batch ${stop} clears its wait and releases the shared lock`, async () => {
+	const entered = Promise.withResolvers();
+	const child = makeChild("child-a", { idle: () => { entered.resolve(); return new Promise(() => {}); } });
+	const h = withEngines(makeBatchHarness({ children: async () => [{ id: child.id, mode: "continuable" }], live: new Map([[child.id, child]]) }), {});
+	const controller = new AbortController();
+	const operation = h.invokeAll(controller.signal);
+	await entered.promise;
+	if (stop === "cancel") controller.abort(new Error("test cancellation"));
+	else for (const dispose of [...h.registrations.effectDisposers].reverse()) await dispose();
+	const result = await operation;
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /cancelled/);
+	assert.equal(h.compactCalls.length, 0);
+	assert.equal(h.registrations.listeners.length, 0);
+	child.whenIdle = async () => {};
+	assert.equal((await h.invoke(child.id)).kind, "success");
+});
+
+test("standalone batch reports partial failure and does not hide successful children", async () => {
+	const live = new Map(["child-a", "child-b"].map((id) => [id, makeChild(id)]));
+	const h = withEngines(makeBatchHarness({ children: async () => [...live.keys()].map((id) => ({ id, mode: "continuable" })), live }), { "child-a": { fail: "persistence" } });
+	const result = await h.invokeAll();
+	assert.equal(result.kind, "error");
+	assert.match(result.text, /child-a: persistence/);
+	assert.match(result.text, /child-b: compacted/);
+	assert.match(result.text, /Summary \(partial-failure\)/);
+});
+
+test("standalone batch accepts blank input and rejects supplied arguments before reading children", async () => {
+	let reads = 0;
+	const h = makeBatchHarness({ children: async () => { reads += 1; return []; } });
+	for (const args of ["all", "child-a", "all now"]) {
+		const result = await h.invokeAll(undefined, args);
+		assert.equal(result.kind, "error");
+		assert.match(result.text, /takes no arguments/);
+	}
+	assert.equal(reads, 0);
+	const result = await h.invokeAll(undefined, "   ");
+	assert.equal(result.kind, "success");
+	assert.match(result.text, /no direct subagents/);
+	assert.equal(reads, 1);
+});
 
 test("batch on an empty catalog reports empty-catalog as success", async () => {
 	const harness = makeBatchHarness({ children: async () => [] });

@@ -2,6 +2,8 @@
 
 [中文：补丁原理、Desktop 副本制作方式与安装边界](README.zh-CN.md)
 
+**Historical documentation for the unreleased 1.1.0 cold-compaction candidate.** Version 1.3.3 uses stock Harness rc.1/rc.2 and requires no host patch. Follow the [current installation instructions](../README.md#install). The procedures and test commands below describe the older candidate.
+
 **Installing the plugin does not apply these host patches.** Candidate source and CI are merged into this repository's `main`; that does not add the maintenance API to an installed stock Desktop. The patched Desktop copy passed real-model acceptance, but there is no portable host patch installer or released patched Desktop in this repository.
 
 These diffs are the **isolated candidate host change** behind review round 3's
