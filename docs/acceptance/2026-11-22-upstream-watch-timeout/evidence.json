@@ -1,0 +1,28 @@
+{
+  "runtimeSourceSha": "17a4aa7194505f0597acfa37b453af327ba32ee7",
+  "baseSha": "cdbbef4f2e7bbe47e60fe9e319eb103b01ac59f9",
+  "originalRunId": 44985777841,
+  "originalRunConclusion": "cancelled",
+  "originalReport": "PREPARED",
+  "originalAggregateComplete": false,
+  "originalEffectiveClassification": "INFRA_ERROR",
+  "originalNotifyJob": "skipped",
+  "watcher": {
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "skipped": 0
+  },
+  "stockRc1": {
+    "tests": 116,
+    "pass": 116,
+    "fail": 0,
+    "skipped": 0
+  },
+  "alpha1Diagnostic": {
+    "classification": "INFRA_ERROR",
+    "purpose": "bounded loader diagnostic; not compatibility acceptance"
+  },
+  "productFilesChanged": false,
+  "scheduleTriggerObserved": false
+}

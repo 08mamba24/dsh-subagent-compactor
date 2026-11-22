@@ -1,0 +1,73 @@
+{
+  "capturedAt": "2026-11-22T05:01:49.957Z",
+  "expectedCount": 1,
+  "reportCount": 1,
+  "complete": false,
+  "problems": [
+    {
+      "tag": "dsh-v0.2.3-alpha.1",
+      "problem": "invalid-classification",
+      "classification": "PREPARED"
+    }
+  ],
+  "counts": {
+    "PREPARED": 1
+  },
+  "effectiveCounts": {
+    "INFRA_ERROR": 1
+  },
+  "reports": [
+    {
+      "artifactPath": "/home/runner/work/dsh-subagent-compactor/dsh-subagent-compactor/downloaded-reports/upstream-compat-dsh-v0.2.3-alpha.1/report.json",
+      "schemaVersion": 1,
+      "tag": "dsh-v0.2.3-alpha.1",
+      "version": "0.2.3-alpha.1",
+      "commit": "d98f5d68519215da48f3002da2cb9c9d2068d81d",
+      "pluginSha": "cdbbef4f2e7bbe47e60fe9e319eb103b01ac59f9",
+      "runUrl": "https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/44985777841",
+      "preparedAt": "2026-11-22T04:36:39.657Z",
+      "dependencies": {
+        "@deepseek-ai/cordis": "4.1.0",
+        "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+        "@deepseek-ai/cordis-plugin-timer": "1.2.0",
+        "@deepseek-ai/schemastery": "3.19.0",
+        "@deepseek-ai/dsh-agent": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-agent-loop": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-agent-preset": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-agent-preset-registry": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-compaction-basic": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-command-compact": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-commands": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-fs-local": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-llm": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-llm-deepseek-api-key": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-session": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-session-projection": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-session-persistence-jsonl": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-session-query": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-subagent": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-subagent-spawn-in-process": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-system-prompt": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-token-meter": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-tool-executor-native": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-tools": "0.2.3-alpha.1",
+        "@deepseek-ai/dsh-working-directory": "0.2.3-alpha.1"
+      },
+      "classification": "PREPARED",
+      "reason": "dependency lock resolved",
+      "dependencyDigest": "d28e12b057980a8c8fffce9ae92276e413b90cb0fd3f2eba7712541acec9ab77",
+      "runnerDigest": "a1fd282e25a63156edf5795d8023245ae6d160cd6d92ccc0ab672ce4b5d87f0b",
+      "runnerSupportedVersions": [
+        "0.2.2-rc.1",
+        "0.2.2-rc.2",
+        "0.2.2-rc.3",
+        "0.2.2-rc.4",
+        "0.2.2-rc.5"
+      ],
+      "runnerSupportsVersion": false,
+      "comboDigest": "df1b864582d72fc988bc4d5905368c8d2e9157a18a5223e4f355b8d16a2cefd8",
+      "dependenciesDirectory": "/home/runner/work/_temp/upstream-compat-dsh-v0.2.3-alpha.1/dependencies",
+      "home": "/home/runner/work/_temp/upstream-compat-dsh-v0.2.3-alpha.1/home"
+    }
+  ]
+}

@@ -1,0 +1,147 @@
+✖ a hung runtime settles an infrastructure report and stops descendants before the job deadline (5034.866667ms)
+✖ workflow keeps execution read-only and isolates issue write permission (1.291958ms)
+✖ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (382.282958ms)
+✖ an incomplete missing report still delivers one infrastructure alert for the discovered target (380.936ms)
+✖ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (613.715459ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 0
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6460.955875
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:367:1
+✖ a hung runtime settles an infrastructure report and stops descendants before the job deadline (5034.866667ms)
+  AssertionError [ERR_ASSERTION]: a runtime deadline must settle INFRA_ERROR instead of leaving PREPARED
+  + actual - expected
+  
+  + 'PREPARED'
+  - 'INFRA_ERROR'
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:385:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'PREPARED',
+    expected: 'INFRA_ERROR',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:396:1
+✖ workflow keeps execution read-only and isolates issue write permission (1.291958ms)
+  AssertionError [ERR_ASSERTION]: incomplete reports must not suppress infrastructure notifications
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:404:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '# Discover new official DeepSeek Harness tags and test only exact, previously unseen combinations.\n# This workflow is independent from ci.yml\'s fixed compatibility matrix.\nname: Upstream compatibility watch\n\non:\n  pull_request:\n    paths:\n      - .github/workflows/upstream-compat.yml\n      - scripts/**\n      - test/**\n      - index.js\n      - package.json\n      - package-lock.json\n  schedule:\n    - cron: "23 * * * *"\n  workflow_dispatch:\n    inputs:\n      tag:\n        description: "Optional exact official tag, for example dsh-v0.2.2-rc.3"\n        required: false\n        type: string\n      force_recheck:\n        description: "Ignore a matching cached result for this manual run"\n        required: false\n        default: false\n        type: boolean\n      notify:\n        description: "Publish anomaly/recovery issues (manual runs on main only)"\n        required: false\n        default: false\n        type: boolean\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: upstream-compat-watch\n  cancel-in-progress: false\n\njobs:\n  discover:\n    name: Discover official releases and tags\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    outputs:\n      matrix: ${{ steps.discover.outputs.matrix }}\n      expected_targets: ${{ steps.discover.outputs.expected_targets }}\n      has_candidates: ${{ steps.discover.outputs.has_candidates }}\n      candidate_count: ${{ steps.discover.outputs.candidate_count }}\n    steps:\n      - uses: actions/checkout@v5\n        with:\n          persist-credentials: false\n      - uses: actions/setup-node@v5\n        with:\n          node-version: 24.18.0\n      - name: Test the watcher logic\n        run: node --test test/upstream-compat-watch.test.mjs\n      - name: Discover recent non-draft DSH tags, including prereleases\n        id: discover\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n          REQUESTED_TAG: ${{ inputs.tag }}\n        run: |\n          args=(\n            --repository deepseek-ai/deepseek-harness\n            --limit 3\n            --output upstream-discovery.json\n            --github-output "$GITHUB_OUTPUT"\n          )\n          if [[ -n "$REQUESTED_TAG" ]]; then\n            args+=(--tag "$REQUESTED_TAG")\n          fi\n          node scripts/discover-upstream.mjs "${args[@]}"\n      - name: Upload discovery provenance\n        uses: actions/upload-artifact@v4\n        with:\n          name: upstream-discovery\n          path: upstream-discovery.json\n          if-no-files-found: error\n          retention-days: 30\n\n  compatibility:\n    name: Harness ${{ matrix.tag }}\n    needs: discover\n    if: needs.discover.outputs.has_candidates == \'true\'\n    runs-on: ubuntu-latest\n    timeout-minutes: 25\n    strategy:\n      fail-fast: false\n      max-parallel: 2\n      matrix: ${{ fromJson(needs.discover.outputs.matrix) }}\n    steps:\n      - uses: actions/checkout@v5\n        with:\n          persist-credentials: false\n      - uses: actions/setup-node@v5\n        with:\n          node-version: 24.18.0\n      - name: Resolve an exact public dependency lock without running package scripts\n        id: prepare\n        env:\n          SCRATCH: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}\n          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json\n          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n        run: |\n          node scripts/upstream-compat.mjs prepare \\\n            --version \'${{ matrix.version }}\' \\\n            --tag \'${{ matrix.tag }}\' \\\n            --commit \'${{ matrix.commit }}\' \\\n            --plugin-sha \'${{ github.sha }}\' \\\n            --scratch "$SCRATCH" \\\n            --report "$REPORT" \\\n            --run-url "$RUN_URL" \\\n            --github-output "$GITHUB_OUTPUT"\n      - name: Restore the most recent cached verdict for this combination\n        id: restore\n        if: steps.prepare.outputs.ready == \'true\'\n        uses: actions/cache/restore@v4\n        with:\n          path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}\n          # The exact key stays unique so it never primary-hits; the prefix\n          # restores the newest stored verdict, which inspect validates below.\n          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-none\n          restore-keys: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-\n      - name: Validate the restored verdict against this exact combination\n        id: inspect\n        if: steps.prepare.outputs.ready == \'true\'\n        env:\n          CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}\n        run: node scripts/upstream-compat.mjs inspect --cache-directory "$CACHE_DIRECTORY" --combo-digest \'${{ steps.prepare.outputs.combo_digest }}\' --github-output "$GITHUB_OUTPUT"\n      - name: Run the isolated stock-runtime compatibility suite\n        id: run\n        if: steps.prepare.outputs.ready == \'true\' && (steps.inspect.outputs.skip != \'true\' || (github.event_name == \'workflow_dispatch\' && inputs.force_recheck))\n        env:\n          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json\n        run: |\n          node scripts/upstream-compat.mjs run \\\n            --plan \'${{ steps.prepare.outputs.plan }}\' \\\n            --report "$REPORT" \\\n            --github-output "$GITHUB_OUTPUT"\n      - name: Record a deduplicated skip\n        id: reuse\n        if: steps.prepare.outputs.ready == \'true\' && steps.inspect.outputs.skip == \'true\' && !(github.event_name == \'workflow_dispatch\' && inputs.force_recheck)\n        env:\n          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json\n        run: |\n          node scripts/upstream-compat.mjs reuse \\\n            --cached-report \'${{ steps.inspect.outputs.cachedReport }}\' \\\n            --report "$REPORT" \\\n            --github-output "$GITHUB_OUTPUT"\n      - name: Prepare a reusable result marker\n        id: cache\n        # Saving follows what THIS run executed: a forced recheck (skip=true,\n        # run executed) must save its fresh verdict under the new digest key;\n        # an ordinary cache hit (run skipped) must not save anything.\n        if: steps.prepare.outputs.ready == \'true\' && steps.run.outcome == \'success\' && steps.run.outputs.classification != \'INFRA_ERROR\'\n        env:\n          REPORT: ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json\n          CACHE_DIRECTORY: ${{ github.workspace }}/.upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}\n        run: node scripts/upstream-compat.mjs cache --report "$REPORT" --cache-directory "$CACHE_DIRECTORY" --github-output "$GITHUB_OUTPUT"\n      - name: Save the exact combination result\n        # The key embeds the result digest: a changed verdict saves a fresh\n        # entry; an identical one re-saves the same key harmlessly.\n        if: steps.prepare.outputs.ready == \'true\' && steps.run.outcome == \'success\' && steps.run.outputs.classification != \'INFRA_ERROR\'\n        uses: actions/cache/save@v4\n        with:\n          path: .upstream-compat-cache/${{ steps.prepare.outputs.combo_digest }}\n          key: dsh-upstream-compat-v2-${{ steps.prepare.outputs.combo_digest }}-${{ steps.cache.outputs.result_digest }}\n      - name: Upload this compatibility report\n        if: always()\n        uses: actions/upload-artifact@v4\n        with:\n          name: upstream-compat-${{ matrix.artifact }}\n          path: |\n            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/report.json\n            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/plan.json\n            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/dependencies/package.json\n            ${{ runner.temp }}/upstream-compat-${{ matrix.artifact }}/dependencies/package-lock.json\n          if-no-files-found: warn\n          retention-days: 30\n\n  aggregate:\n    name: Publish compatibility summary\n    needs: [discover, compatibility]\n    if: always() && needs.discover.outputs.has_candidates == \'true\'\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    outputs:\n      has_incompatible: ${{ steps.aggregate.outputs.has_incompatible }}\n      has_infra_error: ${{ steps.aggregate.outputs.has_infra_error }}\n      has_not_verified: ${{ steps.aggregate.outputs.has_not_verified }}\n      report_count: ${{ steps.aggregate.outputs.report_count }}\n      complete: ${{ steps.aggregate.outputs.complete }}\n    steps:\n      - uses: actions/checkout@v5\n        with:\n          persist-credentials: false\n      - uses: actions/download-artifact@v4\n        with:\n          pattern: upstream-compat-*\n          path: downloaded-reports\n      - name: Aggregate classifications without upgrading NOT_VERIFIED to incompatibility\n        id: aggregate\n        run: |\n          node scripts/upstream-compat.mjs aggregate \\\n            --reports-directory "$GITHUB_WORKSPACE/downloaded-reports" \\\n            --output "$GITHUB_WORKSPACE/upstream-compat-summary.json" \\\n            --markdown "$GITHUB_WORKSPACE/upstream-compat-summary.md" \\\n            --expected-count \'${{ needs.discover.outputs.candidate_count }}\' \\\n            --expected-targets \'${{ needs.discover.outputs.expected_targets }}\' \\\n            --plugin-sha \'${{ github.sha }}\' \\\n            --step-summary "$GITHUB_STEP_SUMMARY" \\\n            --github-output "$GITHUB_OUTPUT"\n      - uses: actions/upload-artifact@v4\n        with:\n          name: upstream-compat-summary\n          path: |\n            upstream-compat-summary.json\n            upstream-compat-summary.md\n          if-no-files-found: error\n          retention-days: 30\n\n  notify:\n    name: Update the unique upstream-version issues\n    needs: [discover, aggregate]\n    if: (github.event_name == \'schedule\' || (github.event_name == \'workflow_dispatch\' && inputs.notify)) && github.ref == \'refs/heads/main\' && needs.discover.outputs.has_candidates == \'true\' && needs.aggregate.outputs.complete == \'true\'\n    runs-on: ubuntu-latest\n    timeout-minut'... 2919 more characters,
+    expected: /needs\.aggregate\.outputs\.complete == 'true'/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:467:2
+✖ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (382.282958ms)
+  AssertionError [ERR_ASSERTION]: publish the monitored target's infrastructure fault, never a healthy or foreign-SHA verdict
+  + actual - expected
+  
+  + []
+  - [
+  -   {
+  -     action: 'created',
+  -     classification: 'INFRA_ERROR',
+  -     tag: 'dsh-v0.2.2-rc1'
+  -   }
+  - ]
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:480:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at node:internal/test_runner/test:1305:31
+      at node:internal/process/task_queues:151:7
+      at AsyncResource.runInAsyncScope (node:async_hooks:227:14)
+      at AsyncResource.runMicrotask (node:internal/process/task_queues:148:8)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { tag: 'dsh-v0.2.2-rc1', classification: 'INFRA_ERROR', action: 'created' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:467:2
+✖ an incomplete missing report still delivers one infrastructure alert for the discovered target (380.936ms)
+  AssertionError [ERR_ASSERTION]: publish the monitored target's infrastructure fault, never a healthy or foreign-SHA verdict
+  + actual - expected
+  
+  + []
+  - [
+  -   {
+  -     action: 'created',
+  -     classification: 'INFRA_ERROR',
+  -     tag: 'dsh-v0.2.2-rc1'
+  -   }
+  - ]
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:480:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [],
+    expected: [ { tag: 'dsh-v0.2.2-rc1', classification: 'INFRA_ERROR', action: 'created' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:467:2
+✖ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (613.715459ms)
+  AssertionError [ERR_ASSERTION]: publish the monitored target's infrastructure fault, never a healthy or foreign-SHA verdict
+  + actual - expected
+  
+    [
+      {
+  +     action: 'healthy',
+  +     classification: 'COMPATIBLE',
+  -     action: 'created',
+  -     classification: 'INFRA_ERROR',
+        tag: 'dsh-v0.2.2-rc1'
+      }
+    ]
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-upstream-watch/test/upstream-compat-watch.test.mjs:480:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { tag: 'dsh-v0.2.2-rc1', classification: 'COMPATIBLE', action: 'healthy' } ],
+    expected: [ { tag: 'dsh-v0.2.2-rc1', classification: 'INFRA_ERROR', action: 'created' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
