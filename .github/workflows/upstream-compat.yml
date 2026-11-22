@@ -224,7 +224,7 @@ jobs:
   notify:
     name: Update the unique upstream-version issues
     needs: [discover, aggregate]
-    if: (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.notify)) && github.ref == 'refs/heads/main' && needs.discover.outputs.has_candidates == 'true' && needs.aggregate.outputs.complete == 'true'
+    if: (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.notify)) && github.ref == 'refs/heads/main' && needs.discover.outputs.has_candidates == 'true' && needs.aggregate.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

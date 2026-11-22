@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
 	appendFileSync,
 	cpSync,
@@ -79,11 +79,48 @@ function safeEnvironment(home) {
 	};
 }
 
-function runCommand(command, args, options = {}) {
-	const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, ...options });
-	const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-	if (output) process.stdout.write(output);
-	return { ...result, output };
+function commandTimeout(args, maximum) {
+	const value = args.timeoutMs === undefined ? maximum : Number(args.timeoutMs);
+	if (!Number.isInteger(value) || value < 1 || value > maximum) throw new Error(`--timeout-ms must be an integer from 1 to ${maximum}`);
+	return value;
+}
+
+function runCommand(command, args, { timeoutMs, ...options }) {
+	return new Promise(resolve => {
+		const child = spawn(command, args, { ...options, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+		const chunks = [];
+		let bytes = 0, error;
+		const stop = failure => {
+			if (error) return;
+			error = failure;
+			const diagnostic = Buffer.from(`\nError: ${failure.message}\n`);
+			chunks.push(diagnostic);
+			process.stderr.write(diagnostic);
+			if (!child.pid) return;
+			// Stop the test runner and its workers, not just the wrapper holding their pipes.
+			try { process.platform === "win32" ? child.kill("SIGKILL") : process.kill(-child.pid, "SIGKILL"); }
+			catch (killError) { if (killError.code !== "ESRCH") child.kill("SIGKILL"); }
+		};
+		const collect = (chunk, stream) => {
+			stream.write(chunk);
+			bytes += chunk.length;
+			if (bytes > 32 * 1024 * 1024) stop(Object.assign(new Error(`${command} exceeded the output limit`), { code: "ENOBUFS" }));
+			else chunks.push(chunk);
+		};
+		child.stdout.on("data", chunk => collect(chunk, process.stdout));
+		child.stderr.on("data", chunk => collect(chunk, process.stderr));
+		child.on("error", failure => { error ??= failure; });
+		const timer = setTimeout(() => stop(Object.assign(new Error(`${command} timed out after ${timeoutMs}ms`), { code: "ETIMEDOUT" })), timeoutMs);
+		const interrupted = () => stop(Object.assign(new Error(`${command} was interrupted`), { code: "EINTR" }));
+		process.on("SIGTERM", interrupted);
+		process.on("SIGINT", interrupted);
+		child.on("close", (status, signal) => {
+			clearTimeout(timer);
+			process.off("SIGTERM", interrupted);
+			process.off("SIGINT", interrupted);
+			resolve({ status, signal, error, output: Buffer.concat(chunks).toString("utf8") });
+		});
+	});
 }
 
 function outputTail(output, limit = 12_000) {
@@ -114,7 +151,7 @@ function baseReport(args) {
 	};
 }
 
-function prepare(args) {
+async function prepare(args) {
 	required(args, "version", "tag", "commit", "pluginSha", "scratch", "report");
 	if (!/^dsh-v[0-9A-Za-z.-]+$/.test(args.tag)) throw new Error("Invalid upstream tag");
 	if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(args.version)) throw new Error("Invalid Harness version");
@@ -126,9 +163,10 @@ function prepare(args) {
 	mkdirSync(dependenciesDirectory, { recursive: true });
 	const dependencies = packageDependencies(args.version);
 	writeFileSync(join(dependenciesDirectory, "package.json"), JSON.stringify({ private: true, dependencies }, null, 2) + "\n");
-	const install = runCommand("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
+	const install = await runCommand("npm", ["install", "--package-lock-only", "--ignore-scripts", "--no-audit", "--no-fund"], {
 		cwd: dependenciesDirectory,
 		env: safeEnvironment(home),
+		timeoutMs: commandTimeout(args, 8 * 60_000),
 	});
 	const common = { ...baseReport(args), preparedAt: new Date().toISOString(), dependencies };
 	if (install.error || install.status !== 0) {
@@ -185,13 +223,14 @@ function installedVersions(dependenciesDirectory, dependencies) {
 	return versions;
 }
 
-function run(args) {
+async function run(args) {
 	required(args, "plan", "report");
 	const plan = JSON.parse(readFileSync(absolute(args.plan, "plan"), "utf8"));
 	const reportPath = absolute(args.report, "report");
-	const install = runCommand("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], {
+	const install = await runCommand("npm", ["ci", "--ignore-scripts", "--no-audit", "--no-fund"], {
 		cwd: plan.dependenciesDirectory,
 		env: safeEnvironment(plan.home),
+		timeoutMs: commandTimeout(args, 10 * 60_000),
 	});
 	if (install.error || install.status !== 0) {
 		const result = classifyInstallFailure(install.output || install.error?.message);
@@ -203,9 +242,10 @@ function run(args) {
 			outputTail: outputTail(install.output || install.error?.message || ""),
 		}, args.githubOutput);
 	}
-	const runtime = runCommand(process.execPath, [join(source, "scripts/test-installed-runtime.mjs"), "--modules", join(plan.dependenciesDirectory, "node_modules"), "--candidate-version", plan.version], {
+	const runtime = await runCommand(process.execPath, [join(source, "scripts/test-installed-runtime.mjs"), "--modules", join(plan.dependenciesDirectory, "node_modules"), "--candidate-version", plan.version], {
 		cwd: source,
 		env: safeEnvironment(plan.home),
+		timeoutMs: commandTimeout(args, 10 * 60_000),
 	});
 	const result = classifyRunnerResult({ status: runtime.status, output: runtime.output, error: runtime.error });
 	return saveReport(reportPath, {
@@ -324,7 +364,19 @@ function aggregate(args) {
 		const effective = effectiveOf(report);
 		effectiveCounts[effective] = (effectiveCounts[effective] ?? 0) + 1;
 	}
-	const value = { capturedAt: new Date().toISOString(), expectedCount, reportCount: reports.length, complete, ...(problems.length > 0 ? { problems } : {}), counts, effectiveCounts, reports: reports.map(item => ({ artifactPath: item.path, ...item.report })) };
+	// An unfinished or missing report still owes an alert for the discovered target.
+	// Keep raw evidence and the failed gate; never forward an unvalidated healthy verdict.
+	const notificationReports = expectedTargets === null ? reports.map(({ report }) => report) : expectedTargets.map(target => {
+		const faults = problems.filter(problem => problem.tag === target.tag || !expectedTargets.some(expected => expected.tag === problem.tag));
+		if (faults.length === 0) return reportsByTag.get(target.tag)[0];
+		return {
+			tag: target.tag, version: target.version, commit: target.commit,
+			pluginSha: args.pluginSha ?? target.pluginSha ?? "",
+			classification: "INFRA_ERROR", reason: "compatibility report incomplete or invalid",
+			firstFailure: faults.map(({ problem }) => problem).join(", "),
+		};
+	});
+	const value = { capturedAt: new Date().toISOString(), expectedCount, reportCount: reports.length, complete, ...(problems.length > 0 ? { problems } : {}), counts, effectiveCounts, reports: reports.map(item => ({ artifactPath: item.path, ...item.report })), notificationReports };
 	writeFileSync(absolute(args.output, "output"), JSON.stringify(value, null, 2) + "\n");
 	const lines = [
 		"# Upstream compatibility watch",
@@ -387,8 +439,8 @@ function inspect(args) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-if (args.command === "prepare") prepare(args);
-else if (args.command === "run") run(args);
+if (args.command === "prepare") await prepare(args);
+else if (args.command === "run") await run(args);
 else if (args.command === "reuse") reuse(args);
 else if (args.command === "cache") cache(args);
 else if (args.command === "inspect") inspect(args);
