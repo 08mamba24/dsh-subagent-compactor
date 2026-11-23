@@ -1,8 +1,14 @@
 # Validation record
 
-## Upstream compatibility watch and rc.3–rc.5 (2026-11-22)
+## Alpha.2 compatibility source candidate (2026-11-24)
 
-The current source passed all five tracked suites on each stock rc.1–rc.5 tree:
+The formal source candidate passes **120/120** on each stock Harness rc.1–rc.5 tree and on a freshly installed **0.2.3-alpha.2** host lock, using Homebrew Node 24.22.3, isolated storage and loopback synthetic model responses. Watcher regressions pass **39/39** and package inspection succeeds. Four added auth fixture tests cover absence, successful loading, missing transitive dependencies and a broken installed entry.
+
+The candidate changes the public command import, composes the alpha.1+ auth service in tests, prepares watcher candidates from the published host closure, and adds a separate locked alpha.2 CI job while retaining rc.1–rc.5. See [the acceptance record](acceptance/2026-11-24-alpha2-compat/acceptance.md) and exact commands/logs. These are local candidate results, not GitHub CI, GUI, installation or release approval.
+
+## Upstream compatibility watch and rc.3–rc.5 (2026-11-22 baseline)
+
+The 2026-11-22 baseline passed all five tracked suites on each stock rc.1–rc.5 tree:
 **116/116 per runtime, zero failed or skipped**. rc.3–rc.5 also traversed the
 watcher's real public-dependency prepare/run path and produced `COMPATIBLE`
 reports with exact source identities and executed-test evidence. The watcher

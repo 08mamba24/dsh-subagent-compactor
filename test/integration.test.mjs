@@ -22,7 +22,7 @@
  * Modules resolve from a stock rc.1 or rc.2 tree linked at ./node_modules.
  */
 import test from "node:test";
-import { startActivation } from "./runtime-fixture.mjs";
+import { loadDeepSeekAuth, startActivation } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
@@ -119,10 +119,13 @@ async function bootComposition(baseURL, storageRoot, { resumeInactive = false } 
 		"@deepseek-ai/dsh-subagent",
 		"@deepseek-ai/dsh-subagent-spawn-in-process"
 	]) modules[moduleName] = await import(moduleName);
+	const deepSeekAuth = await loadDeepSeekAuth();
+	if (deepSeekAuth) modules["@deepseek-ai/dsh-deepseek-auth"] = deepSeekAuth;
 	const ctx = new Context();
 	const rows = [
 		["@deepseek-ai/cordis-plugin-timer", {}],
 		["@deepseek-ai/dsh-llm", {}],
+		...(deepSeekAuth ? [["@deepseek-ai/dsh-deepseek-auth", {}]] : []),
 		["@deepseek-ai/dsh-llm-deepseek-api-key", { baseURL, defaultContextWindow: 200000 }],
 		["@deepseek-ai/dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are the integration test worker." }],
 		["@deepseek-ai/dsh-tools", {}],

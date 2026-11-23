@@ -1,5 +1,16 @@
 # Changelog / 变更日志
 
+## Alpha.2 compatibility candidate / 兼容候选 (2026-11-24)
+
+- Import the runtime `CommandDefinitionId` from the public package root after the old `/brand` subpath was removed. Keep the existing rc.1–rc.5 ownership/catalog adaptation.
+  运行时 `CommandDefinitionId` 改从公开包根导入，适配旧 `/brand` 子路径移除；保留已有 rc.1–rc.5 归属与目录适配。
+- Compose the alpha.1+ auth service in integration fixtures. Only an absent target package is optional; missing entries and transitive dependencies stay visible, covered by negative fixtures.
+  集成夹具挂载 alpha.1+ auth 服务；只允许目标包缺失，入口或传递依赖缺失继续抛错，并以负向夹具覆盖。
+- Use Node 24.22.3 for CI and add a locked alpha.2 stock-host job alongside rc.1–rc.5. Prepare watcher candidates from the exact published host closure instead of mixing old vendor pins.
+  CI 使用 Node 24.22.3，在 rc.1–rc.5 之外新增 alpha.2 原版宿主锁定任务；巡检按精确发布宿主准备依赖闭包，避免混装旧 vendor 固定版本。
+- Source candidate only; no installed update, Desktop restart, tag or release is performed.
+  仅为源码候选，未更新安装、重启 Desktop、创建 tag 或发布。
+
 ## Upstream compatibility automation / 上游兼容性自动化 (2026-11-22)
 
 - Discover official Harness tags and releases hourly, including future RCs, and run isolated candidate regressions against exact versions. Keep fixed CI coverage on rc.1–rc.5; record executed-test evidence and distinguish incompatibility, unverified runs, and infrastructure errors.

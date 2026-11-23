@@ -123,6 +123,8 @@ The five tracked suites use pinned stock runtime packages, isolated temporary st
 
 ## Upstream compatibility watch
 
+The source candidate also adapts the public command import and the alpha.1+ DeepSeek auth test composition. CI retains rc.1–rc.5 and adds a separate locked **0.2.3-alpha.2** host tree under `test/host-locks/0.2.3-alpha.2`. Alpha.2 tests require Node `^24.22.3 || >=26.13.1`; CI uses 24.22.3. This source change does not update an installed plugin or establish Desktop GUI acceptance.
+
 [`upstream-compat.yml`](.github/workflows/upstream-compat.yml) can discover recent official `deepseek-ai/deepseek-harness` releases and tags, including prerelease and RC tags, then test only exact combinations that have not been recorded before. Draft releases are excluded. Every report records the Harness tag and tag commit, this repository's exact SHA, the resolved dependency-lock digest, and the runner digest.
 
 The watcher is separate from `ci.yml` and never changes its pinned compatibility matrix. It attempts the full stock installed-runtime suite for every discovered candidate, including future RCs, using public npm packages, temporary HOME/DSH_HOME/JSONL storage and a loopback synthetic model. An unavailable dependency or a suite that cannot load is `NOT_VERIFIED`; only an executed passing suite establishes compatibility. Anomalies update one issue per upstream tag, and recovery closes it; healthy versions stay in Actions. See [the watch design and operator guide](docs/UPSTREAM_COMPAT_WATCH.md).

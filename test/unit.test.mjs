@@ -5,7 +5,43 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { apply, inject, name as pluginName, Config } from "../index.js";
+
+async function optionalAuthFixture(t, packageSource, packageFields = {}) {
+	const directory = mkdtempSync(join(tmpdir(), "compactor-optional-auth-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const fixture = join(directory, "runtime-fixture.mjs");
+	copyFileSync(new URL("./runtime-fixture.mjs", import.meta.url), fixture);
+	if (packageSource !== undefined) {
+		const auth = join(directory, "node_modules/@deepseek-ai/dsh-deepseek-auth");
+		mkdirSync(auth, { recursive: true });
+		writeFileSync(join(auth, "package.json"), JSON.stringify({ name: "@deepseek-ai/dsh-deepseek-auth", type: "module", exports: "./index.js", ...packageFields }));
+		if (packageSource !== null) writeFileSync(join(auth, "index.js"), packageSource);
+	}
+	return (await import(pathToFileURL(fixture).href)).loadDeepSeekAuth();
+}
+
+test("optional auth: absent package is supported on old stock runtimes", async t => {
+	assert.equal(await optionalAuthFixture(t), undefined);
+});
+
+test("optional auth: installed service is returned", async t => {
+	assert.equal((await optionalAuthFixture(t, 'export const name = "fixture-auth";')).name, "fixture-auth");
+});
+
+test("optional auth: missing transitive dependency remains a load failure", async t => {
+	await assert.rejects(optionalAuthFixture(t, 'import "./missing-transitive.mjs";'), error =>
+		error.code === "ERR_MODULE_NOT_FOUND" && /missing-transitive\.mjs/.test(error.message));
+});
+
+test("optional auth: an installed package with a missing entry remains a load failure", async t => {
+	await assert.rejects(optionalAuthFixture(t, null, { exports: undefined, main: "./missing-entry.mjs" }), error =>
+		error.code === "ERR_MODULE_NOT_FOUND");
+});
 
 class ManualError extends Error {
 	constructor(code, message) {

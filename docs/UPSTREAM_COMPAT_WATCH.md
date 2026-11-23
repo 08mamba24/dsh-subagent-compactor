@@ -29,6 +29,8 @@ An exact GitHub Actions cache key stores the prior classified report. A matching
 
 The compatibility job has read-only repository permission and checks out with persisted Git credentials disabled. It receives no user credentials. Public dependency locks and installs use a fresh HOME and empty npm configuration; package lifecycle scripts are disabled. The stock suite then uses the repository's `scripts/test-installed-runtime.mjs`, which creates isolated temporary DSH_HOME, DSH_AGENTS_HOME and JSONL state. Runtime integration tests route model calls to their loopback synthetic endpoint.
 
+Candidates install exactly `@deepseek-ai/dsh@<discovered version>` and let that host select its Cordis, Loader and auth dependency closure. The generated lock binds the full resolved tree; old plugin development pins are not mixed into a newer host. Reports include the host and core vendor/service versions. The workflow uses Node 24.22.3 for the alpha.2 floor. Fixed CI separately preserves rc.1–rc.5 and runs the checked-in alpha.2 host lock; the watcher does not edit either gate.
+
 The fixed runner and CI matrix cover rc.1–rc.5. The watcher supplies `--candidate-version <exact discovered version>` and attempts the complete suite even for a future rc.6, rc.7, or later tag. The runner verifies the installed version matches that candidate and that every required dsh package agrees before testing. A new tag does not require a manual allowlist edit. `runnerSupportedVersions` and `runnerSupportsVersion` in the plan describe the fixed baseline; they do not prevent candidate execution.
 
 The report has three substantive outcomes:

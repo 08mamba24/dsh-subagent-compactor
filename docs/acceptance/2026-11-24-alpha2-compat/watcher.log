@@ -1,0 +1,49 @@
+{"label": "watcher", "command": ["/opt/homebrew/opt/node@24/bin/node", "--test", "--test-reporter=spec", "test/upstream-compat-watch.test.mjs"], "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2", "log": "watcher.log"}
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (2.488875ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.440167ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.233166ms)
+✔ dedup digest changes for every compatibility identity input (1.072292ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.57025ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (2.503959ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (882.96375ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.869625ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.838875ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (114.517916ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (126.510334ms)
+✔ prepare CLI uses the exact stock host closure and records runner support (1461.103125ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (671.160083ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (558.500834ms)
+✔ a hung runtime settles an infrastructure report and stops descendants before the job deadline (1157.87325ms)
+✔ the failure dependency chain can reach notification while permission gates remain closed elsewhere (2.282125ms)
+✔ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.60275ms)
+✔ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (10508.238833ms)
+ℹ {"stageMinutes":[6,6,6],"scaledElapsedMs":10482,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✔ workflow keeps execution read-only and isolates issue write permission (0.466167ms)
+✔ aggregate-to-notify preserves the existing issue correctly for missing-directory (502.880458ms)
+✔ aggregate-to-notify preserves the existing issue correctly for tagless-extra (497.973583ms)
+✔ aggregate-to-notify preserves the existing issue correctly for count-mismatch (748.340709ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (533.789083ms)
+✔ aggregate refuses to call a PREPARED-only run complete (98.233708ms)
+✔ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (517.272417ms)
+✔ an incomplete missing report still delivers one infrastructure alert for the discovered target (517.62675ms)
+✔ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (520.165333ms)
+✔ an incomplete unexpected report still delivers one infrastructure alert for the discovered target (488.333958ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (324.985792ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (345.745875ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (311.560958ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (114.864459ms)
+✔ notify delivers a cached verdict that was never delivered before (413.430375ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (511.84ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (390.740292ms)
+✔ notify retries a failed reopen after editing INCOMPATIBLE, then stays quiet (1351.913917ms)
+✔ notify retries a failed reopen after editing NOT_VERIFIED, then stays quiet (1108.480916ms)
+✔ notify retries a failed reopen after editing INFRA_ERROR, then stays quiet (1113.758042ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (235.710292ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 39
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 26296.93475

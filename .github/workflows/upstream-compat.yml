@@ -53,7 +53,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.18.0
+          node-version: 24.22.3
       - name: Test the watcher logic
         run: node --test test/upstream-compat-watch.test.mjs
       - name: Discover recent non-draft DSH tags, including prereleases
@@ -96,7 +96,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.18.0
+          node-version: 24.22.3
       - name: Resolve an exact public dependency lock without running package scripts
         id: prepare
         env:

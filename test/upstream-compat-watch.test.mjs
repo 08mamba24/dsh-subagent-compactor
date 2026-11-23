@@ -289,13 +289,13 @@ test("aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result",
 	assert.match(readFileSync(githubOutput, "utf8"), /skipped_count=1/);
 });
 
-test("prepare CLI records the runner support decision before any runtime execution", t => {
+test("prepare CLI uses the exact stock host closure and records runner support", t => {
 	const directory = temporary(t), bin = join(directory, "bin");
 	mkdirSync(bin);
 	const fakeNpm = join(bin, "npm");
 	writeFileSync(fakeNpm, "#!/bin/sh\nprintf '%s\\n' '{\"lockfileVersion\":3,\"packages\":{}}' > package-lock.json\n");
 	chmodSync(fakeNpm, 0o755);
-	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.5", true], ["99.0.0-rc.1", false]]) {
+	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.5", true], ["0.2.3-alpha.2", false], ["99.0.0-rc.1", false]]) {
 		const scratch = join(directory, version), report = join(scratch, "report.json");
 		const result = spawnSync(process.execPath, [
 			join(repository, "scripts/upstream-compat.mjs"), "prepare",
@@ -308,6 +308,7 @@ test("prepare CLI records the runner support decision before any runtime executi
 		], { encoding: "utf8", cwd: repository, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
 		assert.equal(result.status, 0, result.stderr);
 		const plan = JSON.parse(readFileSync(join(scratch, "plan.json"), "utf8"));
+		assert.deepEqual(plan.dependencies, { "@deepseek-ai/dsh": version }, "the candidate host must select its own vendor versions instead of mixing old devDependencies");
 		assert.deepEqual(plan.runnerSupportedVersions, ["0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.2-rc.4", "0.2.2-rc.5"]);
 		assert.equal(plan.runnerSupportsVersion, expected);
 	}
@@ -444,10 +445,14 @@ test("slow prepare and install leave a hung runtime enough time to settle before
 	writeFileSync(entry, source.replace(/commandTimeout\(args, (\d+) \* 60_000\)/g, (_, value) => `commandTimeout(args, ${Number(value) * scale})`));
 	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module", devDependencies: {} }));
 	writeFileSync(join(directory, "bin/npm"), `#!${process.execPath}
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 const prepare = process.argv.includes("--package-lock-only");
 setTimeout(() => {
   if (prepare) writeFileSync("package-lock.json", '{"lockfileVersion":3,"packages":{}}');
+  else {
+    mkdirSync("node_modules/@deepseek-ai/dsh", { recursive: true });
+    writeFileSync("node_modules/@deepseek-ai/dsh/package.json", '{"name":"@deepseek-ai/dsh","version":"99.0.0-rc.1"}');
+  }
   console.log(prepare ? "slow prepare completed" : "slow install completed");
 }, prepare ? ${minutes[0] * scale * 0.85} : ${minutes[1] * scale * 0.85});
 `);

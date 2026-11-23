@@ -133,11 +133,8 @@ function firstFailure(output) {
 }
 
 function packageDependencies(version) {
-	const pkg = JSON.parse(readFileSync(join(source, "package.json"), "utf8"));
-	return Object.fromEntries(Object.entries(pkg.devDependencies).map(([name, current]) => [
-		name,
-		name.startsWith("@deepseek-ai/dsh-") ? version : current,
-	]));
+	// The published host selects its own Cordis/Loader/auth dependency closure.
+	return { "@deepseek-ai/dsh": version };
 }
 
 function baseReport(args) {
@@ -217,7 +214,12 @@ async function prepare(args) {
 
 function installedVersions(dependenciesDirectory, dependencies) {
 	const versions = {};
-	for (const name of Object.keys(dependencies)) {
+	const names = new Set(Object.keys(dependencies));
+	if (names.has("@deepseek-ai/dsh")) {
+		for (const name of ["cordis", "cordis-plugin-loader", "schemastery", "dsh-agent", "dsh-subagent"])
+			names.add(`@deepseek-ai/${name}`);
+	}
+	for (const name of names) {
 		const path = join(dependenciesDirectory, "node_modules", ...name.split("/"), "package.json");
 		versions[name] = JSON.parse(readFileSync(path, "utf8")).version;
 	}

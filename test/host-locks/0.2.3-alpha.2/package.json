@@ -1,0 +1,8 @@
+{
+  "name": "dsh-compactor-alpha2-stock-tests",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.3-alpha.2"
+  }
+}

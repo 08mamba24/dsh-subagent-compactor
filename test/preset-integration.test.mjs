@@ -5,7 +5,7 @@
  * credentials service, or user configuration is loaded.
  */
 import test from "node:test";
-import { startActivation, directCatalog } from "./runtime-fixture.mjs";
+import { loadDeepSeekAuth, startActivation, directCatalog } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -140,9 +140,11 @@ async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, p
 		await ctx.plugin(Loader, { baseUrl: new URL("../package.json", import.meta.url).href });
 		// app-boot publishes the same native Loader builtin before loading rows.
 		ctx.loader.builtins.group = Group;
+		const deepSeekAuth = await loadDeepSeekAuth();
 		const rows = [
 			["cordis-plugin-timer", {}],
 			["dsh-llm", {}],
+			...(deepSeekAuth ? [["dsh-deepseek-auth", {}]] : []),
 			["dsh-llm-deepseek-api-key", { baseURL, apiKeyEnv: TEST_KEY_ENV, models: [{ id: MODEL, contextWindow: auto ? 4000 : 200000 }] }],
 			["dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are a test worker." }],
 			["dsh-tools", {}],
