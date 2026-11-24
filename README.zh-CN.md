@@ -125,6 +125,8 @@ rc.2 的所有单目标入口还需要 `sessionQuery` 与 `subagentCatalog` 投�
 
 ## 上游兼容性监控
 
+当前源码候选还适配了命令公开导入和 alpha.1+ 的 DeepSeek auth 测试组合。CI 保留 rc.1–rc.5，并在 `test/host-locks/0.2.3-alpha.2` 增加独立锁定的 **0.2.3-alpha.2** 宿主树。alpha.2 测试要求 Node `^24.22.3 || >=26.13.1`，CI 使用 24.22.3；源码改动不代表已更新安装或完成 Desktop GUI 验收。
+
 [`upstream-compat.yml`](.github/workflows/upstream-compat.yml) 可发现 `deepseek-ai/deepseek-harness` 官方近期 release 与 tag，包含 prerelease 和 RC，并只测试尚未记录的精确组合；draft release 会被排除。每份报告都会记录 Harness tag 及其精确 commit、本仓精确 SHA、解析后的依赖锁摘要和 runner 摘要。
 
 监控与 `ci.yml` 的固定兼容矩阵相互独立，不会修改原有门禁。每个候选版本（含后续 RC）都会尝试完整 stock installed-runtime 回归，使用公开 npm 包、临时 HOME/DSH_HOME/JSONL 和回环合成模型。依赖不可用或测试无法加载时标记为 `NOT_VERIFIED`，只有实际执行并通过才能判定兼容。异常按上游 tag 更新同一条 issue，恢复后关闭；正常版本保留在 Actions 中。详见[监控设计与操作说明](docs/UPSTREAM_COMPAT_WATCH.md)。

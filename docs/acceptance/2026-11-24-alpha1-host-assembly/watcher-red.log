@@ -1,0 +1,101 @@
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (1.928667ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.383875ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.194042ms)
+✔ dedup digest changes for every compatibility identity input (0.953791ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.528708ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (1.492208ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (574.860917ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.422125ms)
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.17375ms)
+✖ a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure (517.214292ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.394792ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (63.236375ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (66.213458ms)
+✔ prepare CLI uses the exact stock host closure and records runner support (624.791875ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (410.47475ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (368.564042ms)
+✔ a hung runtime settles an infrastructure report and stops descendants before the job deadline (904.95825ms)
+✔ the failure dependency chain can reach notification while permission gates remain closed elsewhere (5.429833ms)
+✔ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.52ms)
+✔ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (10308.79975ms)
+ℹ {"stageMinutes":[6,6,6],"scaledElapsedMs":10284,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✔ workflow keeps execution read-only and isolates issue write permission (0.624083ms)
+✔ aggregate-to-notify preserves the existing issue correctly for missing-directory (546.505041ms)
+✔ aggregate-to-notify preserves the existing issue correctly for tagless-extra (448.666458ms)
+✔ aggregate-to-notify preserves the existing issue correctly for count-mismatch (543.987ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (444.536334ms)
+✔ aggregate refuses to call a PREPARED-only run complete (68.109959ms)
+✔ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (438.72275ms)
+✔ an incomplete missing report still delivers one infrastructure alert for the discovered target (429.497291ms)
+✔ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (455.475833ms)
+✔ an incomplete unexpected report still delivers one infrastructure alert for the discovered target (492.118916ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (206.488333ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (204.932792ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (218.512ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (69.985916ms)
+✔ notify delivers a cached verdict that was never delivered before (366.69325ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (450.696875ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (359.06425ms)
+✔ notify retries a failed reopen after editing INCOMPATIBLE, then stays quiet (837.040375ms)
+✔ notify retries a failed reopen after editing NOT_VERIFIED, then stays quiet (878.633792ms)
+✔ notify retries a failed reopen after editing INFRA_ERROR, then stays quiet (793.1225ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (136.571916ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 39
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22336.067459
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:213:1
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.17375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+      classification: 'NOT_VERIFIED',
+  +   reason: 'test failure origin could not be attributed'
+  -   reason: 'upstream host failed to assemble before the plugin loaded'
+    }
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-alpha2/test/upstream-compat-watch.test.mjs:220:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { classification: 'NOT_VERIFIED', reason: 'test failure origin could not be attributed' },
+    expected: { classification: 'NOT_VERIFIED', reason: 'upstream host failed to assemble before the plugin loaded' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:233:1
+✖ a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure (517.214292ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'test failure origin could not be attributed'
+  - 'upstream host failed to assemble before the plugin loaded'
+  
+      at TestContext.<anonymous> (file:///Users/yuhan/codespace/dsh-subagent-compactor-alpha2/test/upstream-compat-watch.test.mjs:247:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'test failure origin could not be attributed',
+    expected: 'upstream host failed to assemble before the plugin loaded',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

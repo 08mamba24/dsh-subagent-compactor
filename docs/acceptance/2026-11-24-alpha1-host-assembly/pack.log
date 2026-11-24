@@ -1,0 +1,62 @@
+{"label": "pack", "command": ["/opt/homebrew/opt/node@24/bin/npm", "pack", "--dry-run", "--json"], "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2", "log": "pack.log"}
+[
+  {
+    "id": "@local/dsh-subagent-compactor@1.3.4",
+    "name": "@local/dsh-subagent-compactor",
+    "version": "1.3.4",
+    "size": 35071,
+    "unpackedSize": 100937,
+    "shasum": "9d80dcd9b30ad36de2f20e4f0cc767880ef82c33",
+    "integrity": "sha512-fyJXkiaS1Vsi5WbvbfZLdf7oswEjAQq9Z7DLvBGwuAsQ0bA7BrFy2cV8CaJryzIdwhhIrtsFPxekvnqupcMzbg==",
+    "filename": "local-dsh-subagent-compactor-1.3.4.tgz",
+    "files": [
+      {
+        "path": "CHANGELOG.md",
+        "size": 24042,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 14367,
+        "mode": 420
+      },
+      {
+        "path": "README.zh-CN.md",
+        "size": 12803,
+        "mode": 420
+      },
+      {
+        "path": "cordis.patch.yml",
+        "size": 519,
+        "mode": 420
+      },
+      {
+        "path": "icon.svg",
+        "size": 531,
+        "mode": 420
+      },
+      {
+        "path": "index.js",
+        "size": 45392,
+        "mode": 420
+      },
+      {
+        "path": "locale/en.json",
+        "size": 290,
+        "mode": 420
+      },
+      {
+        "path": "locale/zh.json",
+        "size": 294,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 2699,
+        "mode": 420
+      }
+    ],
+    "entryCount": 9,
+    "bundled": []
+  }
+]

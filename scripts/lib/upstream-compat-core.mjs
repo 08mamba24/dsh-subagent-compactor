@@ -97,6 +97,29 @@ export function classifyInstallFailure(output = "") {
 }
 
 /**
+ * Leading line the stock fixture prints when its own host composition throws
+ * before the plugin under test is imported (test/runtime-fixture.mjs keeps the
+ * same literal; the runner copies only the fixture, not this module).
+ */
+const HOST_ASSEMBLY_FAILURE = /^\s*DSH_HOST_ASSEMBLY_FAILED\b/m;
+
+/**
+ * Leading line the stock fixture prints from its root after hook when one of
+ * its HTTP listeners outlived its test: the fixture, not the plugin, is at
+ * fault, and a run with a broken fixture is evidence of nothing.
+ */
+const FIXTURE_LISTENER_LEAK = /^\s*DSH_FIXTURE_LISTENER_LEAK\b/m;
+
+/**
+ * The fixture announces a fault of its own, or of the host, on a leading DSH_
+ * line and prints the host's stack frames beneath it. Neither is this
+ * plugin's evidence: a frame such as `at new AssertionError` names a location,
+ * not what failed.
+ */
+const FIXTURE_ANNOUNCEMENT = /^\s*DSH_(?:FIXTURE_[A-Z_]+|HOST_ASSEMBLY_FAILED)\b/;
+const STACK_FRAME = /^\s*at\b/;
+
+/**
  * Parse a complete node --test spec footer. Anything less than all six
  * counters is not evidence that a suite ran.
  */
@@ -152,8 +175,25 @@ export function classifyRunnerResult({ status, output = "", error } = {}) {
 	 * unattributable origin never becomes a compatibility claim. */
 	const hasFailure = status !== 0 || (testSummary !== undefined && (testSummary.fail > 0 || testSummary.cancelled > 0));
 	if (hasFailure) {
-		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(output)) {
+		/* A fixture that leaked its listeners is not evidence of anything, so it
+		 * outranks every other reading of the same output. INFRA_ERROR is never
+		 * cached: the verdict returns by itself once the leak is fixed. */
+		if (FIXTURE_LISTENER_LEAK.test(output)) {
+			return { classification: "INFRA_ERROR", reason: "test fixture leaked its HTTP listeners" };
+		}
+		/* Per source: the fixture announces a host fault, or its own, on leading
+		 * DSH_ lines and throws its own error types for both, never an
+		 * AssertionError. Set those lines and stack frames aside, and an
+		 * assertion that remains is this plugin's. */
+		const product = output.split(/\r?\n/).filter((line) => !FIXTURE_ANNOUNCEMENT.test(line) && !STACK_FRAME.test(line)).join("\n");
+		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(product)) {
 			return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
+		}
+		/* The fixture's own composition threw before ../index.js was imported,
+		 * so the published host could not be assembled and nothing about this
+		 * plugin ran: not a product verdict, and not our runner's fault either. */
+		if (HOST_ASSEMBLY_FAILURE.test(output)) {
+			return { classification: "NOT_VERIFIED", reason: "upstream host failed to assemble before the plugin loaded", ...(testSummary !== undefined ? { testSummary } : {}) };
 		}
 		if (/\bERR_MODULE_NOT_FOUND\b|Cannot find module|^\s*SyntaxError:/im.test(output)) {
 			return { classification: "NOT_VERIFIED", reason: "test entry failed to load", ...(testSummary !== undefined ? { testSummary } : {}) };

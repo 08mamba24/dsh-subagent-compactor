@@ -1,0 +1,236 @@
+{"label": "mutant-host-error-also-cause-rc1", "command": ["/opt/homebrew/opt/node@24/bin/node", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-host-error-also-cause-rc1/scripts/test-installed-runtime.mjs", "--modules", "/Users/yuhan/codespace/dsh-subagent-compactor/node_modules"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-host-error-also-cause-rc1", "log": "mutant-host-error-also-cause-rc1.log"}
+Node 24.22.3; DSH 0.2.2-rc.1; modules: /Users/yuhan/codespace/dsh-subagent-compactor/node_modules
+Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A
+✔ rc2: direct projection serves listing/batch and is always released (3.976416ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=true) (0.880167ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.341084ms)
+✔ rc2: a lookalike caller with the same id is refused (0.917666ms)
+✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.607042ms)
+✔ rc2: missing or malformed projection fails honestly and releases observation (0.645042ms)
+✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.547708ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"parentSessionId":"different-parent"}) (0.824209ms)
+✔ rc2: an invalid start edge cannot accept a wake ({}) (0.414708ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"local":false}) (0.357708ms)
+✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (0.464084ms)
+✔ rc2: caller/root identity is rechecked after the live idle wait (1.054875ms)
+✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (0.964917ms)
+✔ rc2: an external start cancels only our pending send and uses the live idle path (3.852375ms)
+✔ capacity: a global end outside the snapshot releases an awaiting resume (5.796875ms)
+✔ capacity: an end between attempt and rejection cannot be lost (0.661292ms)
+✔ capacity: periodic probe handles capacity changes with no end event (4.984709ms)
+✔ capacity: cancel clears waits, listeners and target locks without a late wake (1.369167ms)
+✔ capacity: unload clears waits, listeners and target locks without a late wake (0.898459ms)
+✔ capacity: timeout is bounded and cleans up (timer 0ms early) (1.870792ms)
+✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (1.2025ms)
+✔ capacity: model tool and competing batches share admission and target locks (1.134458ms)
+✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.346ms)
+✔ capacity: a capacity-shaped error after start is never retried (0.375666ms)
+✔ capacity: disjoint batches compete for real admission and both eventually finish (1.368875ms)
+✔ capacity: admission clears its deadline before a long summary begins (0.67675ms)
+✔ capacity: another actor's start while parked cannot launch an orphan summary (0.495583ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=true) (1.332291ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.710583ms)
+✔ capacity: a foreign start cannot hide host-refusal from a pending send (0.678541ms)
+✔ capacity: a foreign start cannot hide caller-cancel from a pending send (1.127292ms)
+✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.475292ms)
+✔ standalone batch cancel clears its wait and releases the shared lock (0.291875ms)
+✔ standalone batch unload clears its wait and releases the shared lock (0.171084ms)
+✔ standalone batch reports partial failure and does not hide successful children (0.270875ms)
+✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.186875ms)
+✔ batch on an empty catalog reports empty-catalog as success (0.1165ms)
+✔ batch compacts every live child concurrently and reports completed (27.13275ms)
+✔ an item's engine failure does not hide the rest (partial-failure) (0.454292ms)
+✔ with resume disabled, a settled child is an expected skip, not a failure (0.277333ms)
+✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.283666ms)
+✔ a settled non-continuable child is skipped without a wake attempt (0.226458ms)
+✔ a child disposed while waiting for idle falls back to resume (0.259125ms)
+✔ ownership violations count as failed items without stopping the batch (0.196625ms)
+✔ duplicate catalog ids are compacted exactly once (0.188208ms)
+✔ a concurrent single invocation on the same target reports busy-target (1.237791ms)
+✔ abort during the run reports every started child cancelled (0.441625ms)
+✔ an item's unexpected non-manual error does not stop the rest (0.254042ms)
+✔ a failing catalog read reports listing-failed (0.176416ms)
+✔ abort while the catalog read is in flight reports an unknown snapshot (0.200542ms)
+✔ a catalog that resolved past an abort reports its targets not-started (0.165458ms)
+✔ --all is an accepted alias; extra arguments are a usage error (0.15025ms)
+✔ listing marks live versus persisted children (0.207125ms)
+✔ two settled continuable children are both resumed and compacted (0.247709ms)
+✔ a mixed batch of live and settled children loses no item and double-wakes none (0.198667ms)
+✔ abort during a resumed compaction cancels that item without hiding others (0.253208ms)
+✔ a batch where nothing could be compacted says so instead of implying success (1.043084ms)
+✔ a resume refused for ownership is a failed item, not a skip (0.384ms)
+✔ a single-id command on a child being resumed by the batch reports busy-target (1.872125ms)
+✔ a resumed child with nothing to compact does not inflate the resumed count (0.323208ms)
+integration ok: child=948e4879-124d-435d-a7dd-7d49aefa1ee4 tokens 1613 -> 311, llm requests=7
+✔ integration: live-window compaction of a real continuable subagent (3384.01425ms)
+integration resume ok: child=0a3a3d15-30c6-4d8b-bde2-343903f368c8 requests=6
+✔ integration: resume-path compaction of a settled continuable subagent (134.252792ms)
+✔ integration: cancelling in the resume admission gap leaves no unhandled rejection (197.378917ms)
+✔ fixture: a host row that fails to mount is announced as such (4.273834ms)
+✖ fixture: a host row that fails with an assertion is announced, and never thrown as an assertion (2.763625ms)
+✔ fixture: a cleanup that throws neither hides the host failure nor its announcement (1.624958ms)
+✔ fixture: a plugin that fails to mount once the host is up is not announced (22.2615ms)
+✔ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (1372.632667ms)
+✔ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (119.530708ms)
+✔ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (127.732208ms)
+✔ preset capacity: inactive targets first do not block reversed live idle windows (153.831958ms)
+✔ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (118.552958ms)
+✔ preset capacity: cancel while full leaves no wake and preserves the working occupant (109.817958ms)
+✔ preset capacity: timeout while full leaves no wake and preserves the working occupant (123.782666ms)
+✔ preset: real /subagent-compact persists a summary and resumes the same child id (66.603083ms)
+✔ preset: /subagent-compact all compacts every live child through isolated preset engines (90.287916ms)
+✔ preset: /subagent-compact-all persists one true completion after both child summaries (78.780083ms)
+✔ preset: batch catches the child that settles before its catalog predecessor (668.296375ms)
+✔ preset: batch catches both children when the second settles later (683.906834ms)
+✔ preset: native automatic child compaction works without loading this plugin (59.676333ms)
+✔ preset: /subagent-compact all resumes two settled children and compacts both (93.301334ms)
+✔ preset: a mixed batch compacts the live child directly and resumes the settled one (99.77025ms)
+✔ stock direct-only: a root cannot wake its grandchild or another tree's child (108.788417ms)
+✔ stock direct-only: the model tool refuses a settled grandchild before waking it (104.199542ms)
+✔ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (72.150459ms)
+✔ fixture: a preset host row that fails to mount is announced as such (2.70625ms)
+✖ fixture: a preset host row that fails with an assertion is announced, and never thrown as an assertion (2.215416ms)
+✔ fixture: a cleanup that throws neither hides the preset host failure nor its announcement (1.128416ms)
+✔ fixture: a plugin that fails to mount once the host and its preset are up is not announced (17.714334ms)
+✔ optional auth: absent package is supported on old stock runtimes (3.23575ms)
+✔ optional auth: installed service is returned (2.52525ms)
+✔ optional auth: missing transitive dependency remains a load failure (2.65675ms)
+✔ optional auth: an installed package with a missing entry remains a load failure (2.169834ms)
+✔ fixture listeners: the leak self-check closes and reports a live listener as the fixture's own failure, then passes (7.073958ms)
+✔ fixture: abandoning a composition never raises from its dispose (0.215375ms)
+✔ fixture: a plugin-phase check skips only for a stock host that cannot be assembled (0.289ms)
+✔ plugin surface (0.778416ms)
+✔ apply registers separate batch and parameter commands with the tool in one effect (1.673792ms)
+✔ command no-arg lists direct children (0.830709ms)
+✔ command no-arg with empty catalog and with projection failure (0.540542ms)
+✔ command usage errors: too many arguments (0.288542ms)
+✔ not-resident when no live agent has the id and resume is disabled (0.387792ms)
+✔ a settled child whose wake is refused reports not-resumable (0.795ms)
+✔ resumes a settled continuable child and compacts through the synchronous start edge (0.601167ms)
+✔ a wake refused for authorization reports not-authorized (0.297625ms)
+✔ a busy wake (activation closing) reports busy-target (0.285ms)
+✔ a target that raced back live without a start edge compacts via the live path (0.477584ms)
+✔ a wake that neither starts nor materializes reports resume-failed (0.253833ms)
+✔ the start edge resolves the engine before compacting; a missing engine refuses (0.273541ms)
+✔ a summary failure during resume keeps the wake delivered and says so (0.337125ms)
+✔ cancelling the wake aborts the resume path (0.322083ms)
+✔ the model tool resumes a settled continuable child too (0.868958ms)
+✔ not-authorized for foreign/self/grandchild targets (runtime ownership only) (0.260958ms)
+✔ preset plane resolves via serviceFor and never falls back to the host engine (1.517083ms)
+✔ preset present but its engine missing fails explicitly (no host fallback) (0.305ms)
+✔ host plane used only when no preset registry exists (0.238042ms)
+✔ host plane absent fails explicitly (0.181833ms)
+✔ waitForIdle waits for the child and re-checks identity afterwards (TOCTOU) (4.934833ms)
+✔ waitForIdle: false skips the wait entirely (0.258708ms)
+✔ all six manual codes map to distinct messages and outcomes (0.857292ms)
+✔ unknown manual code stays diagnosable (0.182417ms)
+✔ caller-cancelled wins over busy when the signal is aborted (2.171833ms)
+✔ waiting on an eternally-busy child is cancellable via the request signal (1.800584ms)
+✔ non-manual engine errors propagate (0.356041ms)
+✔ tool requires a calling agent (0.154667ms)
+✔ tool output render produces a text block (0.146916ms)
+✔ command success result carries no sourceEventSeq (child seq must not decorate parent command/done) (0.155083ms)
+✔ unload aborts in-flight operations and converges (2.32925ms)
+✔ an already-aborted signal settles immediately instead of hanging the idle wait (0.32175ms)
+✔ pending listing is cancelled by plugin unload through the fused signal (3.133833ms)
+✔ command declares input so Desktop's UI claims parameterized invocations (0.215084ms)
+ℹ tests 131
+ℹ suites 0
+ℹ pass 129
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4396.168417
+
+✖ failing tests:
+
+test at test/integration.test.mjs:512:1
+✖ fixture: a host row that fails with an assertion is announced, and never thrown as an assertion (2.763625ms)
+  AssertionError [ERR_ASSERTION]: a cause is printed by the reporter, in full
+  + actual - expected
+  
+  + AssertionError [ERR_ASSERTION]: host config rejected
+  +     at new AssertionError (node:internal/assert/assertion_error:380:5)
+  +     at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/integration.test.mjs:516:22)
+  +     at Test.runInAsyncScope (node:async_hooks:227:14)
+  +     at Test.run (node:internal/test_runner/test:1402:25)
+  +     at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+  +     at Test.postRun (node:internal/test_runner/test:1542:19)
+  +     at Test.run (node:internal/test_runner/test:1467:12)
+  +     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+  +     at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+  +   actual: undefined,
+  +   code: 'ERR_ASSERTION',
+  +   diff: 'simple',
+  +   expected: undefined,
+  +   generatedMessage: false,
+  +   operator: undefined
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/integration.test.mjs:522:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: AssertionError [ERR_ASSERTION]: host config rejected
+        at new AssertionError (node:internal/assert/assertion_error:380:5)
+        at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/integration.test.mjs:516:22)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1402:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+        at Test.postRun (node:internal/test_runner/test:1542:19)
+        at Test.run (node:internal/test_runner/test:1467:12)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7),
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/preset-integration.test.mjs:947:1
+✖ fixture: a preset host row that fails with an assertion is announced, and never thrown as an assertion (2.215416ms)
+  AssertionError [ERR_ASSERTION]: a cause is printed by the reporter, in full
+  + actual - expected
+  
+  + AssertionError [ERR_ASSERTION]: host config rejected
+  +     at new AssertionError (node:internal/assert/assertion_error:380:5)
+  +     at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/preset-integration.test.mjs:951:22)
+  +     at Test.runInAsyncScope (node:async_hooks:227:14)
+  +     at Test.run (node:internal/test_runner/test:1402:25)
+  +     at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+  +     at Test.postRun (node:internal/test_runner/test:1542:19)
+  +     at Test.run (node:internal/test_runner/test:1467:12)
+  +     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+  +     at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+  +   actual: undefined,
+  +   code: 'ERR_ASSERTION',
+  +   diff: 'simple',
+  +   expected: undefined,
+  +   generatedMessage: false,
+  +   operator: undefined
+  + }
+  - undefined
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/preset-integration.test.mjs:957:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: AssertionError [ERR_ASSERTION]: host config rejected
+        at new AssertionError (node:internal/assert/assertion_error:380:5)
+        at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-0Et59A/test/preset-integration.test.mjs:951:22)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1402:25)
+        at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+        at Test.postRun (node:internal/test_runner/test:1542:19)
+        at Test.run (node:internal/test_runner/test:1467:12)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7),
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

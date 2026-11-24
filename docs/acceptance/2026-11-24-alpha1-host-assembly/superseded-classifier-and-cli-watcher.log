@@ -1,0 +1,247 @@
+{"label": "superseded-classifier-and-cli-watcher", "command": ["/opt/homebrew/opt/node@24/bin/node", "--test", "--test-reporter=spec", "test/upstream-compat-watch.test.mjs"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher", "log": "superseded-classifier-and-cli-watcher.log"}
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (1.631791ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.324417ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.191542ms)
+✔ dedup digest changes for every compatibility identity input (0.571583ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.431167ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (1.3755ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (531.456875ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.412041ms)
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.143792ms)
+✖ a fixture listener leak is the fixture's own failure: INFRA_ERROR, never a verdict about the upstream version (0.247541ms)
+✖ on the real reporter, a host row that fails with an assertion and a fixture leak are attributed to their source (138.126167ms)
+✔ a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure (359.3845ms)
+✖ a real runner that announces a host row's own assertion settles NOT_VERIFIED, the same as any other host failure (339.360875ms)
+✖ a real runner with a leaked fixture listener settles INFRA_ERROR and keeps the leak line as its first failure (364.47925ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.356708ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (60.828041ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (63.901583ms)
+✔ prepare CLI uses the exact stock host closure and records runner support (577.033208ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (370.923208ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (351.91275ms)
+✔ a hung runtime settles an infrastructure report and stops descendants before the job deadline (864.772708ms)
+✔ the failure dependency chain can reach notification while permission gates remain closed elsewhere (1.452209ms)
+✔ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.337083ms)
+✔ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (10299.385417ms)
+ℹ {"stageMinutes":[6,6,6],"scaledElapsedMs":10276,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✔ workflow keeps execution read-only and isolates issue write permission (0.5595ms)
+✔ aggregate-to-notify preserves the existing issue correctly for missing-directory (493.063208ms)
+✔ aggregate-to-notify preserves the existing issue correctly for tagless-extra (430.7225ms)
+✔ aggregate-to-notify preserves the existing issue correctly for count-mismatch (439.517958ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (439.708875ms)
+✔ aggregate refuses to call a PREPARED-only run complete (67.741834ms)
+✔ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (467.29375ms)
+✔ an incomplete missing report still delivers one infrastructure alert for the discovered target (541.800958ms)
+✔ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (451.761375ms)
+✔ an incomplete unexpected report still delivers one infrastructure alert for the discovered target (430.195667ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (199.69075ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (197.340792ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (186.407792ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (67.637375ms)
+✔ notify delivers a cached verdict that was never delivered before (374.496708ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (442.201125ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (360.80125ms)
+✔ notify retries a failed reopen after editing INCOMPATIBLE, then stays quiet (862.933875ms)
+✔ notify retries a failed reopen after editing NOT_VERIFIED, then stays quiet (817.047042ms)
+✔ notify retries a failed reopen after editing INFRA_ERROR, then stays quiet (792.073875ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (126.432042ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 40
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22602.18275
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:213:1
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.143792ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   classification: 'INCOMPATIBLE',
+  +   reason: 'stock compatibility suite failed'
+  -   classification: 'NOT_VERIFIED',
+  -   reason: 'upstream host failed to assemble before the plugin loaded'
+    }
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher/test/upstream-compat-watch.test.mjs:231:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { classification: 'INCOMPATIBLE', reason: 'stock compatibility suite failed' },
+    expected: { classification: 'NOT_VERIFIED', reason: 'upstream host failed to assemble before the plugin loaded' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:241:1
+✖ a fixture listener leak is the fixture's own failure: INFRA_ERROR, never a verdict about the upstream version (0.247541ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   classification: 'NOT_VERIFIED',
+  +   reason: 'test failure origin could not be attributed'
+  -   classification: 'INFRA_ERROR',
+  -   reason: 'test fixture leaked its HTTP listeners'
+    }
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher/test/upstream-compat-watch.test.mjs:244:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { classification: 'NOT_VERIFIED', reason: 'test failure origin could not be attributed' },
+    expected: { classification: 'INFRA_ERROR', reason: 'test fixture leaked its HTTP listeners' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:260:1
+✖ on the real reporter, a host row that fails with an assertion and a fixture leak are attributed to their source (138.126167ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'INCOMPATIBLE'
+  - 'NOT_VERIFIED'
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher/test/upstream-compat-watch.test.mjs:272:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'INCOMPATIBLE',
+    expected: 'NOT_VERIFIED',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:322:1
+✖ a real runner that announces a host row's own assertion settles NOT_VERIFIED, the same as any other host failure (339.360875ms)
+  AssertionError [ERR_ASSERTION]: Node 24.22.3; DSH 99.0.0-rc.1; modules: /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-upstream-watch-test-Vyoliq/dependencies/node_modules
+  Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-L59AvA
+  ✔ synthetic runner probe (0.522333ms)
+  ✔ synthetic runner probe (0.520292ms)
+  DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: AssertionError [ERR_ASSERTION]: host config rejected
+      at new AssertionError (node:internal/assert/assertion_error:380:5)
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-L59AvA/test/integration.test.mjs:5:18)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ✖ composition (1.505833ms)
+  ✔ synthetic runner probe (0.537541ms)
+  ✔ synthetic runner probe (0.519833ms)
+  ℹ tests 5
+  ℹ suites 0
+  ℹ pass 4
+  ℹ fail 1
+  ℹ cancelled 0
+  ℹ skipped 0
+  ℹ todo 0
+  ℹ duration_ms 74.164791
+  
+  ✖ failing tests:
+  
+  test at test/integration.test.mjs:4:1
+  ✖ composition (1.505833ms)
+    Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+        at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-L59AvA/test/integration.test.mjs:7:8)
+        at Test.runInAsyncScope (node:async_hooks:227:14)
+        at Test.run (node:internal/test_runner/test:1402:25)
+        at Test.start (node:internal/test_runner/test:1262:17)
+        at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+      code: 'DSH_HOST_ASSEMBLY_FAILED',
+      stage: 'mount @deepseek-ai/dsh-llm'
+    }
+  
+  + actual - expected
+  
+  + 'INCOMPATIBLE'
+  - 'NOT_VERIFIED'
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher/test/upstream-compat-watch.test.mjs:332:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'INCOMPATIBLE',
+    expected: 'NOT_VERIFIED',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:338:1
+✖ a real runner with a leaked fixture listener settles INFRA_ERROR and keeps the leak line as its first failure (364.47925ms)
+  AssertionError [ERR_ASSERTION]: Node 24.22.3; DSH 99.0.0-rc.1; modules: /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-upstream-watch-test-ETxwl9/dependencies/node_modules
+  Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-cwrSZh
+  ✔ synthetic runner probe (0.530791ms)
+  ✔ synthetic runner probe (0.525ms)
+  DSH_FIXTURE_LISTENER_LEAK 1 fixture HTTP listener(s) outlived their test
+  ✔ leaves its listener open (6.00525ms)
+  ✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-cwrSZh/test/integration.test.mjs (0.64325ms)
+  ✔ synthetic runner probe (0.528375ms)
+  ✔ synthetic runner probe (0.546709ms)
+  ℹ tests 6
+  ℹ suites 0
+  ℹ pass 5
+  ℹ fail 1
+  ℹ cancelled 0
+  ℹ skipped 0
+  ℹ todo 0
+  ℹ duration_ms 97.240416
+  
+  ✖ failing tests:
+  
+  test at test/integration.test.mjs:5:1
+  ✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-cwrSZh/test/integration.test.mjs (0.64325ms)
+    Error [FixtureListenerLeakError]: 1 fixture HTTP listener(s) outlived their test
+        at TestContext.releaseLeakedFixtureListeners (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-cwrSZh/test/runtime-fixture.mjs:112:8)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async TestHook.run (node:internal/test_runner/test:1409:7)
+        at async Test.runHook (node:internal/test_runner/test:1289:9)
+        at async after (node:internal/test_runner/test:1342:9)
+        at async Test.run (node:internal/test_runner/test:1428:7) {
+      code: 'DSH_FIXTURE_LISTENER_LEAK'
+    }
+  
+  + actual - expected
+  
+  + 'NOT_VERIFIED'
+  - 'INFRA_ERROR'
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/superseded-classifier-and-cli-watcher/test/upstream-compat-watch.test.mjs:345:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'NOT_VERIFIED',
+    expected: 'INFRA_ERROR',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

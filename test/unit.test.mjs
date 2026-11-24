@@ -5,7 +5,74 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { apply, inject, name as pluginName, Config } from "../index.js";
+import { FixtureListenerLeakError, HostAssemblyError, disposeComposition, releaseLeakedFixtureListeners, skipIfHostUnassembled, trackFixtureListener } from "./runtime-fixture.mjs";
+
+async function optionalAuthFixture(t, packageSource, packageFields = {}) {
+	const directory = mkdtempSync(join(tmpdir(), "compactor-optional-auth-"));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	const fixture = join(directory, "runtime-fixture.mjs");
+	copyFileSync(new URL("./runtime-fixture.mjs", import.meta.url), fixture);
+	if (packageSource !== undefined) {
+		const auth = join(directory, "node_modules/@deepseek-ai/dsh-deepseek-auth");
+		mkdirSync(auth, { recursive: true });
+		writeFileSync(join(auth, "package.json"), JSON.stringify({ name: "@deepseek-ai/dsh-deepseek-auth", type: "module", exports: "./index.js", ...packageFields }));
+		if (packageSource !== null) writeFileSync(join(auth, "index.js"), packageSource);
+	}
+	return (await import(pathToFileURL(fixture).href)).loadDeepSeekAuth();
+}
+
+test("optional auth: absent package is supported on old stock runtimes", async t => {
+	assert.equal(await optionalAuthFixture(t), undefined);
+});
+
+test("optional auth: installed service is returned", async t => {
+	assert.equal((await optionalAuthFixture(t, 'export const name = "fixture-auth";')).name, "fixture-auth");
+});
+
+test("optional auth: missing transitive dependency remains a load failure", async t => {
+	await assert.rejects(optionalAuthFixture(t, 'import "./missing-transitive.mjs";'), error =>
+		error.code === "ERR_MODULE_NOT_FOUND" && /missing-transitive\.mjs/.test(error.message));
+});
+
+test("optional auth: an installed package with a missing entry remains a load failure", async t => {
+	await assert.rejects(optionalAuthFixture(t, null, { exports: undefined, main: "./missing-entry.mjs" }), error =>
+		error.code === "ERR_MODULE_NOT_FOUND");
+});
+
+test("fixture listeners: the leak self-check closes and reports a live listener as the fixture's own failure, then passes", async (t) => {
+	const announced = t.mock.method(console, "error", () => {});
+	const server = trackFixtureListener(http.createServer());
+	await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+	await assert.rejects(releaseLeakedFixtureListeners(), (error) => error instanceof FixtureListenerLeakError && error.code === "DSH_FIXTURE_LISTENER_LEAK" && !(error instanceof assert.AssertionError),
+		"a fixture leak is never reported as an assertion: the watcher reads one as this plugin's");
+	assert.equal(server.listening, false, "the leaked listener is closed before the run reports it");
+	assert.deepEqual(announced.mock.calls.map((call) => call.arguments[0]), ["DSH_FIXTURE_LISTENER_LEAK 1 fixture HTTP listener(s) outlived their test"]);
+	await releaseLeakedFixtureListeners();
+});
+
+test("fixture: abandoning a composition never raises from its dispose", async () => {
+	const failure = new Error("dispose failed");
+	assert.equal(await disposeComposition(undefined), undefined);
+	assert.equal(await disposeComposition({ fiber: { dispose: undefined } }), undefined);
+	assert.equal(await disposeComposition({ fiber: { dispose: async () => {} } }), undefined);
+	assert.equal(await disposeComposition({ fiber: { dispose: () => { throw failure; } } }), failure, "a dispose that throws is returned");
+	assert.equal(await disposeComposition({ fiber: { dispose: async () => { throw failure; } } }), failure, "a dispose that rejects is returned");
+});
+
+test("fixture: a plugin-phase check skips only for a stock host that cannot be assembled", (t) => {
+	const skipped = t.mock.fn();
+	const unexpected = new Error("fixture bug");
+	assert.throws(() => skipIfHostUnassembled({ skip: skipped }, unexpected), (error) => error === unexpected, "an unexpected error fails the check instead of skipping it");
+	assert.equal(skipped.mock.callCount(), 0);
+	skipIfHostUnassembled({ skip: skipped }, new HostAssemblyError("mount @deepseek-ai/dsh-llm", new Error('cannot get property "undefined" without inject\nsecond line')));
+	assert.deepEqual(skipped.mock.calls.map((call) => call.arguments), [['stock host does not assemble on this runtime (mount @deepseek-ai/dsh-llm: cannot get property "undefined" without inject)']]);
+});
 
 class ManualError extends Error {
 	constructor(code, message) {

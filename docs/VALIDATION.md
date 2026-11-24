@@ -1,8 +1,26 @@
 # Validation record
 
-## Upstream compatibility watch and rc.3–rc.5 (2026-11-22)
+## Host assembly patrol attribution (2026-11-24)
 
-The current source passed all five tracked suites on each stock rc.1–rc.5 tree:
+Fix commits `01ec7a8c776582e6484c0b6d51f8c52ff2830a9c` and, after an independent review requested changes to it, `15ba0015c19dc5475fa4a02ceb0dbb9bcf0cc8c4`, on top of the alpha.2 candidate `0cbf5b2` of PR #13. The hourly watch failed on stock **0.2.3-alpha.1** without naming a cause. Reproduced on the same tree and lock: that host cannot be assembled, thirteen fixture listeners keep `node --test` alive until the deadline, and the cell ends as `INFRA_ERROR` (`runtime regression timed out`).
+
+Through the watcher's real `prepare`/`run` path, alpha.1 now settles **`NOT_VERIFIED`** (`upstream host failed to assemble before the plugin loaded`) in 41.2 s, with the `DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm` line as its first failure, 21 failed and 2 skipped tests, every failure thrown as the fixture's `HostAssemblyError`, and no assertion, leak or timeout text. alpha.2 and rc.5 stay **`COMPATIBLE` 131/131** on the same path and the same runner digest.
+
+The review found that the first fix reported a leaked fixture listener with an `AssertionError`, which the classifier read as this plugin's. A leak is now `INFRA_ERROR`, and a host row's own assertion is `NOT_VERIFIED`, while this plugin's own assertion is still `INCOMPATIBLE`. A phase check skips only for a host that cannot be assembled, and a cleanup that throws no longer replaces the host failure.
+
+Stock suites pass **131/131** on each of rc.1–rc.5 and on the committed alpha.2 host lock, and watcher contracts pass **45/45**, with zero failed, cancelled, skipped or TODO cases. Against the classifier and CLI of the first fix the same watcher contracts fail five times. Thirteen mutation checks each turn exactly the regressions of their change red and exit within 23 s: stage never cleared, capacity cleanup moved after boot, composition moved out of the `try`, the classifier ignoring the marker, the leak line or the fixture's own lines, the leak hook asserting or staying silent, the skip rule swallowing errors, the host error attached as a cause, the cleanup failure unannounced, the dispose unguarded, and the host error rethrown as it was.
+
+These are local results with loopback synthetic models. The same candidate tree without the fix reproduced the timeout locally (`INFRA_ERROR`, no test summary). See the [dated author acceptance record](acceptance/2026-11-24-alpha1-host-assembly/acceptance.md). They do not establish a GitHub job for this HEAD, GUI behavior, installation or release approval.
+
+## Alpha.2 compatibility source candidate (2026-11-24)
+
+The formal source candidate passes **120/120** on each stock Harness rc.1–rc.5 tree and on a freshly installed **0.2.3-alpha.2** host lock, using Homebrew Node 24.22.3, isolated storage and loopback synthetic model responses. Watcher regressions pass **39/39** and package inspection succeeds. Four added auth fixture tests cover absence, successful loading, missing transitive dependencies and a broken installed entry.
+
+The candidate changes the public command import, composes the alpha.1+ auth service in tests, prepares watcher candidates from the published host closure, and adds a separate locked alpha.2 CI job while retaining rc.1–rc.5. See [the acceptance record](acceptance/2026-11-24-alpha2-compat/acceptance.md) and exact commands/logs. These are local candidate results, not GitHub CI, GUI, installation or release approval.
+
+## Upstream compatibility watch and rc.3–rc.5 (2026-11-22 baseline)
+
+The 2026-11-22 baseline passed all five tracked suites on each stock rc.1–rc.5 tree:
 **116/116 per runtime, zero failed or skipped**. rc.3–rc.5 also traversed the
 watcher's real public-dependency prepare/run path and produced `COMPATIBLE`
 reports with exact source identities and executed-test evidence. The watcher

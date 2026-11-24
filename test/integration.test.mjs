@@ -21,8 +21,8 @@
  *
  * Modules resolve from a stock rc.1 or rc.2 tree linked at ./node_modules.
  */
-import test from "node:test";
-import { startActivation } from "./runtime-fixture.mjs";
+import test, { after } from "node:test";
+import { HostAssemblyError, INERT_MODULE, disposeComposition, inertHost, loadDeepSeekAuth, releaseLeakedFixtureListeners, reportHostAssemblyFailure, skipIfHostUnassembled, startActivation, trackFixtureListener } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, rmSync, readdirSync, readFileSync } from "node:fs";
@@ -35,6 +35,9 @@ process.env.DEEPSEEK_API_KEY = "test-key-used-by-fake-server";
 const PROVIDER = "deepseek-official";
 const MODEL = "deepseek-flash";
 
+// A fixture listener that outlives its test fails the file instead of holding the process open.
+after(releaseLeakedFixtureListeners);
+
 /**
  * Minimal Anthropic Messages SSE responder scripted by the tests. Each
  * request captures its mode AT ARRIVAL. Explicit gates hold selected child
@@ -43,7 +46,7 @@ const MODEL = "deepseek-flash";
 function createFakeMessagesServer() {
 	const state = { mode: "turn", requests: [] };
 	const heldRequests = [];
-	const server = http.createServer((request, response) => {
+	const server = trackFixtureListener(http.createServer((request, response) => {
 		const chunks = [];
 		request.on("data", (chunk) => chunks.push(chunk));
 		request.on("end", () => {
@@ -79,7 +82,7 @@ function createFakeMessagesServer() {
 				};
 			} else respond();
 		});
-	});
+	}));
 	return {
 		state,
 		hold: (marker, mode) => {
@@ -95,59 +98,82 @@ function createFakeMessagesServer() {
 	};
 }
 
-/** Boot the full Host-plane composition plus the plugin under test. */
-async function bootComposition(baseURL, storageRoot, { resumeInactive = false } = {}) {
+/**
+ * Boot the full Host-plane composition plus the plugin under test. A failure
+ * while a host row is still being imported or mounted precedes the plugin:
+ * announce it for the upstream watcher, release the half-built composition,
+ * and throw the fixture's own error in place of the host's.
+ */
+async function bootComposition(baseURL, storageRoot, { resumeInactive = false, hostModules = {}, pluginModule } = {}) {
 	const modules = {};
-	for (const moduleName of [
-		"@deepseek-ai/cordis-plugin-timer",
-		"@deepseek-ai/dsh-llm",
-		"@deepseek-ai/dsh-llm-deepseek-api-key",
-		"@deepseek-ai/dsh-system-prompt",
-		"@deepseek-ai/dsh-tools",
-		"@deepseek-ai/dsh-tool-executor-native",
-		"@deepseek-ai/dsh-commands",
-		"@deepseek-ai/dsh-fs-local",
-		"@deepseek-ai/dsh-session",
-		"@deepseek-ai/dsh-session-projection",
-		"@deepseek-ai/dsh-session-persistence-jsonl",
-		"@deepseek-ai/dsh-session-query",
-		"@deepseek-ai/dsh-token-meter",
-		"@deepseek-ai/dsh-compaction-basic",
-		"@deepseek-ai/dsh-agent",
-		"@deepseek-ai/dsh-agent-loop",
-		"@deepseek-ai/dsh-working-directory",
-		"@deepseek-ai/dsh-subagent",
-		"@deepseek-ai/dsh-subagent-spawn-in-process"
-	]) modules[moduleName] = await import(moduleName);
 	const ctx = new Context();
-	const rows = [
-		["@deepseek-ai/cordis-plugin-timer", {}],
-		["@deepseek-ai/dsh-llm", {}],
-		["@deepseek-ai/dsh-llm-deepseek-api-key", { baseURL, defaultContextWindow: 200000 }],
-		["@deepseek-ai/dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are the integration test worker." }],
-		["@deepseek-ai/dsh-tools", {}],
-		["@deepseek-ai/dsh-tool-executor-native", {}],
-		["@deepseek-ai/dsh-commands", {}],
-		["@deepseek-ai/dsh-fs-local", {}],
-		["@deepseek-ai/dsh-session", {}],
-		["@deepseek-ai/dsh-session-projection", {}],
-		["@deepseek-ai/dsh-session-persistence-jsonl", { root: storageRoot, compression: "none" }],
-		["@deepseek-ai/dsh-session-query", {}],
-		["@deepseek-ai/dsh-token-meter", {}],
-		["@deepseek-ai/dsh-compaction-basic", { auto: false }],
-		["@deepseek-ai/dsh-agent", {}],
-		["@deepseek-ai/dsh-agent-loop", { agents: [] }],
-		["@deepseek-ai/dsh-working-directory", {}],
-		["@deepseek-ai/dsh-subagent", { maxDepth: 3 }],
-		["@deepseek-ai/dsh-subagent-spawn-in-process", {}]
-	];
-	for (const [moduleName, config] of rows) {
-		const module = modules[moduleName];
-		await ctx.plugin(module.default ?? module, config);
+	// The host step in progress; cleared once the host is up and this plugin is what is under test.
+	let stage = "";
+	try {
+		for (const moduleName of [
+			"@deepseek-ai/cordis-plugin-timer",
+			"@deepseek-ai/dsh-llm",
+			"@deepseek-ai/dsh-llm-deepseek-api-key",
+			"@deepseek-ai/dsh-system-prompt",
+			"@deepseek-ai/dsh-tools",
+			"@deepseek-ai/dsh-tool-executor-native",
+			"@deepseek-ai/dsh-commands",
+			"@deepseek-ai/dsh-fs-local",
+			"@deepseek-ai/dsh-session",
+			"@deepseek-ai/dsh-session-projection",
+			"@deepseek-ai/dsh-session-persistence-jsonl",
+			"@deepseek-ai/dsh-session-query",
+			"@deepseek-ai/dsh-token-meter",
+			"@deepseek-ai/dsh-compaction-basic",
+			"@deepseek-ai/dsh-agent",
+			"@deepseek-ai/dsh-agent-loop",
+			"@deepseek-ai/dsh-working-directory",
+			"@deepseek-ai/dsh-subagent",
+			"@deepseek-ai/dsh-subagent-spawn-in-process"
+		]) {
+			stage = `import ${moduleName}`;
+			modules[moduleName] = hostModules[moduleName] ?? await import(moduleName);
+		}
+		stage = "import @deepseek-ai/dsh-deepseek-auth";
+		const deepSeekAuth = hostModules["@deepseek-ai/dsh-deepseek-auth"] ?? await loadDeepSeekAuth();
+		if (deepSeekAuth) modules["@deepseek-ai/dsh-deepseek-auth"] = deepSeekAuth;
+		const rows = [
+			["@deepseek-ai/cordis-plugin-timer", {}],
+			["@deepseek-ai/dsh-llm", {}],
+			...(deepSeekAuth ? [["@deepseek-ai/dsh-deepseek-auth", {}]] : []),
+			["@deepseek-ai/dsh-llm-deepseek-api-key", { baseURL, defaultContextWindow: 200000 }],
+			["@deepseek-ai/dsh-system-prompt", { includeHarnessIdentity: false, includeRuntimeContext: false, personaPrefix: "You are the integration test worker." }],
+			["@deepseek-ai/dsh-tools", {}],
+			["@deepseek-ai/dsh-tool-executor-native", {}],
+			["@deepseek-ai/dsh-commands", {}],
+			["@deepseek-ai/dsh-fs-local", {}],
+			["@deepseek-ai/dsh-session", {}],
+			["@deepseek-ai/dsh-session-projection", {}],
+			["@deepseek-ai/dsh-session-persistence-jsonl", { root: storageRoot, compression: "none" }],
+			["@deepseek-ai/dsh-session-query", {}],
+			["@deepseek-ai/dsh-token-meter", {}],
+			["@deepseek-ai/dsh-compaction-basic", { auto: false }],
+			["@deepseek-ai/dsh-agent", {}],
+			["@deepseek-ai/dsh-agent-loop", { agents: [] }],
+			["@deepseek-ai/dsh-working-directory", {}],
+			["@deepseek-ai/dsh-subagent", { maxDepth: 3 }],
+			["@deepseek-ai/dsh-subagent-spawn-in-process", {}]
+		];
+		for (const [moduleName, config] of rows) {
+			const module = modules[moduleName];
+			stage = `mount ${moduleName}`;
+			await ctx.plugin(module.default ?? module, config);
+		}
+		stage = "";
+		const plugin = pluginModule ?? await import("../index.js");
+		await ctx.plugin(plugin, { waitForIdle: true, resumeInactive });
+		return ctx;
+	} catch (error) {
+		const cleanup = await disposeComposition(ctx);
+		if (!stage) throw error;
+		reportHostAssemblyFailure(stage, error, cleanup);
+		throw new HostAssemblyError(stage, error);
 	}
-	const plugin = await import("../index.js");
-	await ctx.plugin(plugin, { waitForIdle: true, resumeInactive });
-	return ctx;
 }
 
 /** Instance-independent bounded poll; cold resumes swap Agent objects. */
@@ -163,11 +189,12 @@ async function waitFor(probe, timeoutMs = 5000) {
 
 test("integration: live-window compaction of a real continuable subagent", async () => {
 	const fake = createFakeMessagesServer();
-	const baseURL = await fake.start();
 	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-it-"));
-	const ctx = await bootComposition(baseURL, storageRoot);
+	let ctx;
 	const signal = () => new AbortController().signal;
 	try {
+		// Started and assembled inside the try: a host that fails to boot still reaches the cleanup.
+		ctx = await bootComposition(await fake.start(), storageRoot);
 		assert.notEqual(ctx.get("compaction"), undefined, "host-plane compaction engine must be composed");
 
 		const parentHandle = await ctx.agents.create({
@@ -280,7 +307,7 @@ test("integration: live-window compaction of a real continuable subagent", async
 
 		console.log(`integration ok: child=${childId} tokens ${tokensBefore} -> ${tokensAfter}, llm requests=${fake.state.requests.length}`);
 	} finally {
-		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
+		await Promise.resolve(ctx?.fiber?.dispose?.()).catch(() => {});
 		await fake.close();
 		rmSync(storageRoot, { recursive: true, force: true });
 	}
@@ -296,11 +323,11 @@ test("integration: live-window compaction of a real continuable subagent", async
  */
 test("integration: resume-path compaction of a settled continuable subagent", async () => {
 	const fake = createFakeMessagesServer();
-	const baseURL = await fake.start();
 	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-resume-"));
-	const ctx = await bootComposition(baseURL, storageRoot, { resumeInactive: true });
+	let ctx;
 	const signal = () => new AbortController().signal;
 	try {
+		ctx = await bootComposition(await fake.start(), storageRoot, { resumeInactive: true });
 		const parent = (await ctx.agents.create({
 			sessionId: "resume-parent-1",
 			agentOptions: { provider: PROVIDER, model: MODEL }
@@ -377,7 +404,7 @@ test("integration: resume-path compaction of a settled continuable subagent", as
 		assert.ok(JSON.stringify(followupRequest).length > 0);
 		console.log(`integration resume ok: child=${childId} requests=${fake.state.requests.length}`);
 	} finally {
-		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
+		await Promise.resolve(ctx?.fiber?.dispose?.()).catch(() => {});
 		await fake.close();
 		rmSync(storageRoot, { recursive: true, force: true });
 	}
@@ -396,11 +423,11 @@ test("integration: cancelling in the resume admission gap leaves no unhandled re
 	const onUnhandled = (reason) => unhandled.push(reason);
 	process.on("unhandledRejection", onUnhandled);
 	const fake = createFakeMessagesServer();
-	const baseURL = await fake.start();
 	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-gapcancel-"));
-	const ctx = await bootComposition(baseURL, storageRoot, { resumeInactive: true });
+	let ctx;
 	const controller = new AbortController();
 	try {
+		ctx = await bootComposition(await fake.start(), storageRoot, { resumeInactive: true });
 		const parent = (await ctx.agents.create({
 			sessionId: "gapcancel-parent-1",
 			agentOptions: { provider: PROVIDER, model: MODEL }
@@ -451,8 +478,81 @@ test("integration: cancelling in the resume admission gap leaves no unhandled re
 		assert.equal(events.some((event) => event.type === "compaction/summary"), false, "a cancelled resume must not commit a summary");
 	} finally {
 		process.off("unhandledRejection", onUnhandled);
-		await Promise.resolve(ctx.fiber?.dispose?.()).catch(() => {});
+		await Promise.resolve(ctx?.fiber?.dispose?.()).catch(() => {});
 		await fake.close();
 		rmSync(storageRoot, { recursive: true, force: true });
 	}
+});
+
+/** Everything the fixture printed to stderr, one entry per line. */
+const announcedLines = (announced) => announced.mock.calls.flatMap((call) => String(call.arguments[0]).split("\n"));
+
+/** The leading `at` lines of a thrown error's stack: what the announcement repeats from a host row's own error. */
+const stackFrames = (error) => String(error.stack).split("\n").filter((line) => /^\s+at /.test(line));
+
+/**
+ * Attribution by phase, for the upstream watcher: only a host row that fails
+ * before ../index.js is imported is the host's fault. Every other host row
+ * stands in as inert, so the check holds on a runtime whose own composition
+ * cannot come up, and its own failure is never mistaken for one.
+ */
+test("fixture: a host row that fails to mount is announced as such", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const hostFailure = Object.assign(new Error('cannot get property "undefined" without inject'), { code: "ERR_HOST_PROBE" });
+	await assert.rejects(bootComposition("http://127.0.0.1:9", storageRoot, { hostModules: inertHost({ "@deepseek-ai/dsh-llm": { apply() { throw hostFailure; } } }) }),
+		(error) => error instanceof HostAssemblyError && error.hostError === hostFailure, "the test fails with the fixture's own error, which the reporter prints without the host's");
+	const lines = announcedLines(announced);
+	assert.equal(lines[0], 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error [ERR_HOST_PROBE]: cannot get property "undefined" without inject');
+	assert.deepEqual(lines.slice(1), stackFrames(hostFailure).slice(0, 6), "the host's own frames follow, and nothing else");
+});
+
+/** A host row may fail with an assertion of its own. The test must then fail without printing one: the watcher reads an AssertionError as this plugin's. */
+test("fixture: a host row that fails with an assertion is announced, and never thrown as an assertion", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const hostFailure = new assert.AssertionError({ message: "host config rejected" });
+	let thrown;
+	await assert.rejects(bootComposition("http://127.0.0.1:9", storageRoot, { hostModules: inertHost({ "@deepseek-ai/dsh-llm": { apply() { throw hostFailure; } } }) }),
+		(error) => { thrown = error; return error instanceof HostAssemblyError; });
+	assert.equal(thrown.hostError, hostFailure);
+	assert.equal(thrown instanceof assert.AssertionError, false);
+	assert.equal(thrown.cause, undefined, "a cause is printed by the reporter, in full");
+	assert.deepEqual(Object.keys(thrown).filter((key) => thrown[key] instanceof Error), [], "no property the reporter prints holds the host's error");
+	assert.equal(announcedLines(announced)[0], "DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: AssertionError [ERR_ASSERTION]: host config rejected");
+});
+
+/** The cleanup of a half-built composition must never take the place of the host failure it follows. */
+test("fixture: a cleanup that throws neither hides the host failure nor its announcement", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const cleanupFailure = new Error("dispose failed");
+	const hostFailure = new Error("host row failed");
+	await assert.rejects(bootComposition("http://127.0.0.1:9", storageRoot, { hostModules: inertHost({
+		// A root-level row reaches the composition's root fiber and breaks its disposal.
+		"@deepseek-ai/cordis-plugin-timer": { apply(child) { child.fiber.parent.fiber.dispose = () => { throw cleanupFailure; }; } },
+		"@deepseek-ai/dsh-llm": { apply() { throw hostFailure; } },
+	}) }), (error) => error instanceof HostAssemblyError && error.hostError === hostFailure);
+	const lines = announcedLines(announced);
+	assert.equal(lines[0], "DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: host row failed");
+	assert.deepEqual(lines.slice(1, -1), stackFrames(hostFailure).slice(0, 6));
+	assert.equal(lines.at(-1), "DSH_FIXTURE_CLEANUP_FAILED mount @deepseek-ai/dsh-llm: Error: dispose failed", "the cleanup failure is reported on its own line");
+});
+
+/** The other side of the same boundary: once the host is up, a plugin that fails to mount is this plugin under test. */
+test("fixture: a plugin that fails to mount once the host is up is not announced", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "subagent-compactor-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const pluginFailure = new Error("plugin apply failed");
+	// The stock host has to come up for the plugin phase to be reached at all.
+	// Only a host that cannot assemble skips; any other error of the precondition is this check's own failure.
+	const booted = await bootComposition("http://127.0.0.1:9", storageRoot, { pluginModule: INERT_MODULE }).then((ctx) => ({ ctx }), (error) => ({ error }));
+	if (!booted.ctx) { skipIfHostUnassembled(t, booted.error); return; }
+	await booted.ctx.fiber.dispose();
+	await assert.rejects(bootComposition("http://127.0.0.1:9", storageRoot, { pluginModule: { apply() { throw pluginFailure; } } }), (error) => error === pluginFailure);
+	assert.deepEqual(announced.mock.calls, [], "the host assembled; the plugin under test is what failed");
 });

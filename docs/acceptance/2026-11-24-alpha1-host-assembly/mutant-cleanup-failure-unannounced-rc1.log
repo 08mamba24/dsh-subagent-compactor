@@ -1,0 +1,198 @@
+{"label": "mutant-cleanup-failure-unannounced-rc1", "command": ["/opt/homebrew/opt/node@24/bin/node", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-cleanup-failure-unannounced-rc1/scripts/test-installed-runtime.mjs", "--modules", "/Users/yuhan/codespace/dsh-subagent-compactor/node_modules"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-cleanup-failure-unannounced-rc1", "log": "mutant-cleanup-failure-unannounced-rc1.log"}
+Node 24.22.3; DSH 0.2.2-rc.1; modules: /Users/yuhan/codespace/dsh-subagent-compactor/node_modules
+Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv
+✔ rc2: direct projection serves listing/batch and is always released (3.99ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=true) (0.865667ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.339667ms)
+✔ rc2: a lookalike caller with the same id is refused (0.77425ms)
+✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.514041ms)
+✔ rc2: missing or malformed projection fails honestly and releases observation (0.80775ms)
+✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.634375ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"parentSessionId":"different-parent"}) (0.89575ms)
+✔ rc2: an invalid start edge cannot accept a wake ({}) (0.341334ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"local":false}) (0.333209ms)
+✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (0.582917ms)
+✔ rc2: caller/root identity is rechecked after the live idle wait (1.086334ms)
+✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (0.985792ms)
+✔ rc2: an external start cancels only our pending send and uses the live idle path (3.8065ms)
+✔ capacity: a global end outside the snapshot releases an awaiting resume (5.524709ms)
+✔ capacity: an end between attempt and rejection cannot be lost (0.603125ms)
+✔ capacity: periodic probe handles capacity changes with no end event (4.984959ms)
+✔ capacity: cancel clears waits, listeners and target locks without a late wake (1.62625ms)
+✔ capacity: unload clears waits, listeners and target locks without a late wake (1.008875ms)
+✔ capacity: timeout is bounded and cleans up (timer 0ms early) (1.882333ms)
+✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (1.277042ms)
+✔ capacity: model tool and competing batches share admission and target locks (1.1935ms)
+✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.325ms)
+✔ capacity: a capacity-shaped error after start is never retried (0.355875ms)
+✔ capacity: disjoint batches compete for real admission and both eventually finish (1.17925ms)
+✔ capacity: admission clears its deadline before a long summary begins (0.761209ms)
+✔ capacity: another actor's start while parked cannot launch an orphan summary (0.554417ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=true) (1.429875ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.709375ms)
+✔ capacity: a foreign start cannot hide host-refusal from a pending send (0.802625ms)
+✔ capacity: a foreign start cannot hide caller-cancel from a pending send (1.366125ms)
+✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.692083ms)
+✔ standalone batch cancel clears its wait and releases the shared lock (0.355833ms)
+✔ standalone batch unload clears its wait and releases the shared lock (0.181583ms)
+✔ standalone batch reports partial failure and does not hide successful children (0.284959ms)
+✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.189333ms)
+✔ batch on an empty catalog reports empty-catalog as success (0.114208ms)
+✔ batch compacts every live child concurrently and reports completed (25.779833ms)
+✔ an item's engine failure does not hide the rest (partial-failure) (0.41575ms)
+✔ with resume disabled, a settled child is an expected skip, not a failure (0.257542ms)
+✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.27425ms)
+✔ a settled non-continuable child is skipped without a wake attempt (0.228959ms)
+✔ a child disposed while waiting for idle falls back to resume (0.262208ms)
+✔ ownership violations count as failed items without stopping the batch (0.196041ms)
+✔ duplicate catalog ids are compacted exactly once (0.188041ms)
+✔ a concurrent single invocation on the same target reports busy-target (1.175958ms)
+✔ abort during the run reports every started child cancelled (0.532375ms)
+✔ an item's unexpected non-manual error does not stop the rest (0.337584ms)
+✔ a failing catalog read reports listing-failed (0.20975ms)
+✔ abort while the catalog read is in flight reports an unknown snapshot (0.240667ms)
+✔ a catalog that resolved past an abort reports its targets not-started (0.178417ms)
+✔ --all is an accepted alias; extra arguments are a usage error (0.162708ms)
+✔ listing marks live versus persisted children (0.213458ms)
+✔ two settled continuable children are both resumed and compacted (0.2675ms)
+✔ a mixed batch of live and settled children loses no item and double-wakes none (0.207ms)
+✔ abort during a resumed compaction cancels that item without hiding others (0.260125ms)
+✔ a batch where nothing could be compacted says so instead of implying success (0.236125ms)
+✔ a resume refused for ownership is a failed item, not a skip (0.251333ms)
+✔ a single-id command on a child being resumed by the batch reports busy-target (1.770625ms)
+✔ a resumed child with nothing to compact does not inflate the resumed count (0.2595ms)
+integration ok: child=df401376-9ed4-40dd-ac76-9e8e97bce139 tokens 1613 -> 311, llm requests=7
+✔ integration: live-window compaction of a real continuable subagent (3377.875875ms)
+integration resume ok: child=c8763156-a7ba-4ffc-8730-301259834c05 requests=6
+✔ integration: resume-path compaction of a settled continuable subagent (127.006959ms)
+✔ integration: cancelling in the resume admission gap leaves no unhandled rejection (172.506917ms)
+✔ fixture: a host row that fails to mount is announced as such (10.154208ms)
+✔ fixture: a host row that fails with an assertion is announced, and never thrown as an assertion (4.741375ms)
+✖ fixture: a cleanup that throws neither hides the host failure nor its announcement (2.200417ms)
+✔ fixture: a plugin that fails to mount once the host is up is not announced (18.934584ms)
+✔ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (1347.881958ms)
+✔ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (115.3075ms)
+✔ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (144.350792ms)
+✔ preset capacity: inactive targets first do not block reversed live idle windows (158.126166ms)
+✔ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (128.140292ms)
+✔ preset capacity: cancel while full leaves no wake and preserves the working occupant (98.033ms)
+✔ preset capacity: timeout while full leaves no wake and preserves the working occupant (134.926292ms)
+✔ preset: real /subagent-compact persists a summary and resumes the same child id (67.433958ms)
+✔ preset: /subagent-compact all compacts every live child through isolated preset engines (78.468959ms)
+✔ preset: /subagent-compact-all persists one true completion after both child summaries (94.6155ms)
+✔ preset: batch catches the child that settles before its catalog predecessor (664.880333ms)
+✔ preset: batch catches both children when the second settles later (658.4925ms)
+✔ preset: native automatic child compaction works without loading this plugin (68.155708ms)
+✔ preset: /subagent-compact all resumes two settled children and compacts both (92.338417ms)
+✔ preset: a mixed batch compacts the live child directly and resumes the settled one (93.030042ms)
+✔ stock direct-only: a root cannot wake its grandchild or another tree's child (113.162667ms)
+✔ stock direct-only: the model tool refuses a settled grandchild before waking it (93.816584ms)
+✔ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (75.843292ms)
+✔ fixture: a preset host row that fails to mount is announced as such (2.816375ms)
+✔ fixture: a preset host row that fails with an assertion is announced, and never thrown as an assertion (1.646625ms)
+✖ fixture: a cleanup that throws neither hides the preset host failure nor its announcement (1.762833ms)
+✔ fixture: a plugin that fails to mount once the host and its preset are up is not announced (20.291666ms)
+✔ optional auth: absent package is supported on old stock runtimes (3.081583ms)
+✔ optional auth: installed service is returned (2.383625ms)
+✔ optional auth: missing transitive dependency remains a load failure (2.6405ms)
+✔ optional auth: an installed package with a missing entry remains a load failure (2.145875ms)
+✔ fixture listeners: the leak self-check closes and reports a live listener as the fixture's own failure, then passes (7.005792ms)
+✔ fixture: abandoning a composition never raises from its dispose (0.218666ms)
+✔ fixture: a plugin-phase check skips only for a stock host that cannot be assembled (0.281209ms)
+✔ plugin surface (0.7825ms)
+✔ apply registers separate batch and parameter commands with the tool in one effect (1.616792ms)
+✔ command no-arg lists direct children (0.72875ms)
+✔ command no-arg with empty catalog and with projection failure (0.48ms)
+✔ command usage errors: too many arguments (0.251625ms)
+✔ not-resident when no live agent has the id and resume is disabled (0.335209ms)
+✔ a settled child whose wake is refused reports not-resumable (0.688542ms)
+✔ resumes a settled continuable child and compacts through the synchronous start edge (0.522625ms)
+✔ a wake refused for authorization reports not-authorized (0.266833ms)
+✔ a busy wake (activation closing) reports busy-target (0.271334ms)
+✔ a target that raced back live without a start edge compacts via the live path (0.463375ms)
+✔ a wake that neither starts nor materializes reports resume-failed (0.269792ms)
+✔ the start edge resolves the engine before compacting; a missing engine refuses (0.26425ms)
+✔ a summary failure during resume keeps the wake delivered and says so (0.341334ms)
+✔ cancelling the wake aborts the resume path (0.347083ms)
+✔ the model tool resumes a settled continuable child too (0.854625ms)
+✔ not-authorized for foreign/self/grandchild targets (runtime ownership only) (0.267084ms)
+✔ preset plane resolves via serviceFor and never falls back to the host engine (0.365333ms)
+✔ preset present but its engine missing fails explicitly (no host fallback) (1.161125ms)
+✔ host plane used only when no preset registry exists (0.315875ms)
+✔ host plane absent fails explicitly (0.206083ms)
+✔ waitForIdle waits for the child and re-checks identity afterwards (TOCTOU) (5.020292ms)
+✔ waitForIdle: false skips the wait entirely (0.265417ms)
+✔ all six manual codes map to distinct messages and outcomes (0.788167ms)
+✔ unknown manual code stays diagnosable (0.220166ms)
+✔ caller-cancelled wins over busy when the signal is aborted (2.145542ms)
+✔ waiting on an eternally-busy child is cancellable via the request signal (0.426792ms)
+✔ non-manual engine errors propagate (0.214292ms)
+✔ tool requires a calling agent (0.13075ms)
+✔ tool output render produces a text block (0.137416ms)
+✔ command success result carries no sourceEventSeq (child seq must not decorate parent command/done) (0.15025ms)
+✔ unload aborts in-flight operations and converges (3.633667ms)
+✔ an already-aborted signal settles immediately instead of hanging the idle wait (0.378625ms)
+✔ pending listing is cancelled by plugin unload through the fused signal (3.201625ms)
+✔ command declares input so Desktop's UI claims parameterized invocations (0.229083ms)
+ℹ tests 131
+ℹ suites 0
+ℹ pass 129
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4385.089292
+
+✖ failing tests:
+
+test at test/integration.test.mjs:528:1
+✖ fixture: a cleanup that throws neither hides the host failure nor its announcement (2.200417ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/integration.test.mjs:533:22)',
+      '    at Test.runInAsyncScope (node:async_hooks:227:14)',
+      '    at Test.run (node:internal/test_runner/test:1402:25)',
+      '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)',
+      '    at Test.postRun (node:internal/test_runner/test:1542:19)',
+  -   '    at Test.run (node:internal/test_runner/test:1467:12)'
+    ]
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/integration.test.mjs:541:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/integration.test.mjs:533:22)', '    at Test.runInAsyncScope (node:async_hooks:227:14)', '    at Test.run (node:internal/test_runner/test:1402:25)', '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)', '    at Test.postRun (node:internal/test_runner/test:1542:19)' ],
+    expected: [ '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/integration.test.mjs:533:22)', '    at Test.runInAsyncScope (node:async_hooks:227:14)', '    at Test.run (node:internal/test_runner/test:1402:25)', '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)', '    at Test.postRun (node:internal/test_runner/test:1542:19)', '    at Test.run (node:internal/test_runner/test:1467:12)' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/preset-integration.test.mjs:963:1
+✖ fixture: a cleanup that throws neither hides the preset host failure nor its announcement (1.762833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/preset-integration.test.mjs:968:22)',
+      '    at Test.runInAsyncScope (node:async_hooks:227:14)',
+      '    at Test.run (node:internal/test_runner/test:1402:25)',
+      '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)',
+      '    at Test.postRun (node:internal/test_runner/test:1542:19)',
+  -   '    at Test.run (node:internal/test_runner/test:1467:12)'
+    ]
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/preset-integration.test.mjs:976:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/preset-integration.test.mjs:968:22)', '    at Test.runInAsyncScope (node:async_hooks:227:14)', '    at Test.run (node:internal/test_runner/test:1402:25)', '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)', '    at Test.postRun (node:internal/test_runner/test:1542:19)' ],
+    expected: [ '    at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-qsReIv/test/preset-integration.test.mjs:968:22)', '    at Test.runInAsyncScope (node:async_hooks:227:14)', '    at Test.run (node:internal/test_runner/test:1402:25)', '    at Test.processPendingSubtests (node:internal/test_runner/test:974:18)', '    at Test.postRun (node:internal/test_runner/test:1542:19)', '    at Test.run (node:internal/test_runner/test:1467:12)' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

@@ -129,15 +129,15 @@ function outputTail(output, limit = 12_000) {
 
 function firstFailure(output) {
 	const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
-	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖)/i.test(line)) || "");
+	// The fixture prints its host-assembly line while the test is still failing,
+	// and its own leak line before the reporter's rows, so those lines name the
+	// source of the run ahead of the reporter's own ✖ rows.
+	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖|DSH_HOST_ASSEMBLY_FAILED\b|DSH_FIXTURE_LISTENER_LEAK\b)/i.test(line)) || "");
 }
 
 function packageDependencies(version) {
-	const pkg = JSON.parse(readFileSync(join(source, "package.json"), "utf8"));
-	return Object.fromEntries(Object.entries(pkg.devDependencies).map(([name, current]) => [
-		name,
-		name.startsWith("@deepseek-ai/dsh-") ? version : current,
-	]));
+	// The published host selects its own Cordis/Loader/auth dependency closure.
+	return { "@deepseek-ai/dsh": version };
 }
 
 function baseReport(args) {
@@ -217,7 +217,12 @@ async function prepare(args) {
 
 function installedVersions(dependenciesDirectory, dependencies) {
 	const versions = {};
-	for (const name of Object.keys(dependencies)) {
+	const names = new Set(Object.keys(dependencies));
+	if (names.has("@deepseek-ai/dsh")) {
+		for (const name of ["cordis", "cordis-plugin-loader", "schemastery", "dsh-agent", "dsh-subagent"])
+			names.add(`@deepseek-ai/${name}`);
+	}
+	for (const name of names) {
 		const path = join(dependenciesDirectory, "node_modules", ...name.split("/"), "package.json");
 		versions[name] = JSON.parse(readFileSync(path, "utf8")).version;
 	}

@@ -210,6 +210,145 @@ test("classifies unavailable packages, infrastructure failures, unsupported runn
 	});
 });
 
+test("a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout", () => {
+	/* The stock fixture announces the failing host row on one stable line once
+	 * its own composition throws, before ../index.js is imported: the published
+	 * Harness tree could not be composed, so nothing about this plugin ran
+	 * (alpha.1's own dsh-typert-protocol reads a Context.root static that the
+	 * Cordis 4.1.0 in its lock does not define). */
+	const marker = 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject';
+	const output = `${marker}\n✖ integration: live-window compaction of a real continuable subagent (650.0ms)\n`;
+	assert.deepEqual(classifyRunnerResult({ status: 1, output }), {
+		classification: "NOT_VERIFIED",
+		reason: "upstream host failed to assemble before the plugin loaded",
+	});
+	/* A product assertion anywhere in the same run still wins: a real product
+	 * failure must never hide behind a non-red host attribution. */
+	assert.equal(classifyRunnerResult({ status: 1, output: `${output}✖ unit [fail]\n  AssertionError [ERR_ASSERTION]: expected 2 to equal 3` }).classification, "INCOMPATIBLE");
+	/* The host row's own error may be an assertion. The fixture announces it
+	 * and throws its HostAssemblyError instead, so neither the announcement
+	 * line nor a frame under it is this plugin's evidence. */
+	assert.deepEqual(classifyRunnerResult({ status: 1, output: 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: AssertionError [ERR_ASSERTION]: host config rejected\n    at new AssertionError (node:internal/assert/assertion_error:380:5)\n✖ integration: live-window compaction of a real continuable subagent (650.0ms)\n  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm\n' }), {
+		classification: "NOT_VERIFIED",
+		reason: "upstream host failed to assemble before the plugin loaded",
+	});
+	/* The specific phase outranks the generic loader wording it may contain. */
+	assert.equal(classifyRunnerResult({ status: 1, output: "DSH_HOST_ASSEMBLY_FAILED import @deepseek-ai/dsh-llm: Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './brand' is not defined" }).reason, "upstream host failed to assemble before the plugin loaded");
+	/* Only the exact leading marker counts; prose that merely mentions it stays unattributed. */
+	assert.equal(classifyRunnerResult({ status: 1, output: `  at DSH_HOST_ASSEMBLY_FAILED (fixture.mjs:1:1)\nError: something exploded` }).reason, "test failure origin could not be attributed");
+});
+
+test("a fixture listener leak is the fixture's own failure: INFRA_ERROR, never a verdict about the upstream version", () => {
+	const leak = "DSH_FIXTURE_LISTENER_LEAK 1 fixture HTTP listener(s) outlived their test\n✖ test/integration.test.mjs (0.8355ms)\n  Error [FixtureListenerLeakError]: 1 fixture HTTP listener(s) outlived their test\n";
+	/* The leak used to be reported with an AssertionError, which read as this plugin's. */
+	assert.deepEqual(classifyRunnerResult({ status: 1, output: leak }), {
+		classification: "INFRA_ERROR",
+		reason: "test fixture leaked its HTTP listeners",
+	});
+	/* A run with a broken fixture is not evidence of anything, so the leak
+	 * outranks a host announcement and a product assertion alike. INFRA_ERROR
+	 * is never cached: the verdict returns by itself once the leak is fixed. */
+	assert.equal(classifyRunnerResult({ status: 1, output: `DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject\n${leak}` }).classification, "INFRA_ERROR");
+	assert.equal(classifyRunnerResult({ status: 1, output: `${leak}✖ unit [fail]\n  AssertionError [ERR_ASSERTION]: expected 2 to equal 3` }).classification, "INFRA_ERROR");
+});
+
+/** The real fixture under the real reporter, for the failures whose whole point is what the reporter prints. */
+function classifyRealFixtureRun(t, entrySource) {
+	return classifyRealRun(t, `import { ${entrySource.names} } from ${JSON.stringify(new URL("./runtime-fixture.mjs", import.meta.url).href)};\n${entrySource.body}`);
+}
+
+test("on the real reporter, a host row that fails with an assertion and a fixture leak are attributed to their source", t => {
+	const hostAssertion = classifyRealFixtureRun(t, { names: "HostAssemblyError, reportHostAssemblyFailure", body: `import assert from "node:assert/strict";
+import test from "node:test";
+test("composition", () => {
+	const failure = new assert.AssertionError({ message: "host config rejected" });
+	reportHostAssemblyFailure("mount @deepseek-ai/dsh-llm", failure);
+	throw new HostAssemblyError("mount @deepseek-ai/dsh-llm", failure);
+});
+` });
+	assert.equal(hostAssertion.status, 1);
+	/* The host's AssertionError is on the announcement line only; the test's own error names no assertion. */
+	const hostVerdict = classifyRunnerResult({ status: hostAssertion.status, output: hostAssertion.output });
+	assert.equal(hostVerdict.classification, "NOT_VERIFIED");
+	assert.equal(hostVerdict.reason, "upstream host failed to assemble before the plugin loaded");
+	/* The hook closes the leaked listener itself, so the child ends; what it
+	 * leaves behind is its announcement and a typed error, never an assertion. */
+	const leak = classifyRealFixtureRun(t, { names: "releaseLeakedFixtureListeners, trackFixtureListener", body: `import http from "node:http";
+import test, { after } from "node:test";
+test("leaves its listener open", async () => { await new Promise((resolve) => trackFixtureListener(http.createServer()).listen(0, "127.0.0.1", resolve)); });
+after(releaseLeakedFixtureListeners);
+` });
+	assert.equal(leak.status, 1);
+	assert.match(leak.output, /Error \[FixtureListenerLeakError\]: 1 fixture HTTP listener\(s\) outlived their test/);
+	assert.doesNotMatch(leak.output, /AssertionError/);
+	assert.deepEqual(classifyRunnerResult({ status: leak.status, output: leak.output }), {
+		classification: "INFRA_ERROR",
+		reason: "test fixture leaked its HTTP listeners",
+	});
+});
+
+test("a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure", t => {
+	const { directory, modules, env } = candidateFixture(t), report = join(directory, "report.json");
+	/* The other four synthetic files still pass: unit-level plugin behavior is
+	 * evidence, but it cannot certify a host whose composition never came up. */
+	writeFileSync(join(directory, "test/integration.test.mjs"), `import test from "node:test";
+console.error(${JSON.stringify('DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject')});
+test("composition", () => { throw new Error('cannot get property "undefined" without inject'); });
+`);
+	const plan = join(directory, "plan.json");
+	writeFileSync(plan, JSON.stringify({ version: "99.0.0-rc.1", runnerSupportsVersion: false, runnerSupportedVersions: ["0.2.2-rc.1"], dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
+	const result = spawnSync(process.execPath, [join(directory, "scripts/upstream-compat.mjs"), "run", "--plan", plan, "--report", report], { encoding: "utf8", env });
+	assert.equal(result.status, 0, result.stderr);
+	const verdict = JSON.parse(readFileSync(report, "utf8"));
+	assert.equal(verdict.classification, "NOT_VERIFIED", result.stdout);
+	assert.equal(verdict.reason, "upstream host failed to assemble before the plugin loaded");
+	assert.equal(verdict.testExitCode, 1);
+	assert.deepEqual(verdict.testSummary, { tests: 5, pass: 4, fail: 1, cancelled: 0, skipped: 0, todo: 0 });
+	assert.equal(verdict.firstFailure, 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject');
+	assert.equal(verdict.candidateRuntime, true);
+});
+
+/** The real CLI over the candidate fixture, with `integrationSource` as its composition test file. */
+function runCandidate(t, integrationSource) {
+	const { directory, modules, env } = candidateFixture(t), report = join(directory, "report.json");
+	writeFileSync(join(directory, "test/integration.test.mjs"), integrationSource);
+	const plan = join(directory, "plan.json");
+	writeFileSync(plan, JSON.stringify({ version: "99.0.0-rc.1", runnerSupportsVersion: false, runnerSupportedVersions: ["0.2.2-rc.1"], dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
+	const result = spawnSync(process.execPath, [join(directory, "scripts/upstream-compat.mjs"), "run", "--plan", plan, "--report", report], { encoding: "utf8", env });
+	assert.equal(result.status, 0, result.stderr);
+	return { result, verdict: JSON.parse(readFileSync(report, "utf8")) };
+}
+
+test("a real runner that announces a host row's own assertion settles NOT_VERIFIED, the same as any other host failure", t => {
+	const { result, verdict } = runCandidate(t, `import assert from "node:assert/strict";
+import test from "node:test";
+import { HostAssemblyError, reportHostAssemblyFailure } from "./runtime-fixture.mjs";
+test("composition", () => {
+	const failure = new assert.AssertionError({ message: "host config rejected" });
+	reportHostAssemblyFailure("mount @deepseek-ai/dsh-llm", failure);
+	throw new HostAssemblyError("mount @deepseek-ai/dsh-llm", failure);
+});
+`);
+	assert.equal(verdict.classification, "NOT_VERIFIED", result.stdout);
+	assert.equal(verdict.reason, "upstream host failed to assemble before the plugin loaded");
+	assert.deepEqual(verdict.testSummary, { tests: 5, pass: 4, fail: 1, cancelled: 0, skipped: 0, todo: 0 });
+	assert.equal(verdict.firstFailure, "DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: AssertionError [ERR_ASSERTION]: host config rejected");
+});
+
+test("a real runner with a leaked fixture listener settles INFRA_ERROR and keeps the leak line as its first failure", t => {
+	const { result, verdict } = runCandidate(t, `import http from "node:http";
+import test, { after } from "node:test";
+import { releaseLeakedFixtureListeners, trackFixtureListener } from "./runtime-fixture.mjs";
+test("leaves its listener open", async () => { await new Promise((resolve) => trackFixtureListener(http.createServer()).listen(0, "127.0.0.1", resolve)); });
+after(releaseLeakedFixtureListeners);
+`);
+	assert.equal(verdict.classification, "INFRA_ERROR", result.stdout);
+	assert.equal(verdict.reason, "test fixture leaked its HTTP listeners");
+	assert.equal(verdict.testExitCode, 1);
+	assert.equal(verdict.testSummary, undefined, "a run with a broken fixture is not recorded as test evidence");
+	assert.equal(verdict.firstFailure, "DSH_FIXTURE_LISTENER_LEAK 1 fixture HTTP listener(s) outlived their test");
+});
+
 test("issue body records provenance, classification, first failure, and report link without executable HTML", () => {
 	const body = renderIssueBody({
 		classification: "INCOMPATIBLE",
@@ -289,13 +428,13 @@ test("aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result",
 	assert.match(readFileSync(githubOutput, "utf8"), /skipped_count=1/);
 });
 
-test("prepare CLI records the runner support decision before any runtime execution", t => {
+test("prepare CLI uses the exact stock host closure and records runner support", t => {
 	const directory = temporary(t), bin = join(directory, "bin");
 	mkdirSync(bin);
 	const fakeNpm = join(bin, "npm");
 	writeFileSync(fakeNpm, "#!/bin/sh\nprintf '%s\\n' '{\"lockfileVersion\":3,\"packages\":{}}' > package-lock.json\n");
 	chmodSync(fakeNpm, 0o755);
-	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.5", true], ["99.0.0-rc.1", false]]) {
+	for (const [version, expected] of [["0.2.2-rc.1", true], ["0.2.2-rc.5", true], ["0.2.3-alpha.2", false], ["99.0.0-rc.1", false]]) {
 		const scratch = join(directory, version), report = join(scratch, "report.json");
 		const result = spawnSync(process.execPath, [
 			join(repository, "scripts/upstream-compat.mjs"), "prepare",
@@ -308,6 +447,7 @@ test("prepare CLI records the runner support decision before any runtime executi
 		], { encoding: "utf8", cwd: repository, env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } });
 		assert.equal(result.status, 0, result.stderr);
 		const plan = JSON.parse(readFileSync(join(scratch, "plan.json"), "utf8"));
+		assert.deepEqual(plan.dependencies, { "@deepseek-ai/dsh": version }, "the candidate host must select its own vendor versions instead of mixing old devDependencies");
 		assert.deepEqual(plan.runnerSupportedVersions, ["0.2.2-rc.1", "0.2.2-rc.2", "0.2.2-rc.3", "0.2.2-rc.4", "0.2.2-rc.5"]);
 		assert.equal(plan.runnerSupportsVersion, expected);
 	}
@@ -321,7 +461,8 @@ function candidateFixture(t) {
 		copyFileSync(join(repository, file), join(directory, file));
 	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module" }));
 	writeFileSync(join(directory, "index.js"), "");
-	writeFileSync(join(directory, "test/runtime-fixture.mjs"), "");
+	// The real fixture: the synthetic composition tests announce failures with its own error types.
+	copyFileSync(join(repository, "test/runtime-fixture.mjs"), join(directory, "test/runtime-fixture.mjs"));
 	for (const name of ["authorization", "unit", "batch", "integration", "preset-integration"])
 		writeFileSync(join(directory, `test/${name}.test.mjs`), 'import test from "node:test"; test("synthetic runner probe", () => {});\n');
 	const pkg = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"));
@@ -444,10 +585,14 @@ test("slow prepare and install leave a hung runtime enough time to settle before
 	writeFileSync(entry, source.replace(/commandTimeout\(args, (\d+) \* 60_000\)/g, (_, value) => `commandTimeout(args, ${Number(value) * scale})`));
 	writeFileSync(join(directory, "package.json"), JSON.stringify({ type: "module", devDependencies: {} }));
 	writeFileSync(join(directory, "bin/npm"), `#!${process.execPath}
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 const prepare = process.argv.includes("--package-lock-only");
 setTimeout(() => {
   if (prepare) writeFileSync("package-lock.json", '{"lockfileVersion":3,"packages":{}}');
+  else {
+    mkdirSync("node_modules/@deepseek-ai/dsh", { recursive: true });
+    writeFileSync("node_modules/@deepseek-ai/dsh/package.json", '{"name":"@deepseek-ai/dsh","version":"99.0.0-rc.1"}');
+  }
   console.log(prepare ? "slow prepare completed" : "slow install completed");
 }, prepare ? ${minutes[0] * scale * 0.85} : ${minutes[1] * scale * 0.85});
 `);

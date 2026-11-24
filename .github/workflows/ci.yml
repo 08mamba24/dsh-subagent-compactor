@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.18.0
+          node-version: 24.22.3
       - run: npm run test:upstream-watch
 
   stock:
@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24.18.0
+          node-version: 24.22.3
           cache: npm
       - name: Install the unmodified npm runtime tree
         run: npm ci --include=dev
@@ -64,3 +64,20 @@ jobs:
         run: node scripts/test-installed-runtime.mjs --modules "$DSH_TEST_MODULES"
       - name: Check the source distribution contents
         run: npm pack --dry-run
+
+  alpha2:
+    name: stock Harness 0.2.3-alpha.2 — locked host closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.3
+          cache: npm
+          cache-dependency-path: test/host-locks/0.2.3-alpha.2/package-lock.json
+      - name: Install the exact unmodified host dependency closure
+        working-directory: test/host-locks/0.2.3-alpha.2
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Authorization, unit, batch, live integration, and preset suites
+        run: node scripts/test-installed-runtime.mjs --modules "$GITHUB_WORKSPACE/test/host-locks/0.2.3-alpha.2/node_modules" --candidate-version 0.2.3-alpha.2

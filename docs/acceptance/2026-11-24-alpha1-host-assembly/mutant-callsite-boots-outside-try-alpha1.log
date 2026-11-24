@@ -1,0 +1,567 @@
+{"label": "mutant-callsite-boots-outside-try-alpha1", "command": ["/opt/homebrew/opt/node@24/bin/node", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-callsite-boots-outside-try-alpha1/scripts/test-installed-runtime.mjs", "--modules", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules", "--candidate-version", "0.2.3-alpha.1"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/mutant-callsite-boots-outside-try-alpha1", "log": "mutant-callsite-boots-outside-try-alpha1.log"}
+Node 24.22.3; DSH 0.2.3-alpha.1; modules: /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules
+Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv
+✔ rc2: direct projection serves listing/batch and is always released (3.678041ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=true) (1.298291ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.331417ms)
+✔ rc2: a lookalike caller with the same id is refused (0.321917ms)
+✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.567917ms)
+✔ rc2: missing or malformed projection fails honestly and releases observation (0.593292ms)
+✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.525083ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"parentSessionId":"different-parent"}) (0.824ms)
+✔ rc2: an invalid start edge cannot accept a wake ({}) (0.317ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"local":false}) (0.329084ms)
+✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (1.453875ms)
+✔ rc2: caller/root identity is rechecked after the live idle wait (0.597667ms)
+✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (0.998458ms)
+✔ rc2: an external start cancels only our pending send and uses the live idle path (3.59025ms)
+✔ capacity: a global end outside the snapshot releases an awaiting resume (4.971584ms)
+✔ capacity: an end between attempt and rejection cannot be lost (0.608083ms)
+✔ capacity: periodic probe handles capacity changes with no end event (4.927792ms)
+✔ capacity: cancel clears waits, listeners and target locks without a late wake (1.341292ms)
+✔ capacity: unload clears waits, listeners and target locks without a late wake (1.024083ms)
+✔ capacity: timeout is bounded and cleans up (timer 0ms early) (1.968917ms)
+✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (1.331542ms)
+✔ capacity: model tool and competing batches share admission and target locks (1.128792ms)
+✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.093417ms)
+✔ capacity: a capacity-shaped error after start is never retried (0.313708ms)
+✔ capacity: disjoint batches compete for real admission and both eventually finish (1.138166ms)
+✔ capacity: admission clears its deadline before a long summary begins (0.731834ms)
+✔ capacity: another actor's start while parked cannot launch an orphan summary (0.530375ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=true) (1.168ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.67175ms)
+✔ capacity: a foreign start cannot hide host-refusal from a pending send (1.480833ms)
+✔ capacity: a foreign start cannot hide caller-cancel from a pending send (0.537292ms)
+✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.495125ms)
+✔ standalone batch cancel clears its wait and releases the shared lock (0.298625ms)
+✔ standalone batch unload clears its wait and releases the shared lock (0.168167ms)
+✔ standalone batch reports partial failure and does not hide successful children (0.280792ms)
+✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.181667ms)
+✔ batch on an empty catalog reports empty-catalog as success (0.120917ms)
+✔ batch compacts every live child concurrently and reports completed (25.8555ms)
+✔ an item's engine failure does not hide the rest (partial-failure) (0.409083ms)
+✔ with resume disabled, a settled child is an expected skip, not a failure (0.227542ms)
+✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.244542ms)
+✔ a settled non-continuable child is skipped without a wake attempt (0.198083ms)
+✔ a child disposed while waiting for idle falls back to resume (0.241041ms)
+✔ ownership violations count as failed items without stopping the batch (0.172208ms)
+✔ duplicate catalog ids are compacted exactly once (0.143875ms)
+✔ a concurrent single invocation on the same target reports busy-target (1.099625ms)
+✔ abort during the run reports every started child cancelled (0.329125ms)
+✔ an item's unexpected non-manual error does not stop the rest (0.260708ms)
+✔ a failing catalog read reports listing-failed (0.153666ms)
+✔ abort while the catalog read is in flight reports an unknown snapshot (0.169042ms)
+✔ a catalog that resolved past an abort reports its targets not-started (0.154375ms)
+✔ --all is an accepted alias; extra arguments are a usage error (0.130166ms)
+✔ listing marks live versus persisted children (0.1905ms)
+✔ two settled continuable children are both resumed and compacted (0.233583ms)
+✔ a mixed batch of live and settled children loses no item and double-wakes none (0.81825ms)
+✔ abort during a resumed compaction cancels that item without hiding others (0.370375ms)
+✔ a batch where nothing could be compacted says so instead of implying success (0.2465ms)
+✔ a resume refused for ownership is a failed item, not a skip (0.254042ms)
+✔ a single-id command on a child being resumed by the batch reports busy-target (1.567792ms)
+✔ a resumed child with nothing to compact does not inflate the resumed count (0.258375ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_FIXTURE_LISTENER_LEAK 1 fixture HTTP listener(s) outlived their test
+✖ integration: live-window compaction of a real continuable subagent (423.935333ms)
+✖ integration: resume-path compaction of a settled continuable subagent (5.452208ms)
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (2.228125ms)
+✔ fixture: a host row that fails to mount is announced as such (2.546208ms)
+✔ fixture: a host row that fails with an assertion is announced, and never thrown as an assertion (1.674208ms)
+✔ fixture: a cleanup that throws neither hides the host failure nor its announcement (4.549083ms)
+﹣ fixture: a plugin that fails to mount once the host is up is not announced (1.748541ms) # stock host does not assemble on this runtime (mount @deepseek-ai/dsh-llm: cannot get property "undefined" without inject)
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs (0.360958ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (22.248667ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (5.108125ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.277208ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+    at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+    at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+    at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+    at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+    at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+    at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+✖ preset capacity: inactive targets first do not block reversed live idle windows (2.153125ms)
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (1.948167ms)
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (1.919584ms)
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (1.716125ms)
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (1.817458ms)
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (3.678084ms)
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (1.937292ms)
+✖ preset: batch catches the child that settles before its catalog predecessor (1.702458ms)
+✖ preset: batch catches both children when the second settles later (2.114792ms)
+✖ preset: native automatic child compaction works without loading this plugin (1.9095ms)
+✖ preset: /subagent-compact all resumes two settled children and compacts both (1.850583ms)
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (1.758917ms)
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.855208ms)
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.815ms)
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (3.1405ms)
+✔ fixture: a preset host row that fails to mount is announced as such (2.595542ms)
+✔ fixture: a preset host row that fails with an assertion is announced, and never thrown as an assertion (1.52375ms)
+✔ fixture: a cleanup that throws neither hides the preset host failure nor its announcement (1.08925ms)
+﹣ fixture: a plugin that fails to mount once the host and its preset are up is not announced (1.542166ms) # stock host does not assemble on this runtime (mount @deepseek-ai/dsh-llm: cannot get property "undefined" without inject)
+✔ optional auth: absent package is supported on old stock runtimes (2.725208ms)
+✔ optional auth: installed service is returned (2.492042ms)
+✔ optional auth: missing transitive dependency remains a load failure (2.642959ms)
+✔ optional auth: an installed package with a missing entry remains a load failure (2.086375ms)
+✔ fixture listeners: the leak self-check closes and reports a live listener as the fixture's own failure, then passes (6.670416ms)
+✔ fixture: abandoning a composition never raises from its dispose (0.194166ms)
+✔ fixture: a plugin-phase check skips only for a stock host that cannot be assembled (0.270042ms)
+✔ plugin surface (0.742375ms)
+✔ apply registers separate batch and parameter commands with the tool in one effect (1.661792ms)
+✔ command no-arg lists direct children (0.737334ms)
+✔ command no-arg with empty catalog and with projection failure (0.471834ms)
+✔ command usage errors: too many arguments (0.254ms)
+✔ not-resident when no live agent has the id and resume is disabled (0.348ms)
+✔ a settled child whose wake is refused reports not-resumable (0.682667ms)
+✔ resumes a settled continuable child and compacts through the synchronous start edge (0.485542ms)
+✔ a wake refused for authorization reports not-authorized (0.266333ms)
+✔ a busy wake (activation closing) reports busy-target (0.263208ms)
+✔ a target that raced back live without a start edge compacts via the live path (0.41525ms)
+✔ a wake that neither starts nor materializes reports resume-failed (0.241416ms)
+✔ the start edge resolves the engine before compacting; a missing engine refuses (0.239334ms)
+✔ a summary failure during resume keeps the wake delivered and says so (0.299334ms)
+✔ cancelling the wake aborts the resume path (0.390541ms)
+✔ the model tool resumes a settled continuable child too (1.054834ms)
+✔ not-authorized for foreign/self/grandchild targets (runtime ownership only) (0.279ms)
+✔ preset plane resolves via serviceFor and never falls back to the host engine (1.244125ms)
+✔ preset present but its engine missing fails explicitly (no host fallback) (0.175125ms)
+✔ host plane used only when no preset registry exists (0.18125ms)
+✔ host plane absent fails explicitly (0.126875ms)
+✔ waitForIdle waits for the child and re-checks identity afterwards (TOCTOU) (4.277ms)
+✔ waitForIdle: false skips the wait entirely (0.220292ms)
+✔ all six manual codes map to distinct messages and outcomes (0.710416ms)
+✔ unknown manual code stays diagnosable (0.189458ms)
+✔ caller-cancelled wins over busy when the signal is aborted (2.181292ms)
+✔ waiting on an eternally-busy child is cancellable via the request signal (1.833542ms)
+✔ non-manual engine errors propagate (0.320417ms)
+✔ tool requires a calling agent (0.163083ms)
+✔ tool output render produces a text block (0.210041ms)
+✔ command success result carries no sourceEventSeq (child seq must not decorate parent command/done) (0.190292ms)
+✔ unload aborts in-flight operations and converges (3.457917ms)
+✔ an already-aborted signal settles immediately instead of hanging the idle wait (0.234875ms)
+✔ pending listing is cancelled by plugin unload through the fused signal (3.008833ms)
+✔ command declares input so Desktop's UI claims parameterized invocations (0.164959ms)
+ℹ tests 132
+ℹ suites 0
+ℹ pass 108
+ℹ fail 22
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 655.776875
+
+✖ failing tests:
+
+test at test/integration.test.mjs:190:1
+✖ integration: live-window compaction of a real continuable subagent (423.935333ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:175:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:195:8)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/integration.test.mjs:323:1
+✖ integration: resume-path compaction of a settled continuable subagent (5.452208ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:175:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:329:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/integration.test.mjs:420:1
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (2.228125ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:175:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs:429:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/integration.test.mjs:39:1
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/integration.test.mjs (0.360958ms)
+  Error [FixtureListenerLeakError]: 1 fixture HTTP listener(s) outlived their test
+      at TestContext.releaseLeakedFixtureListeners (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/runtime-fixture.mjs:112:8)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestHook.run (node:internal/test_runner/test:1409:7)
+      at async Test.runHook (node:internal/test_runner/test:1289:9)
+      at async after (node:internal/test_runner/test:1342:9)
+      at async Test.run (node:internal/test_runner/test:1428:7) {
+    code: 'DSH_FIXTURE_LISTENER_LEAK'
+  }
+
+test at test/preset-integration.test.mjs:321:1
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (22.248667ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:322:71)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:350:1
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (5.108125ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:351:78)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:433:1
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.277208ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:434:56)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:458:1
+✖ preset capacity: inactive targets first do not block reversed live idle windows (2.153125ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:459:54)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:477:1
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (1.948167ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:478:62)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:492:43
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (1.919584ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:493:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:492:43
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (1.716125ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:493:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:522:1
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (1.817458ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:529:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:659:1
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (3.678084ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:592:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:661:1
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (1.937292ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:592:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:663:1
+✖ preset: batch catches the child that settles before its catalog predecessor (1.702458ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:592:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:665:1
+✖ preset: batch catches both children when the second settles later (2.114792ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:592:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:667:1
+✖ preset: native automatic child compaction works without loading this plugin (1.9095ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:675:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:716:1
+✖ preset: /subagent-compact all resumes two settled children and compacts both (1.850583ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:723:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:788:1
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (1.758917ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:795:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:849:1
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.855208ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:850:72)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:883:1
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.815ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:884:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }
+
+test at test/preset-integration.test.mjs:900:1
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (3.1405ms)
+  Error [HostAssemblyError]: the stock host could not be assembled: mount @deepseek-ai/dsh-llm
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:204:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:284:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/dsh-subagent-compactor-tests-7lLNEv/test/preset-integration.test.mjs:901:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    code: 'DSH_HOST_ASSEMBLY_FAILED',
+    stage: 'mount @deepseek-ai/dsh-llm'
+  }

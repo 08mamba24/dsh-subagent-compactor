@@ -46,7 +46,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import z from "@deepseek-ai/schemastery";
-import { CommandDefinitionId } from "@deepseek-ai/dsh-commands/brand";
+import { CommandDefinitionId } from "@deepseek-ai/dsh-commands";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 
 const name = "subagent-compactor";
