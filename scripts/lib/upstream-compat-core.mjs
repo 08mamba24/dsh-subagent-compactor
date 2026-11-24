@@ -97,6 +97,13 @@ export function classifyInstallFailure(output = "") {
 }
 
 /**
+ * Leading line the stock fixture prints when its own host composition throws
+ * before the plugin under test is imported (test/runtime-fixture.mjs keeps the
+ * same literal; the runner copies only the fixture, not this module).
+ */
+const HOST_ASSEMBLY_FAILURE = /^\s*DSH_HOST_ASSEMBLY_FAILED\b/m;
+
+/**
  * Parse a complete node --test spec footer. Anything less than all six
  * counters is not evidence that a suite ran.
  */
@@ -154,6 +161,12 @@ export function classifyRunnerResult({ status, output = "", error } = {}) {
 	if (hasFailure) {
 		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(output)) {
 			return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
+		}
+		/* The fixture's own composition threw before ../index.js was imported,
+		 * so the published host could not be assembled and nothing about this
+		 * plugin ran: not a product verdict, and not our runner's fault either. */
+		if (HOST_ASSEMBLY_FAILURE.test(output)) {
+			return { classification: "NOT_VERIFIED", reason: "upstream host failed to assemble before the plugin loaded", ...(testSummary !== undefined ? { testSummary } : {}) };
 		}
 		if (/\bERR_MODULE_NOT_FOUND\b|Cannot find module|^\s*SyntaxError:/im.test(output)) {
 			return { classification: "NOT_VERIFIED", reason: "test entry failed to load", ...(testSummary !== undefined ? { testSummary } : {}) };

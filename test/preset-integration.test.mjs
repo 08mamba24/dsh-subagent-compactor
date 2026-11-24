@@ -4,8 +4,8 @@
  * package linked to the extracted official app tree; no installed profile,
  * credentials service, or user configuration is loaded.
  */
-import test from "node:test";
-import { loadDeepSeekAuth, startActivation, directCatalog } from "./runtime-fixture.mjs";
+import test, { after } from "node:test";
+import { inertHost, loadDeepSeekAuth, startActivation, directCatalog, releaseLeakedFixtureListeners, reportHostAssemblyFailure, trackFixtureListener } from "./runtime-fixture.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -20,6 +20,9 @@ const MODEL = "deepseek-flash";
 const PRESET = "isolated-test-preset";
 const TEST_KEY_ENV = "DSH_PRESET_TEST_FAKE_API_KEY";
 process.env[TEST_KEY_ENV] = "loopback-only-test-key";
+
+// A fixture listener that outlives its test fails the file instead of holding the process open.
+after(releaseLeakedFixtureListeners);
 
 function deadline(promise, label, timeoutMs = 15_000) {
 	let timer;
@@ -64,7 +67,7 @@ function fakeMessagesServer() {
 	const requests = [];
 	let emptySummaries = 0;
 	const sockets = new Set();
-	const server = http.createServer((request, response) => {
+	const server = trackFixtureListener(http.createServer((request, response) => {
 		const chunks = [];
 		request.on("data", (chunk) => chunks.push(chunk));
 		request.on("end", () => {
@@ -101,7 +104,7 @@ function fakeMessagesServer() {
 				gate.arrived.resolve(received);
 			} else respond();
 		});
-	});
+	}));
 	server.on("connection", (socket) => {
 		sockets.add(socket);
 		socket.on("close", () => sockets.delete(socket));
@@ -134,13 +137,16 @@ function fakeMessagesServer() {
 	};
 }
 
-async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, pluginConfig = {} }) {
+async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, pluginConfig = {}, hostModules = {}, pluginModule }) {
 	const ctx = new Context();
+	// The host step in progress; cleared once the host and its preset are up and this plugin is what is under test.
+	let stage = "mount @deepseek-ai/cordis-plugin-loader";
 	try {
 		await ctx.plugin(Loader, { baseUrl: new URL("../package.json", import.meta.url).href });
 		// app-boot publishes the same native Loader builtin before loading rows.
 		ctx.loader.builtins.group = Group;
-		const deepSeekAuth = await loadDeepSeekAuth();
+		stage = "import @deepseek-ai/dsh-deepseek-auth";
+		const deepSeekAuth = hostModules["dsh-deepseek-auth"] ?? await loadDeepSeekAuth();
 		const rows = [
 			["cordis-plugin-timer", {}],
 			["dsh-llm", {}],
@@ -164,9 +170,12 @@ async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, p
 			["dsh-agent-preset-registry", { default: PRESET }]
 		];
 		for (const [name, config] of rows) {
-			const module = await import(`@deepseek-ai/${name}`);
+			stage = `import @deepseek-ai/${name}`;
+			const module = hostModules[name] ?? await import(`@deepseek-ai/${name}`);
+			stage = `mount @deepseek-ai/${name}`;
 			await ctx.plugin(module.default ?? module, config);
 		}
+		stage = "compose preset";
 		// Same group shape as official dsh-web-app/presets/minimal.patch.yml.
 		await ctx.loader.root.update([{
 			id: "preset-test", name: "@deepseek-ai/dsh-agent-preset",
@@ -183,11 +192,14 @@ async function boot(baseURL, storageRoot, { plugin, auto, subagentConfig = {}, p
 			}
 		}]);
 		await ctx.loader.await();
+		stage = "resolve preset";
 		assert.deepEqual(await ctx.agentPresets.resolve(PRESET), { id: PRESET });
-		if (plugin) await ctx.plugin(await import("../index.js"), { waitForIdle: true, ...pluginConfig });
+		stage = "";
+		if (plugin) await ctx.plugin(pluginModule ?? await import("../index.js"), { waitForIdle: true, ...pluginConfig });
 		return ctx;
 	} catch (error) {
 		await ctx.fiber.dispose();
+		if (stage) reportHostAssemblyFailure(stage, error);
 		throw error;
 	}
 }
@@ -261,14 +273,16 @@ function activationJournal(ctx) {
 async function capacityRuntime(t, options = {}) {
 	const fake = fakeMessagesServer();
 	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-capacity-"));
-	const ctx = await boot(await fake.start(), storageRoot, { plugin: true, auto: false, ...options });
-	const journal = sessionJournal(ctx);
-	const lifecycle = activationJournal(ctx);
+	let ctx, journal, lifecycle;
+	// Registered before boot: a host that fails to assemble still releases the listener and the scratch directory.
 	t.after(async () => {
-		journal.dispose(); lifecycle.dispose();
-		await ctx.fiber.dispose(); await fake.close();
+		journal?.dispose(); lifecycle?.dispose();
+		await ctx?.fiber.dispose(); await fake.close();
 		rmSync(storageRoot, { recursive: true, force: true });
 	});
+	ctx = await boot(await fake.start(), storageRoot, { plugin: true, auto: false, ...options });
+	journal = sessionJournal(ctx);
+	lifecycle = activationJournal(ctx);
 	const parent = await createParent(ctx, "capacity-parent");
 	const start = async (marker, owner = parent) => {
 		const activation = await startActivation(ctx, {
@@ -902,4 +916,35 @@ test("stock direct-only: a multilevel batch compacts the direct branch and leave
 	assert.equal(summaries(leaf.childId).length, 0);
 	assert.equal(ctx.agents.get(leaf.childId), undefined);
 	assert.equal(fake.requests.filter((r) => JSON.stringify(r.body.messages.at(-1)).includes("history-compaction maintenance")).length, 0);
+});
+
+/**
+ * Attribution by phase, for the upstream watcher: only a host row that fails
+ * before ../index.js is imported is the host's fault. Every other host row
+ * stands in as inert, so the check holds on a runtime whose own composition
+ * cannot come up, and its own failure is never mistaken for one.
+ */
+test("fixture: a preset host row that fails to mount is announced as such", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const hostFailure = Object.assign(new Error('cannot get property "undefined" without inject'), { code: "ERR_HOST_PROBE" });
+	await assert.rejects(boot("http://127.0.0.1:9", storageRoot, { plugin: true, hostModules: inertHost({ "dsh-llm": { apply() { throw hostFailure; } } }) }), (error) => error === hostFailure);
+	assert.deepEqual(announced.mock.calls.map((call) => call.arguments[0]), [
+		'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error [ERR_HOST_PROBE]: cannot get property "undefined" without inject',
+	]);
+});
+
+/** The other side of the same boundary: once the host and its preset are up, a plugin that fails to mount is this plugin under test. */
+test("fixture: a plugin that fails to mount once the host and its preset are up is not announced", async (t) => {
+	const storageRoot = mkdtempSync(join(tmpdir(), "dsh-preset-bootfail-"));
+	t.after(() => rmSync(storageRoot, { recursive: true, force: true }));
+	const announced = t.mock.method(console, "error", () => {});
+	const pluginFailure = new Error("plugin apply failed");
+	// The stock host and its preset have to come up for the plugin phase to be reached at all.
+	const host = await boot("http://127.0.0.1:9", storageRoot, { plugin: false }).then((ctx) => ctx, () => undefined);
+	if (!host) { t.skip("stock host does not assemble on this runtime"); return; }
+	await host.fiber.dispose();
+	await assert.rejects(boot("http://127.0.0.1:9", storageRoot, { plugin: true, pluginModule: { apply() { throw pluginFailure; } } }), (error) => error === pluginFailure);
+	assert.deepEqual(announced.mock.calls.map((call) => call.arguments[0]), [], "the host and its preset assembled; the plugin under test is what failed");
 });

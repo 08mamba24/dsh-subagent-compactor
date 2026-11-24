@@ -5,11 +5,13 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { apply, inject, name as pluginName, Config } from "../index.js";
+import { releaseLeakedFixtureListeners, trackFixtureListener } from "./runtime-fixture.mjs";
 
 async function optionalAuthFixture(t, packageSource, packageFields = {}) {
 	const directory = mkdtempSync(join(tmpdir(), "compactor-optional-auth-"));
@@ -41,6 +43,14 @@ test("optional auth: missing transitive dependency remains a load failure", asyn
 test("optional auth: an installed package with a missing entry remains a load failure", async t => {
 	await assert.rejects(optionalAuthFixture(t, null, { exports: undefined, main: "./missing-entry.mjs" }), error =>
 		error.code === "ERR_MODULE_NOT_FOUND");
+});
+
+test("fixture listeners: the leak self-check closes and reports a live listener, then passes", async () => {
+	const server = trackFixtureListener(http.createServer());
+	await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+	await assert.rejects(releaseLeakedFixtureListeners(), /1 fixture HTTP listener\(s\) outlived their test/);
+	assert.equal(server.listening, false, "the leaked listener is closed before the run reports it");
+	await releaseLeakedFixtureListeners();
 });
 
 class ManualError extends Error {

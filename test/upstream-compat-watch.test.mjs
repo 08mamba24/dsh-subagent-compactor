@@ -210,6 +210,47 @@ test("classifies unavailable packages, infrastructure failures, unsupported runn
 	});
 });
 
+test("a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout", () => {
+	/* The stock fixture announces the failing host row on one stable line once
+	 * its own composition throws, before ../index.js is imported: the published
+	 * Harness tree could not be composed, so nothing about this plugin ran
+	 * (alpha.1 ships Cordis 4.1.0, which has no Context.root). */
+	const marker = 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject';
+	const output = `${marker}\n✖ integration: live-window compaction of a real continuable subagent (650.0ms)\n`;
+	assert.deepEqual(classifyRunnerResult({ status: 1, output }), {
+		classification: "NOT_VERIFIED",
+		reason: "upstream host failed to assemble before the plugin loaded",
+	});
+	/* Assertion evidence anywhere in the same run still wins: a real product
+	 * failure must never hide behind a non-red host attribution. */
+	assert.equal(classifyRunnerResult({ status: 1, output: `${output}✖ unit [fail]\n  AssertionError [ERR_ASSERTION]: expected 2 to equal 3` }).classification, "INCOMPATIBLE");
+	/* The specific phase outranks the generic loader wording it may contain. */
+	assert.equal(classifyRunnerResult({ status: 1, output: "DSH_HOST_ASSEMBLY_FAILED import @deepseek-ai/dsh-llm: Error [ERR_PACKAGE_PATH_NOT_EXPORTED]: Package subpath './brand' is not defined" }).reason, "upstream host failed to assemble before the plugin loaded");
+	/* Only the exact leading marker counts; prose that merely mentions it stays unattributed. */
+	assert.equal(classifyRunnerResult({ status: 1, output: `  at DSH_HOST_ASSEMBLY_FAILED (fixture.mjs:1:1)\nError: something exploded` }).reason, "test failure origin could not be attributed");
+});
+
+test("a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure", t => {
+	const { directory, modules, env } = candidateFixture(t), report = join(directory, "report.json");
+	/* The other four synthetic files still pass: unit-level plugin behavior is
+	 * evidence, but it cannot certify a host whose composition never came up. */
+	writeFileSync(join(directory, "test/integration.test.mjs"), `import test from "node:test";
+console.error(${JSON.stringify('DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject')});
+test("composition", () => { throw new Error('cannot get property "undefined" without inject'); });
+`);
+	const plan = join(directory, "plan.json");
+	writeFileSync(plan, JSON.stringify({ version: "99.0.0-rc.1", runnerSupportsVersion: false, runnerSupportedVersions: ["0.2.2-rc.1"], dependenciesDirectory: dirname(modules), home: join(directory, "home"), dependencies: {} }));
+	const result = spawnSync(process.execPath, [join(directory, "scripts/upstream-compat.mjs"), "run", "--plan", plan, "--report", report], { encoding: "utf8", env });
+	assert.equal(result.status, 0, result.stderr);
+	const verdict = JSON.parse(readFileSync(report, "utf8"));
+	assert.equal(verdict.classification, "NOT_VERIFIED", result.stdout);
+	assert.equal(verdict.reason, "upstream host failed to assemble before the plugin loaded");
+	assert.equal(verdict.testExitCode, 1);
+	assert.deepEqual(verdict.testSummary, { tests: 5, pass: 4, fail: 1, cancelled: 0, skipped: 0, todo: 0 });
+	assert.equal(verdict.firstFailure, 'DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject');
+	assert.equal(verdict.candidateRuntime, true);
+});
+
 test("issue body records provenance, classification, first failure, and report link without executable HTML", () => {
 	const body = renderIssueBody({
 		classification: "INCOMPATIBLE",

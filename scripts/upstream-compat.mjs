@@ -129,7 +129,9 @@ function outputTail(output, limit = 12_000) {
 
 function firstFailure(output) {
 	const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
-	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖)/i.test(line)) || "");
+	// The fixture prints its host-assembly line while the test is still failing,
+	// ahead of the reporter's own ✖ row, so that line names the failing host row.
+	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖|DSH_HOST_ASSEMBLY_FAILED\b)/i.test(line)) || "");
 }
 
 function packageDependencies(version) {
