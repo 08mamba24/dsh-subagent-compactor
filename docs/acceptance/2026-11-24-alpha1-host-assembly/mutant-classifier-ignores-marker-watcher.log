@@ -1,0 +1,102 @@
+{"label": "mutant-classifier-ignores-marker-watcher", "command": ["/opt/homebrew/opt/node@24/bin/node", "--test", "--test-reporter=spec", "test/upstream-compat-watch.test.mjs"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-classifier-ignores-marker-watcher", "log": "mutant-classifier-ignores-marker-watcher.log"}
+✔ discovers prereleases, excludes drafts, and preserves exact tag commits (1.705459ms)
+✔ manual tag selection remains exact and rejects non-DSH tags (0.342792ms)
+✔ the candidate window orders future RCs numerically and the stable release above its RCs (0.180541ms)
+✔ dedup digest changes for every compatibility identity input (0.586875ms)
+✔ recognizes both the fixed-version and supportedVersions runner contracts (0.469875ms)
+✔ a zero-exit runner without executed-test evidence is never COMPATIBLE (1.343084ms)
+✔ a real load-failure entry is never attributed to the product, but real assertion failures are (503.290292ms)
+✔ classifies unavailable packages, infrastructure failures, unsupported runners, and compatibility failures distinctly (0.378083ms)
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.031583ms)
+✖ a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure (380.15075ms)
+✔ issue body records provenance, classification, first failure, and report link without executable HTML (0.329334ms)
+✔ discovery CLI emits a GitHub matrix from fixtures without network access (60.80325ms)
+✔ aggregate CLI preserves NOT_VERIFIED as a distinct non-compatible result (63.985708ms)
+✔ prepare CLI uses the exact stock host closure and records runner support (595.040459ms)
+✔ candidate mode runs a future runtime while the fixed runner still rejects it and mismatched packages (363.324375ms)
+✔ the watcher executes an unknown candidate instead of stopping at the baseline allowlist (362.328ms)
+✔ a hung runtime settles an infrastructure report and stops descendants before the job deadline (882.642ms)
+✔ the failure dependency chain can reach notification while permission gates remain closed elsewhere (1.554542ms)
+✔ the cancelled dependency chain can reach notification while permission gates remain closed elsewhere (0.381292ms)
+✔ slow prepare and install leave a hung runtime enough time to settle before the shared job limit (10334.573ms)
+ℹ {"stageMinutes":[6,6,6],"scaledElapsedMs":10310,"scaledJobLimitMs":15000,"classification":"INFRA_ERROR"}
+✔ workflow keeps execution read-only and isolates issue write permission (0.53325ms)
+✔ aggregate-to-notify preserves the existing issue correctly for missing-directory (455.016125ms)
+✔ aggregate-to-notify preserves the existing issue correctly for tagless-extra (492.746917ms)
+✔ aggregate-to-notify preserves the existing issue correctly for count-mismatch (545.433125ms)
+✔ aggregate-to-notify preserves the existing issue correctly for healthy (490.128167ms)
+✔ aggregate refuses to call a PREPARED-only run complete (69.521084ms)
+✔ an incomplete PREPARED report still delivers one infrastructure alert for the discovered target (439.291333ms)
+✔ an incomplete missing report still delivers one infrastructure alert for the discovered target (435.871792ms)
+✔ an incomplete wrong-sha report still delivers one infrastructure alert for the discovered target (462.172833ms)
+✔ an incomplete unexpected report still delivers one infrastructure alert for the discovered target (451.953125ms)
+✔ aggregate rejects missing, duplicate, and unknown-classification reports (205.087583ms)
+✔ aggregate rejects a COMPATIBLE report without executed-test evidence or with a foreign plugin SHA (201.397ms)
+✔ aggregate and inspect apply the same evidence rule to a TODO-only or cancelled suite (187.1795ms)
+✔ aggregate gate flags read the effective verdict, not this run's skip bookkeeping (67.867833ms)
+✔ notify delivers a cached verdict that was never delivered before (379.762375ms)
+✔ notify updates and resolves a recovered issue, then stays quiet for the same cached verdict (627.510875ms)
+✔ notify leaves a newly compatible version in Actions without creating an issue (368.649917ms)
+✔ notify retries a failed reopen after editing INCOMPATIBLE, then stays quiet (830.688ms)
+✔ notify retries a failed reopen after editing NOT_VERIFIED, then stays quiet (810.550416ms)
+✔ notify retries a failed reopen after editing INFRA_ERROR, then stays quiet (805.36825ms)
+✔ cache emits a result digest so a changed verdict gets a fresh cache key (129.925541ms)
+ℹ tests 41
+ℹ suites 0
+ℹ pass 39
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22096.409208
+
+✖ failing tests:
+
+test at test/upstream-compat-watch.test.mjs:213:1
+✖ a host that fails to assemble before the plugin is mounted is attributed to the host, never to the plugin, the runner, or a timeout (1.031583ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+      classification: 'NOT_VERIFIED',
+  +   reason: 'test failure origin could not be attributed'
+  -   reason: 'upstream host failed to assemble before the plugin loaded'
+    }
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-classifier-ignores-marker-watcher/test/upstream-compat-watch.test.mjs:220:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { classification: 'NOT_VERIFIED', reason: 'test failure origin could not be attributed' },
+    expected: { classification: 'NOT_VERIFIED', reason: 'upstream host failed to assemble before the plugin loaded' },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/upstream-compat-watch.test.mjs:233:1
+✖ a real runner that announces a host-assembly failure settles NOT_VERIFIED and keeps the marker as its first failure (380.15075ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'test failure origin could not be attributed'
+  - 'upstream host failed to assemble before the plugin loaded'
+  
+      at TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-classifier-ignores-marker-watcher/test/upstream-compat-watch.test.mjs:247:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'test failure origin could not be attributed',
+    expected: 'upstream host failed to assemble before the plugin loaded',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

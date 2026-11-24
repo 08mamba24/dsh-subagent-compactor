@@ -1,5 +1,18 @@
 # Changelog / 变更日志
 
+## Host assembly patrol attribution / 宿主装配失败的巡检归因 (2026-11-24)
+
+- Attribute a candidate whose published host fails before the plugin is loaded to the host. Test fixtures announce the failing host row with `DSH_HOST_ASSEMBLY_FAILED <stage>`, and the watcher classifies the run `NOT_VERIFIED` with that line as the first failure instead of waiting for the deadline and reporting `INFRA_ERROR`.
+  发布宿主在插件加载前失败时归因于宿主：测试夹具以 `DSH_HOST_ASSEMBLY_FAILED <阶段>` 报出失败的宿主行，巡检判为 `NOT_VERIFIED` 并保留该行为首个失败，不再等到截止时间报 `INFRA_ERROR`。
+- Release fixture resources when a composition fails. Listener and scratch-directory cleanup is registered before each boot, and a fixture HTTP listener that outlives its test is closed and reported by a root after-hook.
+  组合失败时释放夹具资源：监听与临时目录的清理在每次启动前注册，存活超过所属测试的夹具 HTTP 监听由根级 after 钩子关闭并上报。
+- Keep an `AssertionError` ahead of the host marker, and skip the two phase checks that need a working host when it does not assemble. Add five stock tests and two watcher contracts (stock suites 120 → 125, watcher 39 → 41).
+  断言失败仍优先于宿主标记；需要健康宿主的两个阶段检查在宿主无法装配时跳过。新增 5 个套件用例与 2 个巡检契约（套件 120 → 125，巡检 39 → 41）。
+- Found on stock `0.2.3-alpha.1`: its `dsh-typert-protocol` reads `ctx[Context.root]`, a static that the Cordis 4.1.0 of its own lock does not define, so mounting `dsh-llm` throws. rc.5 resolves the same Cordis and assembles. rc.1–rc.5 and alpha.2 stay at 125/125; alpha.1 remains `NOT_VERIFIED` and unsupported.
+  问题在原版 `0.2.3-alpha.1` 上发现：其 `dsh-typert-protocol` 读取 `ctx[Context.root]`，而自身锁文件解析出的 Cordis 4.1.0 没有这个静态成员，挂载 `dsh-llm` 时抛错。rc.5 解析到同一版 Cordis 且可正常装配。rc.1–rc.5 与 alpha.2 仍为 125/125；alpha.1 保持 `NOT_VERIFIED` 且不受支持。
+- Source branch of PR #13 only; no merge, release, installation or Desktop restart is performed.
+  仅为 PR #13 的源码分支，未合并、发布、安装或重启 Desktop。
+
 ## Alpha.2 compatibility candidate / 兼容候选 (2026-11-24)
 
 - Import the runtime `CommandDefinitionId` from the public package root after the old `/brand` subpath was removed. Keep the existing rc.1–rc.5 ownership/catalog adaptation.

@@ -1,0 +1,15 @@
+watcher 0 {'tests': 41, 'pass': 41, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.9
+rc1 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.8
+rc2 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.8
+rc3 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc4 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc5 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.0
+alpha2 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.1
+alpha2 patrol COMPATIBLE {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 47.6
+alpha1 patrol NOT_VERIFIED {'tests': 125, 'pass': 102, 'fail': 21, 'cancelled': 0, 'skipped': 2, 'todo': 0} 49.9
+rc5 patrol COMPATIBLE {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 48.1
+mutant-stage-never-cleared-rc1 1 {'tests': 125, 'pass': 123, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+mutant-capacity-cleanup-after-boot-alpha1 1 {'tests': 126, 'pass': 102, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.9
+mutant-callsite-boots-outside-try-alpha1 1 {'tests': 126, 'pass': 102, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.8
+mutant-classifier-ignores-marker-watcher 1 {'tests': 41, 'pass': 39, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.2
+validate exit=0

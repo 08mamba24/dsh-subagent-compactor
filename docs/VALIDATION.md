@@ -1,5 +1,15 @@
 # Validation record
 
+## Host assembly patrol attribution (2026-11-24)
+
+Fix commit `01ec7a8c776582e6484c0b6d51f8c52ff2830a9c`, on top of the alpha.2 candidate `0cbf5b2` of PR #13. The hourly watch failed on stock **0.2.3-alpha.1** without naming a cause. Reproduced on the same tree and lock: that host cannot be assembled, thirteen fixture listeners keep `node --test` alive until the deadline, and the cell ends as `INFRA_ERROR` (`runtime regression timed out`).
+
+Through the watcher's real `prepare`/`run` path, alpha.1 now settles **`NOT_VERIFIED`** (`upstream host failed to assemble before the plugin loaded`) in 50 s, with the `DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm` line as its first failure, 21 failed and 2 skipped tests, and no assertion, leak or timeout text. alpha.2 and rc.5 stay **`COMPATIBLE` 125/125** on the same path and the same runner digest.
+
+Stock suites pass **125/125** on each of rc.1–rc.5 and on the committed alpha.2 host lock, and watcher contracts pass **41/41**, with zero failed, cancelled, skipped or TODO cases. Four mutation checks each turn one new regression red and exit within 25 s: stage never cleared, capacity cleanup moved after boot, composition moved out of the `try`, classifier ignoring the marker.
+
+These are local results with loopback synthetic models. The same candidate tree without the fix reproduced the timeout locally (`INFRA_ERROR`, no test summary). See the [dated author acceptance record](acceptance/2026-11-24-alpha1-host-assembly/acceptance.md). They do not establish a GitHub job for this HEAD, GUI behavior, installation or release approval.
+
 ## Alpha.2 compatibility source candidate (2026-11-24)
 
 The formal source candidate passes **120/120** on each stock Harness rc.1–rc.5 tree and on a freshly installed **0.2.3-alpha.2** host lock, using Homebrew Node 24.22.3, isolated storage and loopback synthetic model responses. Watcher regressions pass **39/39** and package inspection succeeds. Four added auth fixture tests cover absence, successful loading, missing transitive dependencies and a broken installed entry.

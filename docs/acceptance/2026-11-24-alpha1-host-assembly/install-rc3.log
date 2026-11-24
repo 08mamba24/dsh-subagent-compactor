@@ -1,0 +1,3 @@
+{"label": "install-rc3", "command": ["/opt/homebrew/opt/node@24/bin/npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc3", "log": "install-rc3.log"}
+
+added 96 packages in 3s

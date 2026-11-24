@@ -1,0 +1,1416 @@
+Node 24.22.3; DSH 0.2.3-alpha.1; modules: /private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules
+Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp
+✔ rc2: direct projection serves listing/batch and is always released (4.685958ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=true) (0.974583ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.922584ms)
+✔ rc2: a lookalike caller with the same id is refused (0.455666ms)
+✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.852625ms)
+✔ rc2: missing or malformed projection fails honestly and releases observation (0.830417ms)
+✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.730958ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"parentSessionId":"different-parent"}) (1.949459ms)
+✔ rc2: an invalid start edge cannot accept a wake ({}) (0.700375ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"local":false}) (0.680791ms)
+✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (1.815125ms)
+✔ rc2: caller/root identity is rechecked after the live idle wait (0.919375ms)
+✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (1.803917ms)
+✔ rc2: an external start cancels only our pending send and uses the live idle path (6.438292ms)
+✔ capacity: a global end outside the snapshot releases an awaiting resume (5.801458ms)
+✔ capacity: an end between attempt and rejection cannot be lost (0.647208ms)
+✔ capacity: periodic probe handles capacity changes with no end event (8.546041ms)
+✔ capacity: cancel clears waits, listeners and target locks without a late wake (2.052833ms)
+✔ capacity: unload clears waits, listeners and target locks without a late wake (1.52425ms)
+✔ capacity: timeout is bounded and cleans up (timer 0ms early) (3.384584ms)
+✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (2.168916ms)
+✔ capacity: model tool and competing batches share admission and target locks (1.690792ms)
+✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.890458ms)
+✔ capacity: a capacity-shaped error after start is never retried (0.51725ms)
+✔ capacity: disjoint batches compete for real admission and both eventually finish (2.092583ms)
+✔ capacity: admission clears its deadline before a long summary begins (1.500958ms)
+✔ capacity: another actor's start while parked cannot launch an orphan summary (1.220833ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=true) (2.431ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.996ms)
+✔ capacity: a foreign start cannot hide host-refusal from a pending send (1.967125ms)
+✔ capacity: a foreign start cannot hide caller-cancel from a pending send (0.918666ms)
+✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.811417ms)
+✔ standalone batch cancel clears its wait and releases the shared lock (0.489208ms)
+✔ standalone batch unload clears its wait and releases the shared lock (0.241583ms)
+✔ standalone batch reports partial failure and does not hide successful children (0.741917ms)
+✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.446125ms)
+✔ batch on an empty catalog reports empty-catalog as success (0.21225ms)
+✔ batch compacts every live child concurrently and reports completed (27.025375ms)
+✔ an item's engine failure does not hide the rest (partial-failure) (0.675458ms)
+✔ with resume disabled, a settled child is an expected skip, not a failure (0.572208ms)
+✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.588625ms)
+✔ a settled non-continuable child is skipped without a wake attempt (0.521541ms)
+✔ a child disposed while waiting for idle falls back to resume (0.487083ms)
+✔ ownership violations count as failed items without stopping the batch (0.408084ms)
+✔ duplicate catalog ids are compacted exactly once (0.271709ms)
+✔ a concurrent single invocation on the same target reports busy-target (2.370125ms)
+✔ abort during the run reports every started child cancelled (0.570959ms)
+✔ an item's unexpected non-manual error does not stop the rest (0.4215ms)
+✔ a failing catalog read reports listing-failed (0.26175ms)
+✔ abort while the catalog read is in flight reports an unknown snapshot (0.274375ms)
+✔ a catalog that resolved past an abort reports its targets not-started (0.251125ms)
+✔ --all is an accepted alias; extra arguments are a usage error (0.22225ms)
+✔ listing marks live versus persisted children (0.315375ms)
+✔ two settled continuable children are both resumed and compacted (0.388333ms)
+✔ a mixed batch of live and settled children loses no item and double-wakes none (1.925792ms)
+✔ abort during a resumed compaction cancels that item without hiding others (0.786083ms)
+✔ a batch where nothing could be compacted says so instead of implying success (0.497167ms)
+✔ a resume refused for ownership is a failed item, not a skip (0.647416ms)
+✔ a single-id command on a child being resumed by the batch reports busy-target (3.349167ms)
+✔ a resumed child with nothing to compact does not inflate the resumed count (0.55825ms)
+✖ integration: live-window compaction of a real continuable subagent (652.058625ms)
+✖ integration: resume-path compaction of a settled continuable subagent (4.484625ms)
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (1.736708ms)
+✖ fixture: a host row that fails to mount is announced as such; a plugin that fails to mount is not (2.411833ms)
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs (2.4625ms)
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (44.4815ms)
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (6.2945ms)
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.484042ms)
+✖ preset capacity: inactive targets first do not block reversed live idle windows (2.363584ms)
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (2.355709ms)
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (2.145667ms)
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (2.29025ms)
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (2.638ms)
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (2.681042ms)
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (4.258542ms)
+✖ preset: batch catches the child that settles before its catalog predecessor (2.12125ms)
+✖ preset: batch catches both children when the second settles later (2.045917ms)
+✖ preset: native automatic child compaction works without loading this plugin (2.1ms)
+✖ preset: /subagent-compact all resumes two settled children and compacts both (2.251334ms)
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (1.856459ms)
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.524375ms)
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.575375ms)
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (1.84575ms)
+✖ fixture: a preset host row that fails to mount is announced as such; a plugin that fails to mount is not (2.871667ms)
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs (7.301625ms)
+✔ optional auth: absent package is supported on old stock runtimes (5.398042ms)
+✔ optional auth: installed service is returned (4.61725ms)
+✔ optional auth: missing transitive dependency remains a load failure (6.272375ms)
+✔ optional auth: an installed package with a missing entry remains a load failure (3.4165ms)
+✔ fixture listeners: the leak self-check closes and reports a live listener, then passes (16.789125ms)
+✔ plugin surface (2.863667ms)
+✔ apply registers separate batch and parameter commands with the tool in one effect (3.609584ms)
+✔ command no-arg lists direct children (1.62725ms)
+✔ command no-arg with empty catalog and with projection failure (1.092083ms)
+✔ command usage errors: too many arguments (0.693041ms)
+✔ not-resident when no live agent has the id and resume is disabled (0.734542ms)
+✔ a settled child whose wake is refused reports not-resumable (1.9ms)
+✔ resumes a settled continuable child and compacts through the synchronous start edge (1.148333ms)
+✔ a wake refused for authorization reports not-authorized (0.605875ms)
+✔ a busy wake (activation closing) reports busy-target (0.527833ms)
+✔ a target that raced back live without a start edge compacts via the live path (0.931167ms)
+✔ a wake that neither starts nor materializes reports resume-failed (0.5905ms)
+✔ the start edge resolves the engine before compacting; a missing engine refuses (0.758708ms)
+✔ a summary failure during resume keeps the wake delivered and says so (0.729958ms)
+✔ cancelling the wake aborts the resume path (0.825ms)
+✔ the model tool resumes a settled continuable child too (1.474375ms)
+✔ not-authorized for foreign/self/grandchild targets (runtime ownership only) (0.60775ms)
+✔ preset plane resolves via serviceFor and never falls back to the host engine (1.98775ms)
+✔ preset present but its engine missing fails explicitly (no host fallback) (0.437208ms)
+✔ host plane used only when no preset registry exists (0.519333ms)
+✔ host plane absent fails explicitly (0.533375ms)
+✔ waitForIdle waits for the child and re-checks identity afterwards (TOCTOU) (9.657791ms)
+✔ waitForIdle: false skips the wait entirely (0.496375ms)
+✔ all six manual codes map to distinct messages and outcomes (1.260375ms)
+✔ unknown manual code stays diagnosable (0.27175ms)
+✔ caller-cancelled wins over busy when the signal is aborted (3.81275ms)
+✔ waiting on an eternally-busy child is cancellable via the request signal (1.9885ms)
+✔ non-manual engine errors propagate (0.34025ms)
+✔ tool requires a calling agent (0.19725ms)
+✔ tool output render produces a text block (0.196417ms)
+✔ command success result carries no sourceEventSeq (child seq must not decorate parent command/done) (0.255333ms)
+✔ unload aborts in-flight operations and converges (3.955083ms)
+✔ an already-aborted signal settles immediately instead of hanging the idle wait (0.697542ms)
+✔ pending listing is cancelled by plugin unload through the fused signal (3.614917ms)
+✔ command declares input so Desktop's UI claims parameterized invocations (0.338708ms)
+ℹ tests 125
+ℹ suites 0
+ℹ pass 100
+ℹ fail 25
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 787.385958
+
+✖ failing tests:
+
+test at test/integration.test.mjs:170:1
+✖ integration: live-window compaction of a real continuable subagent (652.058625ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:152:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:174:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at test/integration.test.mjs:303:1
+✖ integration: resume-path compaction of a settled continuable subagent (4.484625ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:152:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:307:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/integration.test.mjs:400:1
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (1.736708ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:152:13)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:407:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/integration.test.mjs:471:1
+✖ fixture: a host row that fails to mount is announced as such; a plugin that fails to mount is not (2.411833ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+  
+  Caught error:
+  
+  Error: cannot get property "undefined" without inject
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:479:2)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: cannot get property "undefined" without inject
+        at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+        at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+        at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+        at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+        at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+        at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+        at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:152:13)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs:479:2)
+        at async Test.run (node:internal/test_runner/test:1409:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test/integration.test.mjs:39:1
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/integration.test.mjs (2.4625ms)
+  AssertionError [ERR_ASSERTION]: 3 fixture HTTP listener(s) outlived their test
+  + actual - expected
+  
+  + [
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 85,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 87,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 86,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 64,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [Function: connectionListener],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 12302,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 12304,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 12303,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 712,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [Function: connectionListener],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 12664,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 12666,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 12665,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 714,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [Function: connectionListener],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   }
+  + ]
+  - []
+  
+      at TestContext.releaseLeakedFixtureListeners (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/runtime-fixture.mjs:36:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestHook.run (node:internal/test_runner/test:1409:7)
+      at async Test.runHook (node:internal/test_runner/test:1289:9)
+      at async after (node:internal/test_runner/test:1342:9)
+      at async Test.run (node:internal/test_runner/test:1428:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at test/preset-integration.test.mjs:309:1
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (44.4815ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:310:71)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at test/preset-integration.test.mjs:338:1
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (6.2945ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:339:78)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:421:1
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.484042ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:422:56)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:446:1
+✖ preset capacity: inactive targets first do not block reversed live idle windows (2.363584ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:447:54)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:465:1
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (2.355709ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:466:62)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:480:43
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (2.145667ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:481:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:480:43
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (2.29025ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:481:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:510:1
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (2.638ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:517:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:647:1
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (2.681042ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:580:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:649:1
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (4.258542ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:580:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:651:1
+✖ preset: batch catches the child that settles before its catalog predecessor (2.12125ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:580:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:653:1
+✖ preset: batch catches both children when the second settles later (2.045917ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:580:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:655:1
+✖ preset: native automatic child compaction works without loading this plugin (2.1ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:663:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:704:1
+✖ preset: /subagent-compact all resumes two settled children and compacts both (2.251334ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:711:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:776:1
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (1.856459ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:783:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:837:1
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.524375ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:838:72)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:871:1
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.575375ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:872:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:888:1
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (1.84575ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:267:14)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:889:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:916:1
+✖ fixture: a preset host row that fails to mount is announced as such; a plugin that fails to mount is not (2.871667ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+  
+  Caught error:
+  
+  Error: cannot get property "undefined" without inject
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:924:2)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: cannot get property "undefined" without inject
+        at provideInvocationAccessor (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+        at bindTypertRemote (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+        at new TypertRemoteService (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+        at new LlmRuntime (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+        at Fiber.execute (file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+        at file:///private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+        at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:171:14)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs:924:2)
+        at async Test.run (node:internal/test_runner/test:1409:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:974:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at test/preset-integration.test.mjs:25:1
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/preset-integration.test.mjs (7.301625ms)
+  AssertionError [ERR_ASSERTION]: 10 fixture HTTP listener(s) outlived their test
+  + actual - expected
+  
+  + [
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 179,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 181,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 180,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 176,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 569,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 571,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 570,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 213,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 904,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 906,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 905,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 216,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1240,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1242,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1241,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 219,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1575,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1577,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1576,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 221,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1911,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1913,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1912,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 224,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 2246,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 2248,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 2247,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 226,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 5418,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 5420,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 5419,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 248,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 5753,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 5755,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 5754,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 250,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 6089,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 6091,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 6090,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 252,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   }
+  + ]
+  - []
+  
+      at TestContext.releaseLeakedFixtureListeners (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-O5Jjvp/test/runtime-fixture.mjs:36:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestHook.run (node:internal/test_runner/test:1409:7)
+      at async Test.runHook (node:internal/test_runner/test:1289:9)
+      at async after (node:internal/test_runner/test:1342:9)
+      at async Test.run (node:internal/test_runner/test:1428:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }

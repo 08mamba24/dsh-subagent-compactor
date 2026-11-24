@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "tag": "dsh-v0.2.3-alpha.1",
+  "version": "0.2.3-alpha.1",
+  "commit": "d98f5d68519215da48f3002da2cb9c9d2068d81d",
+  "pluginSha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+  "runUrl": "https://github.com/08mamba24/dsh-subagent-compactor/actions/runs/45333552103",
+  "preparedAt": "2026-11-24T05:56:07.822Z",
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.2.3-alpha.1"
+  },
+  "classification": "INFRA_ERROR",
+  "reason": "runtime regression timed out",
+  "dependencyDigest": "9761d7261bc7a13d954503d08e574414b6e70691c9426265d0afd5c20dde50d4",
+  "runnerDigest": "59985b26f3c22e0458cb2f1002ba2c8e6c135333f403d195fe52a5c3d2cc2ece",
+  "runnerSupportedVersions": [
+    "0.2.2-rc.1",
+    "0.2.2-rc.2",
+    "0.2.2-rc.3",
+    "0.2.2-rc.4",
+    "0.2.2-rc.5"
+  ],
+  "runnerSupportsVersion": false,
+  "comboDigest": "a8308fe2ed21f35eb4f7fdf5fb29e2edb2696934aa82e6c5608c9b5e5da51770",
+  "dependenciesDirectory": "/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies",
+  "home": "/tmp/dsh-pr13-alpha1-probe/alpha1/home",
+  "candidateRuntime": true,
+  "testedAt": "2026-11-24T06:01:23.195Z",
+  "installedVersions": {
+    "@deepseek-ai/dsh": "0.2.3-alpha.1",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/cordis-plugin-loader": "1.1.0",
+    "@deepseek-ai/schemastery": "3.19.0",
+    "@deepseek-ai/dsh-agent": "0.2.3-alpha.1",
+    "@deepseek-ai/dsh-subagent": "0.2.3-alpha.1"
+  },
+  "testExitCode": null,
+  "firstFailure": "✖ integration: live-window compaction of a real continuable subagent (509.755958ms)",
+  "outputTail": "Node 24.22.3; DSH 0.2.3-alpha.1; modules: /private/tmp/dsh-pr13-alpha1-probe/alpha1/dependencies/node_modules\nRunning 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-subagent-compactor-tests-DDhl4N\n✔ rc2: direct projection serves listing/batch and is always released (4.137375ms)\n✔ rc2: shared root does not authorize a non-direct target (resident=true) (0.895625ms)\n✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.9075ms)\n✔ rc2: a lookalike caller with the same id is refused (0.440833ms)\n✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.835708ms)\n✔ rc2: missing or malformed projection fails honestly and releases observation (0.70675ms)\n✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.7295ms)\n✔ rc2: an invalid start edge cannot accept a wake ({\"parentSessionId\":\"different-parent\"}) (1.101458ms)\n✔ rc2: an invalid start edge cannot accept a wake ({}) (0.51675ms)\n✔ rc2: an invalid start edge cannot accept a wake ({\"local\":false}) (0.528333ms)\n✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (1.406459ms)\n✔ rc2: caller/root identity is rechecked after the live idle wait (0.449666ms)\n✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (0.986125ms)\n✔ rc2: an external start cancels only our pending send and uses the live idle path (3.871666ms)\n✔ capacity: a global end outside the snapshot releases an awaiting resume (6.586458ms)\n✔ capacity: an end between attempt and rejection cannot be lost (0.750125ms)\n✔ capacity: periodic probe handles capacity changes with no end event (6.023875ms)\n✔ capacity: cancel clears waits, listeners and target locks without a late wake (1.420334ms)\n✔ capacity: unload clears waits, listeners and target locks without a late wake (1.102958ms)\n✔ capacity: timeout is bounded and cleans up (timer 0ms early) (2.162959ms)\n✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (2.23825ms)\n✔ capacity: model tool and competing batches share admission and target locks (1.742583ms)\n✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.40325ms)\n✔ capacity: a capacity-shaped error after start is never retried (0.42975ms)\n✔ capacity: disjoint batches compete for real admission and both eventually finish (1.467375ms)\n✔ capacity: admission clears its deadline before a long summary begins (0.821542ms)\n✔ capacity: another actor's start while parked cannot launch an orphan summary (0.577083ms)\n✔ capacity: an externally restored live child is rechecked before sending (owned=true) (1.278708ms)\n✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.63925ms)\n✔ capacity: a foreign start cannot hide host-refusal from a pending send (0.637ms)\n✔ capacity: a foreign start cannot hide caller-cancel from a pending send (1.191583ms)\n✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.464334ms)\n✔ standalone batch cancel clears its wait and releases the shared lock (0.287833ms)\n✔ standalone batch unload clears its wait and releases the shared lock (0.171542ms)\n✔ standalone batch reports partial failure and does not hide successful children (0.271583ms)\n✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.352583ms)\n✔ batch on an empty catalog reports empty-catalog as success (0.206791ms)\n✔ batch compacts every live child concurrently and reports completed (26.382083ms)\n✔ an item's engine failure does not hide the rest (partial-failure) (0.407625ms)\n✔ with resume disabled, a settled child is an expected skip, not a failure (0.236167ms)\n✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.251209ms)\n✔ a settled non-continuable child is skipped without a wake attempt (0.216333ms)\n✔ a child disposed while waiting for idle falls back to resume (0.251875ms)\n✔ ownership violations count as failed items without stopping the batch (0.196083ms)\n✔ duplicate catalog ids are compacted exactly once (0.189292ms)\n✔ a concurrent single invocation on the same target reports busy-target (1.171208ms)\n✔ abort during the run reports every started child cancelled (0.423542ms)\n✔ an item's unexpected non-manual error does not stop the rest (0.320916ms)\n✔ a failing catalog read reports listing-failed (0.173875ms)\n✔ abort while the catalog read is in flight reports an unknown snapshot (0.19975ms)\n✔ a catalog that resolved past an abort reports its targets not-started (0.173916ms)\n✔ --all is an accepted alias; extra arguments are a usage error (0.162042ms)\n✔ listing marks live versus persisted children (0.216ms)\n✔ two settled continuable children are both resumed and compacted (0.286542ms)\n✔ a mixed batch of live and settled children loses no item and double-wakes none (0.206709ms)\n✔ abort during a resumed compaction cancels that item without hiding others (0.267416ms)\n✔ a batch where nothing could be compacted says so instead of implying success (1.069917ms)\n✔ a resume refused for ownership is a failed item, not a skip (0.3785ms)\n✔ a single-id command on a child being resumed by the batch reports busy-target (1.945667ms)\n✔ a resumed child with nothing to compact does not inflate the resumed count (0.302709ms)\n✖ integration: live-window compaction of a real continuable subagent (509.755958ms)\n✖ integration: resume-path compaction of a settled continuable subagent (4.799875ms)\n✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (1.757375ms)\n\nError: /opt/homebrew/Cellar/node@24/24.22.3_1/bin/node timed out after 240000ms\n"
+}

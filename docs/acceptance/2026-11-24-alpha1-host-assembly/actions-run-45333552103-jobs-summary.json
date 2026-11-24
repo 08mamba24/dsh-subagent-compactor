@@ -1,0 +1,425 @@
+{
+  "source": "GET https://api.github.com/repos/08mamba24/dsh-subagent-compactor/actions/runs/45333552103/jobs?per_page=100 (anonymous, read 2026-11-24; job logs are not readable without authentication)",
+  "total_count": 7,
+  "jobs": [
+    {
+      "id": 138240134352,
+      "name": "Discover official releases and tags",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-24T05:28:25Z",
+      "completed_at": "2026-11-24T05:28:55Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Run actions/checkout@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:28Z",
+          "completed_at": "2026-11-24T05:28:33Z"
+        },
+        {
+          "number": 3,
+          "name": "Run actions/setup-node@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:33Z",
+          "completed_at": "2026-11-24T05:28:37Z"
+        },
+        {
+          "number": 4,
+          "name": "Test the watcher logic",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:37Z",
+          "completed_at": "2026-11-24T05:28:50Z"
+        },
+        {
+          "number": 5,
+          "name": "Discover recent non-draft DSH tags, including prereleases",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:50Z",
+          "completed_at": "2026-11-24T05:28:51Z"
+        },
+        {
+          "number": 6,
+          "name": "Upload discovery provenance",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:51Z",
+          "completed_at": "2026-11-24T05:28:53Z"
+        },
+        {
+          "number": 13,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:53Z",
+          "completed_at": "2026-11-24T05:28:53Z"
+        }
+      ]
+    },
+    {
+      "id": 138240345797,
+      "name": "Harness dsh-v0.2.3-alpha.1",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-24T05:28:58Z",
+      "completed_at": "2026-11-24T05:36:04Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Run actions/checkout@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:01Z",
+          "completed_at": "2026-11-24T05:29:07Z"
+        },
+        {
+          "number": 3,
+          "name": "Run actions/setup-node@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:07Z",
+          "completed_at": "2026-11-24T05:29:12Z"
+        },
+        {
+          "number": 4,
+          "name": "Resolve an exact public dependency lock without running package scripts",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:12Z",
+          "completed_at": "2026-11-24T05:29:43Z"
+        },
+        {
+          "number": 5,
+          "name": "Restore the most recent cached verdict for this combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:43Z",
+          "completed_at": "2026-11-24T05:29:43Z"
+        },
+        {
+          "number": 6,
+          "name": "Validate the restored verdict against this exact combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:43Z",
+          "completed_at": "2026-11-24T05:29:43Z"
+        },
+        {
+          "number": 7,
+          "name": "Run the isolated stock-runtime compatibility suite",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:43Z",
+          "completed_at": "2026-11-24T05:35:58Z"
+        },
+        {
+          "number": 8,
+          "name": "Record a deduplicated skip",
+          "conclusion": "skipped",
+          "started_at": "2026-11-24T05:35:58Z",
+          "completed_at": "2026-11-24T05:35:58Z"
+        },
+        {
+          "number": 9,
+          "name": "Prepare a reusable result marker",
+          "conclusion": "skipped",
+          "started_at": "2026-11-24T05:35:58Z",
+          "completed_at": "2026-11-24T05:35:58Z"
+        },
+        {
+          "number": 10,
+          "name": "Save the exact combination result",
+          "conclusion": "skipped",
+          "started_at": "2026-11-24T05:35:58Z",
+          "completed_at": "2026-11-24T05:35:58Z"
+        },
+        {
+          "number": 11,
+          "name": "Upload this compatibility report",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:35:58Z",
+          "completed_at": "2026-11-24T05:36:00Z"
+        },
+        {
+          "number": 23,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:00Z",
+          "completed_at": "2026-11-24T05:36:00Z"
+        }
+      ]
+    },
+    {
+      "id": 138240345799,
+      "name": "Harness dsh-v0.2.2-rc.5",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-24T05:30:19Z",
+      "completed_at": "2026-11-24T05:31:25Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Run actions/checkout@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:21Z",
+          "completed_at": "2026-11-24T05:30:23Z"
+        },
+        {
+          "number": 3,
+          "name": "Run actions/setup-node@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:23Z",
+          "completed_at": "2026-11-24T05:30:23Z"
+        },
+        {
+          "number": 4,
+          "name": "Resolve an exact public dependency lock without running package scripts",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:23Z",
+          "completed_at": "2026-11-24T05:30:50Z"
+        },
+        {
+          "number": 5,
+          "name": "Restore the most recent cached verdict for this combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:50Z",
+          "completed_at": "2026-11-24T05:30:50Z"
+        },
+        {
+          "number": 6,
+          "name": "Validate the restored verdict against this exact combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:50Z",
+          "completed_at": "2026-11-24T05:30:50Z"
+        },
+        {
+          "number": 7,
+          "name": "Run the isolated stock-runtime compatibility suite",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:50Z",
+          "completed_at": "2026-11-24T05:31:17Z"
+        },
+        {
+          "number": 8,
+          "name": "Record a deduplicated skip",
+          "conclusion": "skipped",
+          "started_at": "2026-11-24T05:31:17Z",
+          "completed_at": "2026-11-24T05:31:17Z"
+        },
+        {
+          "number": 9,
+          "name": "Prepare a reusable result marker",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:31:17Z",
+          "completed_at": "2026-11-24T05:31:17Z"
+        },
+        {
+          "number": 10,
+          "name": "Save the exact combination result",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:31:17Z",
+          "completed_at": "2026-11-24T05:31:18Z"
+        },
+        {
+          "number": 11,
+          "name": "Upload this compatibility report",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:31:18Z",
+          "completed_at": "2026-11-24T05:31:20Z"
+        },
+        {
+          "number": 23,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:31:20Z",
+          "completed_at": "2026-11-24T05:31:20Z"
+        }
+      ]
+    },
+    {
+      "id": 138240345857,
+      "name": "Harness dsh-v0.2.3-alpha.2",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-24T05:28:57Z",
+      "completed_at": "2026-11-24T05:30:17Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Run actions/checkout@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:28:59Z",
+          "completed_at": "2026-11-24T05:29:00Z"
+        },
+        {
+          "number": 3,
+          "name": "Run actions/setup-node@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:00Z",
+          "completed_at": "2026-11-24T05:29:01Z"
+        },
+        {
+          "number": 4,
+          "name": "Resolve an exact public dependency lock without running package scripts",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:01Z",
+          "completed_at": "2026-11-24T05:29:31Z"
+        },
+        {
+          "number": 5,
+          "name": "Restore the most recent cached verdict for this combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:31Z",
+          "completed_at": "2026-11-24T05:29:32Z"
+        },
+        {
+          "number": 6,
+          "name": "Validate the restored verdict against this exact combination",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:32Z",
+          "completed_at": "2026-11-24T05:29:32Z"
+        },
+        {
+          "number": 7,
+          "name": "Run the isolated stock-runtime compatibility suite",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:29:32Z",
+          "completed_at": "2026-11-24T05:30:08Z"
+        },
+        {
+          "number": 8,
+          "name": "Record a deduplicated skip",
+          "conclusion": "skipped",
+          "started_at": "2026-11-24T05:30:08Z",
+          "completed_at": "2026-11-24T05:30:08Z"
+        },
+        {
+          "number": 9,
+          "name": "Prepare a reusable result marker",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:08Z",
+          "completed_at": "2026-11-24T05:30:08Z"
+        },
+        {
+          "number": 10,
+          "name": "Save the exact combination result",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:08Z",
+          "completed_at": "2026-11-24T05:30:08Z"
+        },
+        {
+          "number": 11,
+          "name": "Upload this compatibility report",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:08Z",
+          "completed_at": "2026-11-24T05:30:09Z"
+        },
+        {
+          "number": 23,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:30:10Z",
+          "completed_at": "2026-11-24T05:30:10Z"
+        }
+      ]
+    },
+    {
+      "id": 138243132134,
+      "name": "Publish compatibility summary",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-24T05:36:05Z",
+      "completed_at": "2026-11-24T05:36:11Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Run actions/checkout@v5",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:07Z",
+          "completed_at": "2026-11-24T05:36:08Z"
+        },
+        {
+          "number": 3,
+          "name": "Run actions/download-artifact@v4",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:08Z",
+          "completed_at": "2026-11-24T05:36:08Z"
+        },
+        {
+          "number": 4,
+          "name": "Aggregate classifications without upgrading NOT_VERIFIED to incompatibility",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:08Z",
+          "completed_at": "2026-11-24T05:36:08Z"
+        },
+        {
+          "number": 5,
+          "name": "Run actions/upload-artifact@v4",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:08Z",
+          "completed_at": "2026-11-24T05:36:09Z"
+        },
+        {
+          "number": 11,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:09Z",
+          "completed_at": "2026-11-24T05:36:09Z"
+        }
+      ]
+    },
+    {
+      "id": 138243180384,
+      "name": "Classify the watch result",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-24T05:36:14Z",
+      "completed_at": "2026-11-24T05:36:18Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": [
+        {
+          "number": 2,
+          "name": "Preserve the three-state verdict",
+          "conclusion": "failure",
+          "started_at": "2026-11-24T05:36:15Z",
+          "completed_at": "2026-11-24T05:36:16Z"
+        },
+        {
+          "number": 3,
+          "name": "Complete job",
+          "conclusion": "success",
+          "started_at": "2026-11-24T05:36:16Z",
+          "completed_at": "2026-11-24T05:36:16Z"
+        }
+      ]
+    },
+    {
+      "id": 138243183290,
+      "name": "Update the unique upstream-version issues",
+      "status": "completed",
+      "conclusion": "skipped",
+      "started_at": "2026-11-24T05:36:12Z",
+      "completed_at": "2026-11-24T05:36:11Z",
+      "head_sha": "0cbf5b2e6a030c88f2890006233f0663e72ad53f",
+      "run_id": 45333552103,
+      "run_attempt": 1,
+      "workflow_name": "Upstream compatibility watch",
+      "steps": []
+    }
+  ]
+}

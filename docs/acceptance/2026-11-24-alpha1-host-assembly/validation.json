@@ -1,0 +1,630 @@
+{
+  "startedAt": "2026-11-24T07:08:41.170752+00:00",
+  "pluginSha": "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+  "node": "/opt/homebrew/opt/node@24/bin/node",
+  "nodeSha256": "2c711dba4c61d710efa4e806dd87c6bf1532aa02afb95515c1c60efa0275ffec",
+  "scope": "local stock module suites and the real watcher prepare/run path; synthetic loopback models; no Desktop GUI or daily installation",
+  "candidates": [
+    {
+      "label": "alpha2",
+      "version": "0.2.3-alpha.2",
+      "tag": "dsh-v0.2.3-alpha.2",
+      "commit": "4b399c39a6d1479cd84ca591b4d7c88e24d38a96"
+    },
+    {
+      "label": "alpha1",
+      "version": "0.2.3-alpha.1",
+      "tag": "dsh-v0.2.3-alpha.1",
+      "commit": "d98f5d68519215da48f3002da2cb9c9d2068d81d"
+    },
+    {
+      "label": "rc5",
+      "version": "0.2.2-rc.5",
+      "tag": "dsh-v0.2.2-rc.5",
+      "commit": "9c2670d3bce5275e0d1610272958121af87787bb"
+    }
+  ],
+  "testedFileSha256": {
+    ".github/workflows/ci.yml": "3baa46eaa33ed54f3afbded55d8921a36046913c8551c700b67165930ba98cd5",
+    ".github/workflows/upstream-compat.yml": "b524683b81ed3edc461455f23a334eb0fadd7ba4a69f59092b77378e13f4962b",
+    "index.js": "8ba1545872c5b6693f295250b97b11dec530329739193bf1c543049ac0959fe9",
+    "package-lock.json": "bf0f5ac5104cabab468be8c3fd3c8b5b95c1efcefc3d4e613f8f9e119f1c0ff0",
+    "package.json": "d8db5e0e521dfc7bf53744d54ec8fff1dde2d5a38b6f5af5ce1e5e6310c1b6fe",
+    "scripts/discover-upstream.mjs": "19ccd3185b0b846af447f5d04226a8199ada8dee505010e34579d74991ff46c4",
+    "scripts/lib/upstream-compat-core.mjs": "3073e882accc9f186eed134dfa9c6ae4e8cda91e84f41325e3e0f8ac8a9db5e8",
+    "scripts/notify-upstream-compat.mjs": "9d8095bc31870ea624aa777cdd1745427081901c39ac9fb3732e0bf26527b96f",
+    "scripts/test-installed-runtime.mjs": "a51905db0d9c39976513ebbc1a3293a6d7a40050e7b664f0de67de4620f4e268",
+    "scripts/upstream-compat.mjs": "b26b25bbecb0645d8d3cc4c6488c8c1a45a42ee9c5ab6a1769dc7a2328b45695",
+    "test/authorization.test.mjs": "812c21f9c7abe2650ba80c6ceadab0b223e5f5c6731a44126044145cfc763ad2",
+    "test/batch.test.mjs": "34d5e81bd8c31b562b4fc3ccca2a9f93bac33a0b1f1dee97680246720a8f5524",
+    "test/host-locks/0.2.3-alpha.2/package-lock.json": "3102f0405d3c1f6d72f88f305a1f138ef973a70b105ee1cc2d1fedf6c24bf5ad",
+    "test/host-locks/0.2.3-alpha.2/package.json": "1d5e256785b17bcc5a76d9c1bc722890b7289825c4111d244c0d2f9f6793ac60",
+    "test/integration.test.mjs": "37a732e85374aa53aa0982726245290c1fc00315754df4ca1fcf7d2a17e62e1f",
+    "test/preset-integration.test.mjs": "2f2d3145506a501e065c671eba4ad394d6fd68cdbea59fa64ad25ee00d5dfc43",
+    "test/runtime-fixture.mjs": "fb644e9eb913ae74c65ff1bfc0d1fb05372079d88281d802edf42863df331231",
+    "test/unit.test.mjs": "c156c9da4a111c8ddd16868e9c8428fb58b409763c9aa9cb60fd6b4c6cc5dfda",
+    "test/upstream-compat-watch.test.mjs": "4815e259975055f11cf96a0446c8cb5508678b65430c059843846ab11fcf44d2"
+  },
+  "runs": [
+    {
+      "label": "watcher",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "--test",
+        "--test-reporter=spec",
+        "test/upstream-compat-watch.test.mjs"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "watcher.log",
+      "exitCode": 0,
+      "elapsedSeconds": 22.9,
+      "logSha256": "cd54c891995a1e1881fd543bf8c08d19ccb3992988e016322adfa2013a625b40",
+      "counts": {
+        "tests": 41,
+        "pass": 41,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "41/41, nothing failed, cancelled, skipped or TODO"
+    },
+    {
+      "label": "install-rc2",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/npm",
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc2",
+      "log": "install-rc2.log",
+      "exitCode": 0,
+      "elapsedSeconds": 49.8,
+      "logSha256": "80707cb06481c3043ad1758736416df6616a4c396cabb7dc6a33b2cebfbc6591"
+    },
+    {
+      "label": "install-rc3",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/npm",
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc3",
+      "log": "install-rc3.log",
+      "exitCode": 0,
+      "elapsedSeconds": 3.4,
+      "logSha256": "89ff4019d201f78a41b9f444e23f3033608ed83c58a2086093a792fab60e6809"
+    },
+    {
+      "label": "install-rc4",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/npm",
+        "install",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc4",
+      "log": "install-rc4.log",
+      "exitCode": 0,
+      "elapsedSeconds": 4.5,
+      "logSha256": "9486c49b5a94a39e9553227413eba4cb17e1837acbb6e7fa238ab9ff512dfeb8"
+    },
+    {
+      "label": "install-alpha2",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/npm",
+        "ci",
+        "--ignore-scripts",
+        "--no-audit",
+        "--no-fund"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/alpha2",
+      "log": "install-alpha2.log",
+      "exitCode": 0,
+      "elapsedSeconds": 38.6,
+      "logSha256": "81f39d6badda79ef6e5aa415b9b808a423c700babfaa998dad6a63cfe4263533"
+    },
+    {
+      "label": "rc1",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/Users/yuhan/codespace/dsh-subagent-compactor/node_modules"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc1.log",
+      "exitCode": 0,
+      "elapsedSeconds": 4.8,
+      "logSha256": "eacd601181beb808cf3eff5ae3e5733bd79aa842b652a87aa6c09d94996acef4",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.2-rc.1",
+      "hostManifestSha256": "1c5070df3ef30c939c4006afcad0184ffa1d4d9e9b23c88df8d9fe32e1e75514"
+    },
+    {
+      "label": "rc2",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc2/node_modules"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc2.log",
+      "exitCode": 0,
+      "elapsedSeconds": 4.8,
+      "logSha256": "7f1e107844c8b1dab2318a6d4a8387346696a60eb29148cffd0306cc3eafa622",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.2-rc.2",
+      "hostManifestSha256": "0220e35dfd1d5353598d2899583647e6edfa66f39a4eb6df3e05ed7521e0baf8"
+    },
+    {
+      "label": "rc3",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc3/node_modules"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc3.log",
+      "exitCode": 0,
+      "elapsedSeconds": 4.7,
+      "logSha256": "fc27134d696bba59121e6254ba772d228b2f3865265df35506186bca4a603247",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.2-rc.3",
+      "hostManifestSha256": "1f527f1660013a9acd116eacfd3c25e88577d18e42b669df76df5376fe356316"
+    },
+    {
+      "label": "rc4",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc4/node_modules"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc4.log",
+      "exitCode": 0,
+      "elapsedSeconds": 4.7,
+      "logSha256": "18b9f14d2efd3b18ba3a81ffb7a63cb5f9b39fd17ec5d989b215b82838cc8f32",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.2-rc.4",
+      "hostManifestSha256": "a718eaec0ddb30891f3b58eb2b41fcf9ff210a20b04c0ad98182bb121fb69377"
+    },
+    {
+      "label": "rc5",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/private/tmp/dsh-alpha2-compat/runtime-rc5/node_modules"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc5.log",
+      "exitCode": 0,
+      "elapsedSeconds": 5.0,
+      "logSha256": "8e2d0c5d4d7f6712e0f0767fd4f3bcfe40bb9c6c16e1a16328d64f1a0afa6408",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.2-rc.5",
+      "hostManifestSha256": "648c50d0f82f8cd01477b90ea4a209f61769b2eaba58f73967a822d46c701bf2"
+    },
+    {
+      "label": "alpha2",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/alpha2/node_modules",
+        "--candidate-version",
+        "0.2.3-alpha.2"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "alpha2.log",
+      "exitCode": 0,
+      "elapsedSeconds": 5.1,
+      "logSha256": "83a4603bc74d1b691ae626779c2216d6edcd271b775f63af2244cc34fcea3598",
+      "counts": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "125/125, nothing failed, cancelled, skipped or TODO",
+      "harness": "0.2.3-alpha.2",
+      "hostManifestSha256": "7edc4e2691a46d34ebb6b7d33348fc6fa1a655200271a821f1cc5d6850b27b42"
+    },
+    {
+      "label": "alpha2-prepare",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "prepare",
+        "--version",
+        "0.2.3-alpha.2",
+        "--tag",
+        "dsh-v0.2.3-alpha.2",
+        "--commit",
+        "4b399c39a6d1479cd84ca591b4d7c88e24d38a96",
+        "--plugin-sha",
+        "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+        "--scratch",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha2",
+        "--report",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/alpha2-prepared.json",
+        "--timeout-ms",
+        "240000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "alpha2-prepare.log",
+      "exitCode": 0,
+      "elapsedSeconds": 87.2,
+      "logSha256": "2448fd5abe042ce787c8fba91e8a5bafd79b5dacdcd7fe3499b91b71413756ba"
+    },
+    {
+      "label": "alpha2-run",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "run",
+        "--plan",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha2/plan.json",
+        "--report",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/docs/acceptance/2026-11-24-alpha1-host-assembly/alpha2-report.json",
+        "--timeout-ms",
+        "180000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "alpha2-run.log",
+      "exitCode": 0,
+      "elapsedSeconds": 47.6,
+      "logSha256": "2929f9f6352868798d0dd0d0122f40a18452bad1dda7ca42bc9d5a96824907f8"
+    },
+    {
+      "label": "alpha1-prepare",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "prepare",
+        "--version",
+        "0.2.3-alpha.1",
+        "--tag",
+        "dsh-v0.2.3-alpha.1",
+        "--commit",
+        "d98f5d68519215da48f3002da2cb9c9d2068d81d",
+        "--plugin-sha",
+        "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+        "--scratch",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1",
+        "--report",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/alpha1-prepared.json",
+        "--timeout-ms",
+        "240000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "alpha1-prepare.log",
+      "exitCode": 0,
+      "elapsedSeconds": 116.5,
+      "logSha256": "3cdbc4cbcae9f63d566dcb5ba9094728b3ba64bb4ae436f18815dabb36a957d7"
+    },
+    {
+      "label": "alpha1-run",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "run",
+        "--plan",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/plan.json",
+        "--report",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/docs/acceptance/2026-11-24-alpha1-host-assembly/alpha1-report.json",
+        "--timeout-ms",
+        "180000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "alpha1-run.log",
+      "exitCode": 0,
+      "elapsedSeconds": 49.9,
+      "logSha256": "d1a432276a2e4881695b9b88e85780f8f67330c4e65fa6aab2c40d09eea5b165"
+    },
+    {
+      "label": "rc5-prepare",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "prepare",
+        "--version",
+        "0.2.2-rc.5",
+        "--tag",
+        "dsh-v0.2.2-rc.5",
+        "--commit",
+        "9c2670d3bce5275e0d1610272958121af87787bb",
+        "--plugin-sha",
+        "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+        "--scratch",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-rc5",
+        "--report",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc5-prepared.json",
+        "--timeout-ms",
+        "240000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc5-prepare.log",
+      "exitCode": 0,
+      "elapsedSeconds": 78.8,
+      "logSha256": "0524652772e1e181b1a9f8822bc567ec16b3bec2886b34021585db0bf44e0498"
+    },
+    {
+      "label": "rc5-run",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/scripts/upstream-compat.mjs",
+        "run",
+        "--plan",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-rc5/plan.json",
+        "--report",
+        "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2/docs/acceptance/2026-11-24-alpha1-host-assembly/rc5-report.json",
+        "--timeout-ms",
+        "180000"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "rc5-run.log",
+      "exitCode": 0,
+      "elapsedSeconds": 48.1,
+      "logSha256": "d596ab879a378fc03b47c5e697ea4d33994fde0e423b13b7d3d7f502b74568c0"
+    },
+    {
+      "label": "pack",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/npm",
+        "pack",
+        "--dry-run",
+        "--json"
+      ],
+      "cwd": "/Users/yuhan/codespace/dsh-subagent-compactor-alpha2",
+      "log": "pack.log",
+      "exitCode": 0,
+      "elapsedSeconds": 0.5,
+      "logSha256": "1a1615940718a57d382ccc07699167df5b6546018704654a88bc6ea8dd8e6490"
+    }
+  ],
+  "patrol": [
+    {
+      "tag": "dsh-v0.2.3-alpha.2",
+      "version": "0.2.3-alpha.2",
+      "commit": "4b399c39a6d1479cd84ca591b4d7c88e24d38a96",
+      "pluginSha": "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+      "classification": "COMPATIBLE",
+      "reason": "stock compatibility suite passed",
+      "testSummary": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "testExitCode": 0,
+      "firstFailure": "",
+      "dependencyDigest": "7bf68a19daf5731c59b91733c15e846755c63231228ac0919d2a17f06f8b44c7",
+      "runnerDigest": "59985b26f3c22e0458cb2f1002ba2c8e6c135333f403d195fe52a5c3d2cc2ece",
+      "comboDigest": "c413568473811b453d66a7f8544e2b15f03f8251435b002142d735c71e6ceec0",
+      "candidateRuntime": true,
+      "testedAt": "2026-11-24T07:13:24.102Z",
+      "label": "alpha2",
+      "runLog": "alpha2-run.log",
+      "runSeconds": 47.6,
+      "prepareSeconds": 87.2,
+      "report": "alpha2-report.json",
+      "reportSha256": "07d26ad87ca3cc52623e8b010cd3ad19ffe3b22a9bf56bc8d9229ef9a87ee135",
+      "cordis": "4.2.0-alpha.1"
+    },
+    {
+      "tag": "dsh-v0.2.3-alpha.1",
+      "version": "0.2.3-alpha.1",
+      "commit": "d98f5d68519215da48f3002da2cb9c9d2068d81d",
+      "pluginSha": "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+      "classification": "NOT_VERIFIED",
+      "reason": "upstream host failed to assemble before the plugin loaded",
+      "testSummary": {
+        "tests": 125,
+        "pass": 102,
+        "fail": 21,
+        "cancelled": 0,
+        "skipped": 2,
+        "todo": 0
+      },
+      "testExitCode": 1,
+      "firstFailure": "DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property \"undefined\" without inject",
+      "dependencyDigest": "9761d7261bc7a13d954503d08e574414b6e70691c9426265d0afd5c20dde50d4",
+      "runnerDigest": "59985b26f3c22e0458cb2f1002ba2c8e6c135333f403d195fe52a5c3d2cc2ece",
+      "comboDigest": "a6322a54436c4292dd0a113603888d556c4a19ab5e1e035c1ec8b0a19196c9aa",
+      "candidateRuntime": true,
+      "testedAt": "2026-11-24T07:16:10.545Z",
+      "label": "alpha1",
+      "runLog": "alpha1-run.log",
+      "runSeconds": 49.9,
+      "prepareSeconds": 116.5,
+      "report": "alpha1-report.json",
+      "reportSha256": "0e1597f4f2e7885fefc4abad952310f847a6e7ba324a56effb619d8854895a8f",
+      "cordis": "4.1.0"
+    },
+    {
+      "tag": "dsh-v0.2.2-rc.5",
+      "version": "0.2.2-rc.5",
+      "commit": "9c2670d3bce5275e0d1610272958121af87787bb",
+      "pluginSha": "01ec7a8c776582e6484c0b6d51f8c52ff2830a9c",
+      "classification": "COMPATIBLE",
+      "reason": "stock compatibility suite passed",
+      "testSummary": {
+        "tests": 125,
+        "pass": 125,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "testExitCode": 0,
+      "firstFailure": "",
+      "dependencyDigest": "888caa5c496b9df4e09a411098441eb9b5d766cd437a55ad014588cf3006a7ab",
+      "runnerDigest": "59985b26f3c22e0458cb2f1002ba2c8e6c135333f403d195fe52a5c3d2cc2ece",
+      "comboDigest": "3a3ec9599a6e6d6c295e30252e098e05295c403804360de8ec3e76e9760fa5b1",
+      "candidateRuntime": false,
+      "testedAt": "2026-11-24T07:18:17.418Z",
+      "label": "rc5",
+      "runLog": "rc5-run.log",
+      "runSeconds": 48.1,
+      "prepareSeconds": 78.8,
+      "report": "rc5-report.json",
+      "reportSha256": "f265b6b69122872f84876284d87115f4ba644c9dfebc7b46187942cd96bfa104",
+      "cordis": "4.1.0"
+    }
+  ],
+  "mutations": [
+    {
+      "label": "mutant-stage-never-cleared-rc1",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-stage-never-cleared-rc1/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/Users/yuhan/codespace/dsh-subagent-compactor/node_modules"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-stage-never-cleared-rc1",
+      "log": "mutant-stage-never-cleared-rc1.log",
+      "exitCode": 1,
+      "elapsedSeconds": 4.7,
+      "logSha256": "e9d77921d72984173e56c22dba3f69e11cb2bf7b350f3f3a4e89b20a1c4b319e",
+      "counts": {
+        "tests": 125,
+        "pass": 123,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "2 failed: both \"not announced\" phase checks"
+    },
+    {
+      "label": "mutant-capacity-cleanup-after-boot-alpha1",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-capacity-cleanup-after-boot-alpha1/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules",
+        "--candidate-version",
+        "0.2.3-alpha.1"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-capacity-cleanup-after-boot-alpha1",
+      "log": "mutant-capacity-cleanup-after-boot-alpha1.log",
+      "exitCode": 1,
+      "elapsedSeconds": 0.9,
+      "logSha256": "b996ff864652ab7a69673eef061d98a61496d9934f65668988b290fd37461b03",
+      "counts": {
+        "tests": 126,
+        "pass": 102,
+        "fail": 22,
+        "cancelled": 0,
+        "skipped": 2,
+        "todo": 0
+      },
+      "expected": "22 failed: the self-check names 10 leaked listeners"
+    },
+    {
+      "label": "mutant-callsite-boots-outside-try-alpha1",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-callsite-boots-outside-try-alpha1/scripts/test-installed-runtime.mjs",
+        "--modules",
+        "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules",
+        "--candidate-version",
+        "0.2.3-alpha.1"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-callsite-boots-outside-try-alpha1",
+      "log": "mutant-callsite-boots-outside-try-alpha1.log",
+      "exitCode": 1,
+      "elapsedSeconds": 0.8,
+      "logSha256": "6359cb2787f7fe1dcc91038a7ae66b5054169693cb8c210191d8576d94b43612",
+      "counts": {
+        "tests": 126,
+        "pass": 102,
+        "fail": 22,
+        "cancelled": 0,
+        "skipped": 2,
+        "todo": 0
+      },
+      "expected": "22 failed: the self-check names 1 leaked listener"
+    },
+    {
+      "label": "mutant-classifier-ignores-marker-watcher",
+      "command": [
+        "/opt/homebrew/opt/node@24/bin/node",
+        "--test",
+        "--test-reporter=spec",
+        "test/upstream-compat-watch.test.mjs"
+      ],
+      "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-classifier-ignores-marker-watcher",
+      "log": "mutant-classifier-ignores-marker-watcher.log",
+      "exitCode": 1,
+      "elapsedSeconds": 22.2,
+      "logSha256": "7094e86845c87d2725b6357e4c9eb5a78a11a0f27c9a6069671725ae9fdd40b6",
+      "counts": {
+        "tests": 41,
+        "pass": 39,
+        "fail": 2,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "expected": "2 failed: both host-assembly watcher contracts"
+    }
+  ],
+  "scratchLeftovers": [],
+  "testedFilesUnchanged": true,
+  "completedAt": "2026-11-24T07:18:46.608335+00:00"
+}

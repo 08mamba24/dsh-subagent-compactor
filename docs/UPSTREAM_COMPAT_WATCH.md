@@ -39,11 +39,33 @@ The report has three substantive outcomes:
 | --- | --- |
 | `COMPATIBLE` | The stock installed-runtime suite ran and passed. |
 | `INCOMPATIBLE` | The suite failed with assertion evidence attributable to the compatibility tests. |
-| `NOT_VERIFIED` | The exact public dependency set is unavailable, the suite could not load, or execution evidence is missing or unattributable. This is not an incompatibility result. |
+| `NOT_VERIFIED` | The exact public dependency set is unavailable, the suite could not load, the published host could not be assembled by the test fixture, or execution evidence is missing or unattributable. This is not an incompatibility result. |
 
 Dependency/network failures that prevent an otherwise testable run are `INFRA_ERROR`. `INCOMPATIBLE` and `INFRA_ERROR` make the final watch gate red. `NOT_VERIFIED` produces an Actions warning and requires manual analysis, but is never rewritten as a green compatibility claim.
 
 The report records the first failure, output tail, resolved package versions, lock digest, Harness tag/commit, plugin SHA, and workflow URL. Artifacts are retained for 30 days.
+
+### Host assembly failures (2026-11-24)
+
+The stock fixture composes the published host itself before it mounts the plugin. When a host row throws during that composition, the fixture prints one line on stderr from the failing call site:
+
+```text
+DSH_HOST_ASSEMBLY_FAILED <stage>: <error name> [<code>]: <first line of the message>
+```
+
+`<stage>` names the step that threw: `mount @deepseek-ai/cordis-plugin-loader`, `import @deepseek-ai/<package>`, `mount @deepseek-ai/<package>`, `compose preset` or `resolve preset`. The stage is cleared once the host is up, so a failure of the plugin under test is never announced this way.
+
+On a failing run the classifier attributes in this order:
+
+1. An `AssertionError` anywhere in the output stays `INCOMPATIBLE`. Unit, batch and authorization tests exercise the plugin without composing a host, so their assertion failures remain product evidence even when other tests report a host fault.
+2. Otherwise a `DSH_HOST_ASSEMBLY_FAILED` line gives `NOT_VERIFIED` with the reason `upstream host failed to assemble before the plugin loaded`. The same line becomes the report's first failure.
+3. Otherwise a module resolution or syntax error gives `NOT_VERIFIED`, `test entry failed to load`. Any other failure stays `NOT_VERIFIED` with an unattributed origin.
+
+The two phase checks that need a working host (the fixture tests whose name ends in "is not announced") skip with `stock host does not assemble on this runtime` instead of failing. A run on such a host therefore reports two skipped tests beside the host failures.
+
+Fixtures release what they start even when a composition throws. Every composition registers its listener and scratch-directory cleanup before it boots, and a root `after` hook closes any fixture HTTP listener that outlived its test and fails the suite with `N fixture HTTP listener(s) outlived their test`. That message is an `AssertionError` and therefore `INCOMPATIBLE` on purpose: a leak is a defect in this repository's fixtures and must stay visible instead of becoming a timeout.
+
+Before this rule a host that could not be assembled kept its listeners open, `node --test` printed no failure details, and the run ended as `INFRA_ERROR` (`runtime regression timed out`) at the deadline. Such a run now ends as `NOT_VERIFIED` in well under the CLI's default six-minute deadline. `NOT_VERIFIED` is cached like `COMPATIBLE`, so later hourly runs reuse it until the plugin SHA, dependency lock or runner digest changes; the anomaly issue stays open as a request for analysis. The first such host is `0.2.3-alpha.1`: its `dsh-typert-protocol` reads `ctx[Context.root]`, a static that the Cordis 4.1.0 resolved by its own lock does not define, so mounting `dsh-llm` throws `cannot get property "undefined" without inject`. `0.2.2-rc.5` resolves the same Cordis 4.1.0 and assembles. alpha.1 is not a supported target: no fixture or product code is adapted to it.
 
 ## Notifications and permissions
 
@@ -57,7 +79,7 @@ An issue is a request for analysis. Even `COMPATIBLE` does not authorize install
 
 `.github/workflows/ci.yml` remains the release-candidate gate for its explicit, pinned Harness matrix. The upstream watcher only discovers and classifies newer combinations. It does not edit the product implementation, the fixed CI matrix, or the installed-runtime runner's supported versions.
 
-If a new upstream version is `NOT_VERIFIED`, inspect the unavailable package, load failure or missing evidence before changing the fixture. If it is `INCOMPATIBLE`, diagnose the first failing stock test before changing product code; a fix requires a new SHA and normal review. Candidate results do not automatically change the fixed matrix, plugin dependencies, installation or published tags.
+If a new upstream version is `NOT_VERIFIED`, inspect the unavailable package, load failure, `DSH_HOST_ASSEMBLY_FAILED` stage or missing evidence before changing the fixture. A host that cannot assemble is an upstream fault to report, not a plugin defect to patch around. If it is `INCOMPATIBLE`, diagnose the first failing stock test before changing product code; a fix requires a new SHA and normal review. Candidate results do not automatically change the fixed matrix, plugin dependencies, installation or published tags.
 
 ## Local verification
 

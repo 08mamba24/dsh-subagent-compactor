@@ -1,0 +1,1168 @@
+{"label": "mutant-capacity-cleanup-after-boot-alpha1", "command": ["/opt/homebrew/opt/node@24/bin/node", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-capacity-cleanup-after-boot-alpha1/scripts/test-installed-runtime.mjs", "--modules", "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules", "--candidate-version", "0.2.3-alpha.1"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/mutant-capacity-cleanup-after-boot-alpha1", "log": "mutant-capacity-cleanup-after-boot-alpha1.log"}
+Node 24.22.3; DSH 0.2.3-alpha.1; modules: /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules
+Running 5 test files in isolated scratch: /var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf
+✔ rc2: direct projection serves listing/batch and is always released (3.807375ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=true) (1.556708ms)
+✔ rc2: shared root does not authorize a non-direct target (resident=false) (0.402625ms)
+✔ rc2: a lookalike caller with the same id is refused (0.42925ms)
+✔ rc2: catalog membership does not authorize an unmanaged or foreign live instance (0.810083ms)
+✔ rc2: missing or malformed projection fails honestly and releases observation (0.811333ms)
+✔ rc2: observation cancellation/unload reaches the read and never sends a wake (0.683834ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"parentSessionId":"different-parent"}) (1.006125ms)
+✔ rc2: an invalid start edge cannot accept a wake ({}) (0.428166ms)
+✔ rc2: an invalid start edge cannot accept a wake ({"local":false}) (1.2505ms)
+✔ rc2: valid resume reserves maintenance synchronously before accepting its wake (0.516958ms)
+✔ rc2: caller/root identity is rechecked after the live idle wait (0.419666ms)
+✔ rc2: capacity hints cannot authorize a replaced caller or send a late wake (0.888083ms)
+✔ rc2: an external start cancels only our pending send and uses the live idle path (3.638667ms)
+✔ capacity: a global end outside the snapshot releases an awaiting resume (6.101542ms)
+✔ capacity: an end between attempt and rejection cannot be lost (0.616167ms)
+✔ capacity: periodic probe handles capacity changes with no end event (5.321458ms)
+✔ capacity: cancel clears waits, listeners and target locks without a late wake (1.608083ms)
+✔ capacity: unload clears waits, listeners and target locks without a late wake (1.290666ms)
+✔ capacity: timeout is bounded and cleans up (timer 0ms early) (2.641666ms)
+✔ capacity: timeout is bounded and cleans up (timer 0.5ms early) (1.623333ms)
+✔ capacity: model tool and competing batches share admission and target locks (1.273375ms)
+✔ capacity: non-capacity refusals are terminal and do not leave listeners (1.170375ms)
+✔ capacity: a capacity-shaped error after start is never retried (0.317125ms)
+✔ capacity: disjoint batches compete for real admission and both eventually finish (1.363458ms)
+✔ capacity: admission clears its deadline before a long summary begins (0.892208ms)
+✔ capacity: another actor's start while parked cannot launch an orphan summary (0.766083ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=true) (1.47425ms)
+✔ capacity: an externally restored live child is rechecked before sending (owned=false) (0.825667ms)
+✔ capacity: a foreign start cannot hide host-refusal from a pending send (1.495ms)
+✔ capacity: a foreign start cannot hide caller-cancel from a pending send (0.646791ms)
+✔ standalone batch awaits real completion and shares locks with parameter commands and tools (0.665291ms)
+✔ standalone batch cancel clears its wait and releases the shared lock (0.360042ms)
+✔ standalone batch unload clears its wait and releases the shared lock (0.204708ms)
+✔ standalone batch reports partial failure and does not hide successful children (0.417209ms)
+✔ standalone batch accepts blank input and rejects supplied arguments before reading children (0.237083ms)
+✔ batch on an empty catalog reports empty-catalog as success (0.142125ms)
+✔ batch compacts every live child concurrently and reports completed (26.242625ms)
+✔ an item's engine failure does not hide the rest (partial-failure) (0.4865ms)
+✔ with resume disabled, a settled child is an expected skip, not a failure (0.285875ms)
+✔ an unrestorable settled child is skipped with its reason, and the run still completes (0.38225ms)
+✔ a settled non-continuable child is skipped without a wake attempt (0.34975ms)
+✔ a child disposed while waiting for idle falls back to resume (0.407ms)
+✔ ownership violations count as failed items without stopping the batch (0.280834ms)
+✔ duplicate catalog ids are compacted exactly once (0.242125ms)
+✔ a concurrent single invocation on the same target reports busy-target (1.663709ms)
+✔ abort during the run reports every started child cancelled (0.469375ms)
+✔ an item's unexpected non-manual error does not stop the rest (0.357333ms)
+✔ a failing catalog read reports listing-failed (0.244209ms)
+✔ abort while the catalog read is in flight reports an unknown snapshot (0.267875ms)
+✔ a catalog that resolved past an abort reports its targets not-started (0.238333ms)
+✔ --all is an accepted alias; extra arguments are a usage error (0.21725ms)
+✔ listing marks live versus persisted children (0.310916ms)
+✔ two settled continuable children are both resumed and compacted (0.358584ms)
+✔ a mixed batch of live and settled children loses no item and double-wakes none (1.255292ms)
+✔ abort during a resumed compaction cancels that item without hiding others (0.601458ms)
+✔ a batch where nothing could be compacted says so instead of implying success (0.3975ms)
+✔ a resume refused for ownership is a failed item, not a skip (0.409166ms)
+✔ a single-id command on a child being resumed by the batch reports busy-target (2.619916ms)
+✔ a resumed child with nothing to compact does not inflate the resumed count (0.400541ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+✖ integration: live-window compaction of a real continuable subagent (612.578084ms)
+✖ integration: resume-path compaction of a settled continuable subagent (4.829916ms)
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (2.056041ms)
+✔ fixture: a host row that fails to mount is announced as such (2.272958ms)
+﹣ fixture: a plugin that fails to mount once the host is up is not announced (5.425ms) # stock host does not assemble on this runtime
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (28.875584ms)
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+DSH_HOST_ASSEMBLY_FAILED mount @deepseek-ai/dsh-llm: Error: cannot get property "undefined" without inject
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (5.579375ms)
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.332834ms)
+✖ preset capacity: inactive targets first do not block reversed live idle windows (1.926ms)
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (1.7165ms)
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (1.628917ms)
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (1.5495ms)
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (2.045542ms)
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (3.535666ms)
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (1.994625ms)
+✖ preset: batch catches the child that settles before its catalog predecessor (1.674458ms)
+✖ preset: batch catches both children when the second settles later (1.584042ms)
+✖ preset: native automatic child compaction works without loading this plugin (1.89725ms)
+✖ preset: /subagent-compact all resumes two settled children and compacts both (1.891084ms)
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (2.089958ms)
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.575375ms)
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.493041ms)
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (1.502667ms)
+✔ fixture: a preset host row that fails to mount is announced as such (4.064458ms)
+﹣ fixture: a plugin that fails to mount once the host and its preset are up is not announced (1.6485ms) # stock host does not assemble on this runtime
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs (4.310416ms)
+✔ optional auth: absent package is supported on old stock runtimes (2.591209ms)
+✔ optional auth: installed service is returned (2.36325ms)
+✔ optional auth: missing transitive dependency remains a load failure (2.614125ms)
+✔ optional auth: an installed package with a missing entry remains a load failure (1.990958ms)
+✔ fixture listeners: the leak self-check closes and reports a live listener, then passes (9.547292ms)
+✔ plugin surface (1.182334ms)
+✔ apply registers separate batch and parameter commands with the tool in one effect (2.361167ms)
+✔ command no-arg lists direct children (0.872083ms)
+✔ command no-arg with empty catalog and with projection failure (0.622292ms)
+✔ command usage errors: too many arguments (0.393875ms)
+✔ not-resident when no live agent has the id and resume is disabled (0.442625ms)
+✔ a settled child whose wake is refused reports not-resumable (0.81725ms)
+✔ resumes a settled continuable child and compacts through the synchronous start edge (0.589125ms)
+✔ a wake refused for authorization reports not-authorized (0.305375ms)
+✔ a busy wake (activation closing) reports busy-target (0.29425ms)
+✔ a target that raced back live without a start edge compacts via the live path (0.506083ms)
+✔ a wake that neither starts nor materializes reports resume-failed (0.242208ms)
+✔ the start edge resolves the engine before compacting; a missing engine refuses (0.295541ms)
+✔ a summary failure during resume keeps the wake delivered and says so (0.371958ms)
+✔ cancelling the wake aborts the resume path (0.336166ms)
+✔ the model tool resumes a settled continuable child too (0.838167ms)
+✔ not-authorized for foreign/self/grandchild targets (runtime ownership only) (0.318792ms)
+✔ preset plane resolves via serviceFor and never falls back to the host engine (1.37475ms)
+✔ preset present but its engine missing fails explicitly (no host fallback) (0.211667ms)
+✔ host plane used only when no preset registry exists (0.202959ms)
+✔ host plane absent fails explicitly (0.196208ms)
+✔ waitForIdle waits for the child and re-checks identity afterwards (TOCTOU) (5.777708ms)
+✔ waitForIdle: false skips the wait entirely (0.41775ms)
+✔ all six manual codes map to distinct messages and outcomes (1.061333ms)
+✔ unknown manual code stays diagnosable (0.232542ms)
+✔ caller-cancelled wins over busy when the signal is aborted (2.60375ms)
+✔ waiting on an eternally-busy child is cancellable via the request signal (1.682958ms)
+✔ non-manual engine errors propagate (0.4215ms)
+✔ tool requires a calling agent (0.214292ms)
+✔ tool output render produces a text block (0.195208ms)
+✔ command success result carries no sourceEventSeq (child seq must not decorate parent command/done) (0.248292ms)
+✔ unload aborts in-flight operations and converges (2.366125ms)
+✔ an already-aborted signal settles immediately instead of hanging the idle wait (0.418375ms)
+✔ pending listing is cancelled by plugin unload through the fused signal (3.046667ms)
+✔ command declares input so Desktop's UI claims parameterized invocations (0.320291ms)
+ℹ tests 126
+ℹ suites 0
+ℹ pass 102
+ℹ fail 22
+ℹ cancelled 0
+ℹ skipped 2
+ℹ todo 0
+ℹ duration_ms 735.8085
+
+✖ failing tests:
+
+test at test/integration.test.mjs:189:1
+✖ integration: live-window compaction of a real continuable subagent (612.578084ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:165:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:196:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at test/integration.test.mjs:323:1
+✖ integration: resume-path compaction of a settled continuable subagent (4.829916ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:165:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:329:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/integration.test.mjs:420:1
+✖ integration: cancelling in the resume admission gap leaves no unhandled rejection (2.056041ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at bootComposition (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:165:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/integration.test.mjs:429:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:319:1
+✖ preset capacity: one batch resumes 16 settled children over default 8 slots and all original IDs continue (28.875584ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:320:71)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at test/preset-integration.test.mjs:348:1
+✖ preset capacity: an external cold resume queued ahead of maintenance keeps its work and receives no wake (5.579375ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:349:78)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:431:1
+✖ preset capacity: a shared-pool grandchild outside the snapshot frees admission without stopping live work (2.332834ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:432:56)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:456:1
+✖ preset capacity: inactive targets first do not block reversed live idle windows (1.926ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:457:54)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:475:1
+✖ preset capacity: a failed summary keeps its wake and eventually frees the slot for the next target (1.7165ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:476:62)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:490:43
+✖ preset capacity: cancel while full leaves no wake and preserves the working occupant (1.628917ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:491:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:490:43
+✖ preset capacity: timeout while full leaves no wake and preserves the working occupant (1.5495ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:491:69)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:520:1
+✖ preset: real /subagent-compact persists a summary and resumes the same child id (2.045542ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:527:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:657:1
+✖ preset: /subagent-compact all compacts every live child through isolated preset engines (3.535666ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:590:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:659:1
+✖ preset: /subagent-compact-all persists one true completion after both child summaries (1.994625ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:590:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:661:1
+✖ preset: batch catches the child that settles before its catalog predecessor (1.674458ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:590:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:663:1
+✖ preset: batch catches both children when the second settles later (1.584042ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async batchWindowScenario (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:590:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:665:1
+✖ preset: native automatic child compaction works without loading this plugin (1.89725ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:673:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:714:1
+✖ preset: /subagent-compact all resumes two settled children and compacts both (1.891084ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:721:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:786:1
+✖ preset: a mixed batch compacts the live child directly and resumes the settled one (2.089958ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:793:9)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:847:1
+✖ stock direct-only: a root cannot wake its grandchild or another tree's child (1.575375ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:848:72)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:881:1
+✖ stock direct-only: the model tool refuses a settled grandchild before waking it (1.493041ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:882:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:898:1
+✖ stock direct-only: a multilevel batch compacts the direct branch and leaves its leaf cold (1.502667ms)
+  Error: cannot get property "undefined" without inject
+      at provideInvocationAccessor (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:362:23)
+      at bindTypertRemote (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:333:23)
+      at new TypertRemoteService (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-typert-protocol/lib/index.js:352:23)
+      at new LlmRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/dsh-llm/lib/index.js:1856:4)
+      at Fiber.execute (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:362:24)
+      at file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/patrol-alpha1/dependencies/node_modules/@deepseek-ai/cordis/lib/index.js:436:34
+      at boot (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:176:14)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async capacityRuntime (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:277:8)
+      at async TestContext.<anonymous> (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs:899:63)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at test/preset-integration.test.mjs:25:1
+✖ /private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/preset-integration.test.mjs (4.310416ms)
+  AssertionError [ERR_ASSERTION]: 10 fixture HTTP listener(s) outlived their test
+  + actual - expected
+  
+  + [
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 185,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 187,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 186,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 144,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 576,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 578,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 577,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 168,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 912,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 914,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 913,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 170,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1249,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1251,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1250,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 173,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1585,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1587,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1586,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 175,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 1922,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 1924,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 1923,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 176,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 2258,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 2260,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 2259,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 178,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 5439,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 5441,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 5440,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 197,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 5775,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 5777,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 5776,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 198,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   },
+  +   Server {
+  +     Symbol(IncomingMessage): [Function: IncomingMessage],
+  +     Symbol(OptimizeEmptyRequestsOption): false,
+  +     Symbol(ServerResponse): [Function: ServerResponse],
+  +     Symbol(async_id_symbol): 6112,
+  +     Symbol(http.server.connections): ConnectionsList {},
+  +     Symbol(http.server.connectionsCheckingInterval): Timeout {
+  +       Symbol(asyncId): 6114,
+  +       Symbol(kAsyncContextFrame): undefined,
+  +       Symbol(kHasPrimitive): false,
+  +       Symbol(refed): false,
+  +       Symbol(triggerId): 6113,
+  +       _destroyed: true,
+  +       _idleNext: null,
+  +       _idlePrev: null,
+  +       _idleStart: 200,
+  +       _idleTimeout: -1,
+  +       _onTimeout: undefined,
+  +       _repeat: 30000,
+  +       _timerArgs: undefined
+  +     },
+  +     Symbol(kCapture): false,
+  +     Symbol(kUniqueHeaders): null,
+  +     Symbol(shapeMode): false,
+  +     _connectionKey: '4:127.0.0.1:0',
+  +     _connections: 0,
+  +     _events: [Object: null prototype] {
+  +       close: [Function (anonymous)],
+  +       connection: [
+  +         [Function: connectionListener],
+  +         [Function (anonymous)],
+  +         Symbol(events.emitting): 0
+  +       ],
+  +       listening: [Function: setupConnectionsTracking],
+  +       request: [Function (anonymous)]
+  +     },
+  +     _eventsCount: 4,
+  +     _handle: null,
+  +     _listeningId: 3,
+  +     _maxListeners: undefined,
+  +     _unref: false,
+  +     _usingWorkers: false,
+  +     _workers: [],
+  +     allowHalfOpen: true,
+  +     connectionsCheckingInterval: 30000,
+  +     headersTimeout: 60000,
+  +     highWaterMark: 65536,
+  +     httpAllowHalfOpen: false,
+  +     httpValidation: undefined,
+  +     insecureHTTPParser: undefined,
+  +     joinDuplicateHeaders: undefined,
+  +     keepAlive: false,
+  +     keepAliveInitialDelay: 0,
+  +     keepAliveTimeout: 5000,
+  +     keepAliveTimeoutBuffer: 1000,
+  +     maxHeaderSize: undefined,
+  +     maxHeadersCount: null,
+  +     maxRequestsPerSocket: 0,
+  +     noDelay: true,
+  +     pauseOnConnect: false,
+  +     rejectNonStandardBodyWrites: false,
+  +     requestTimeout: 300000,
+  +     requireHostHeader: true,
+  +     shouldUpgradeCallback: [Function (anonymous)],
+  +     timeout: 0
+  +   }
+  + ]
+  - []
+  
+      at TestContext.releaseLeakedFixtureListeners (file:///private/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/dsh-subagent-compactor-tests-kOjnAf/test/runtime-fixture.mjs:44:9)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestHook.run (node:internal/test_runner/test:1409:7)
+      at async Test.runHook (node:internal/test_runner/test:1289:9)
+      at async after (node:internal/test_runner/test:1342:9)
+      at async Test.run (node:internal/test_runner/test:1428:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [Array],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
