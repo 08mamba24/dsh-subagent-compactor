@@ -104,6 +104,22 @@ export function classifyInstallFailure(output = "") {
 const HOST_ASSEMBLY_FAILURE = /^\s*DSH_HOST_ASSEMBLY_FAILED\b/m;
 
 /**
+ * Leading line the stock fixture prints from its root after hook when one of
+ * its HTTP listeners outlived its test: the fixture, not the plugin, is at
+ * fault, and a run with a broken fixture is evidence of nothing.
+ */
+const FIXTURE_LISTENER_LEAK = /^\s*DSH_FIXTURE_LISTENER_LEAK\b/m;
+
+/**
+ * The fixture announces a fault of its own, or of the host, on a leading DSH_
+ * line and prints the host's stack frames beneath it. Neither is this
+ * plugin's evidence: a frame such as `at new AssertionError` names a location,
+ * not what failed.
+ */
+const FIXTURE_ANNOUNCEMENT = /^\s*DSH_(?:FIXTURE_[A-Z_]+|HOST_ASSEMBLY_FAILED)\b/;
+const STACK_FRAME = /^\s*at\b/;
+
+/**
  * Parse a complete node --test spec footer. Anything less than all six
  * counters is not evidence that a suite ran.
  */
@@ -159,7 +175,18 @@ export function classifyRunnerResult({ status, output = "", error } = {}) {
 	 * unattributable origin never becomes a compatibility claim. */
 	const hasFailure = status !== 0 || (testSummary !== undefined && (testSummary.fail > 0 || testSummary.cancelled > 0));
 	if (hasFailure) {
-		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(output)) {
+		/* A fixture that leaked its listeners is not evidence of anything, so it
+		 * outranks every other reading of the same output. INFRA_ERROR is never
+		 * cached: the verdict returns by itself once the leak is fixed. */
+		if (FIXTURE_LISTENER_LEAK.test(output)) {
+			return { classification: "INFRA_ERROR", reason: "test fixture leaked its HTTP listeners" };
+		}
+		/* Per source: the fixture announces a host fault, or its own, on leading
+		 * DSH_ lines and throws its own error types for both, never an
+		 * AssertionError. Set those lines and stack frames aside, and an
+		 * assertion that remains is this plugin's. */
+		const product = output.split(/\r?\n/).filter((line) => !FIXTURE_ANNOUNCEMENT.test(line) && !STACK_FRAME.test(line)).join("\n");
+		if (/\bAssertionError\b|\[ERR_ASSERTION\]/.test(product)) {
 			return { classification: "INCOMPATIBLE", reason: "stock compatibility suite failed", ...(testSummary !== undefined ? { testSummary } : {}) };
 		}
 		/* The fixture's own composition threw before ../index.js was imported,

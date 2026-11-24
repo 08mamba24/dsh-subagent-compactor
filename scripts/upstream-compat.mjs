@@ -130,8 +130,9 @@ function outputTail(output, limit = 12_000) {
 function firstFailure(output) {
 	const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
 	// The fixture prints its host-assembly line while the test is still failing,
-	// ahead of the reporter's own ✖ row, so that line names the failing host row.
-	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖|DSH_HOST_ASSEMBLY_FAILED\b)/i.test(line)) || "");
+	// and its own leak line before the reporter's rows, so those lines name the
+	// source of the run ahead of the reporter's own ✖ rows.
+	return sanitizeReportText(clean.split(/\r?\n/).find(line => /Unsupported test runtime:|\bnot ok\b|^\s*(?:npm ERR!|Error(?: \[[^\]\r\n]+\])?:|✖|DSH_HOST_ASSEMBLY_FAILED\b|DSH_FIXTURE_LISTENER_LEAK\b)/i.test(line)) || "");
 }
 
 function packageDependencies(version) {
