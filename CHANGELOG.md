@@ -2,14 +2,18 @@
 
 ## Host assembly patrol attribution / 宿主装配失败的巡检归因 (2026-11-24)
 
-- Attribute a candidate whose published host fails before the plugin is loaded to the host. Test fixtures announce the failing host row with `DSH_HOST_ASSEMBLY_FAILED <stage>`, and the watcher classifies the run `NOT_VERIFIED` with that line as the first failure instead of waiting for the deadline and reporting `INFRA_ERROR`.
-  发布宿主在插件加载前失败时归因于宿主：测试夹具以 `DSH_HOST_ASSEMBLY_FAILED <阶段>` 报出失败的宿主行，巡检判为 `NOT_VERIFIED` 并保留该行为首个失败，不再等到截止时间报 `INFRA_ERROR`。
+- Attribute a candidate whose published host fails before the plugin is loaded to the host. Test fixtures announce the failing host row with `DSH_HOST_ASSEMBLY_FAILED <stage>`, throw `HostAssemblyError` in its place, and the watcher classifies the run `NOT_VERIFIED` with that line as the first failure instead of waiting for the deadline and reporting `INFRA_ERROR`.
+  发布宿主在插件加载前失败时归因于宿主：测试夹具以 `DSH_HOST_ASSEMBLY_FAILED <阶段>` 报出失败的宿主行并改抛 `HostAssemblyError`，巡检判为 `NOT_VERIFIED` 并保留该行为首个失败，不再等到截止时间报 `INFRA_ERROR`。
+- Attribute a failure by its source (changes requested by an independent review of the first version). The fixture's announcement lines and the stack frames beneath them are set aside before an `AssertionError` is read as this plugin's: a host row that fails with an assertion stays `NOT_VERIFIED`, while an assertion of this plugin's own is still `INCOMPATIBLE`. A fixture HTTP listener that outlives its test is closed and thrown as `FixtureListenerLeakError` (`DSH_FIXTURE_LISTENER_LEAK`), which the watcher reports as `INFRA_ERROR`. A broken fixture is evidence of nothing about the Harness version, and because `INFRA_ERROR` is never cached the next run re-tests the combination once the leak is fixed.
+  按来源归因（首个版本经独立复审后修改）：夹具的宣告行与其下的栈帧行先被放到一边，再把 `AssertionError` 读作本插件的，因此以断言失败的宿主行仍是 `NOT_VERIFIED`，而本插件自身的断言仍是 `INCOMPATIBLE`。存活超过所属测试的夹具 HTTP 监听被关闭并以 `FixtureListenerLeakError` 抛出（`DSH_FIXTURE_LISTENER_LEAK`），巡检报 `INFRA_ERROR`：夹具坏了，对 Harness 版本就不构成任何证据；`INFRA_ERROR` 不缓存，泄漏修好后下一次运行会重新测试该组合。
+- A plugin-phase check skips only for a `HostAssemblyError` and rethrows anything else. A cleanup that throws neither replaces the host failure nor its announcement: the failure is announced first together with the host's first stack frames, a cleanup error gets its own `DSH_FIXTURE_CLEANUP_FAILED <stage>` line, and the test receives the original failure.
+  插件阶段检查只对 `HostAssemblyError` 跳过，其余错误原样抛出。清理抛错既不盖掉宿主失败也不盖掉它的宣告：先连同宿主的前几帧栈宣告失败，清理错误另占一行 `DSH_FIXTURE_CLEANUP_FAILED <阶段>`，测试拿到的是原始失败。
 - Release fixture resources when a composition fails. Listener and scratch-directory cleanup is registered before each boot, and a fixture HTTP listener that outlives its test is closed and reported by a root after-hook.
   组合失败时释放夹具资源：监听与临时目录的清理在每次启动前注册，存活超过所属测试的夹具 HTTP 监听由根级 after 钩子关闭并上报。
-- Keep an `AssertionError` ahead of the host marker, and skip the two phase checks that need a working host when it does not assemble. Add five stock tests and two watcher contracts (stock suites 120 → 125, watcher 39 → 41).
-  断言失败仍优先于宿主标记；需要健康宿主的两个阶段检查在宿主无法装配时跳过。新增 5 个套件用例与 2 个巡检契约（套件 120 → 125，巡检 39 → 41）。
-- Found on stock `0.2.3-alpha.1`: its `dsh-typert-protocol` reads `ctx[Context.root]`, a static that the Cordis 4.1.0 of its own lock does not define, so mounting `dsh-llm` throws. rc.5 resolves the same Cordis and assembles. rc.1–rc.5 and alpha.2 stay at 125/125; alpha.1 remains `NOT_VERIFIED` and unsupported.
-  问题在原版 `0.2.3-alpha.1` 上发现：其 `dsh-typert-protocol` 读取 `ctx[Context.root]`，而自身锁文件解析出的 Cordis 4.1.0 没有这个静态成员，挂载 `dsh-llm` 时抛错。rc.5 解析到同一版 Cordis 且可正常装配。rc.1–rc.5 与 alpha.2 仍为 125/125；alpha.1 保持 `NOT_VERIFIED` 且不受支持。
+- Skip the two phase checks that need a working host when it does not assemble. The two fixes add eleven stock tests and six watcher contracts (stock suites 120 → 125 → 131, watcher 39 → 41 → 45), and correct the root-cause comment of the watcher contract.
+  需要健康宿主的两个阶段检查在宿主无法装配时跳过。两次修复合计新增 11 个套件用例与 6 个巡检契约（套件 120 → 125 → 131，巡检 39 → 41 → 45），并更正巡检契约里的根因注释。
+- Found on stock `0.2.3-alpha.1`: its `dsh-typert-protocol` reads `ctx[Context.root]`, a static that the Cordis 4.1.0 of its own lock does not define, so mounting `dsh-llm` throws. rc.5 resolves the same Cordis and assembles. rc.1–rc.5 and alpha.2 stay at 131/131; alpha.1 remains `NOT_VERIFIED` and unsupported.
+  问题在原版 `0.2.3-alpha.1` 上发现：其 `dsh-typert-protocol` 读取 `ctx[Context.root]`，而自身锁文件解析出的 Cordis 4.1.0 没有这个静态成员，挂载 `dsh-llm` 时抛错。rc.5 解析到同一版 Cordis 且可正常装配。rc.1–rc.5 与 alpha.2 仍为 131/131；alpha.1 保持 `NOT_VERIFIED` 且不受支持。
 - Source branch of PR #13 only; no merge, release, installation or Desktop restart is performed.
   仅为 PR #13 的源码分支，未合并、发布、安装或重启 Desktop。
 

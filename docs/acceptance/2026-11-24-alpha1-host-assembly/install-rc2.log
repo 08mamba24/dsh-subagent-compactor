@@ -1,6 +1,6 @@
-{"label": "install-rc2", "command": ["/opt/homebrew/opt/node@24/bin/npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-8wxp86iw/rc2", "log": "install-rc2.log"}
+{"label": "install-rc2", "command": ["/opt/homebrew/opt/node@24/bin/npm", "install", "--ignore-scripts", "--no-audit", "--no-fund"], "cwd": "/var/folders/_v/yv2vvhm50n96kbkz0n_wyn3h0000gn/T/dsh-alpha1-patrol-lg3y1rdv/rc2", "log": "install-rc2.log"}
 
-added 96 packages in 49s
+added 96 packages in 45s
 npm notice
 npm notice New major version of npm available! 11.19.1 -> 12.2.3
 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.3

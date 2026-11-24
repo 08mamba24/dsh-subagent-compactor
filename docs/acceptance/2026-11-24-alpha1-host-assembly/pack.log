@@ -4,15 +4,15 @@
     "id": "@local/dsh-subagent-compactor@1.3.4",
     "name": "@local/dsh-subagent-compactor",
     "version": "1.3.4",
-    "size": 34052,
-    "unpackedSize": 98569,
-    "shasum": "dd2ed60fd5cc375a604ff7537327f974e6cf3fd6",
-    "integrity": "sha512-Jua81ofeJ1aTqoZSs5cop/i7bNSwTMSriF4V2rQ9ntfLYKLVBekk64s4IDB57Q+1Ow5CvzKjd2Poi/Hm0xEnwA==",
+    "size": 35071,
+    "unpackedSize": 100937,
+    "shasum": "9d80dcd9b30ad36de2f20e4f0cc767880ef82c33",
+    "integrity": "sha512-fyJXkiaS1Vsi5WbvbfZLdf7oswEjAQq9Z7DLvBGwuAsQ0bA7BrFy2cV8CaJryzIdwhhIrtsFPxekvnqupcMzbg==",
     "filename": "local-dsh-subagent-compactor-1.3.4.tgz",
     "files": [
       {
         "path": "CHANGELOG.md",
-        "size": 21674,
+        "size": 24042,
         "mode": 420
       },
       {

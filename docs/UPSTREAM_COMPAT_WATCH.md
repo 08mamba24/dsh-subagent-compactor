@@ -41,7 +41,7 @@ The report has three substantive outcomes:
 | `INCOMPATIBLE` | The suite failed with assertion evidence attributable to the compatibility tests. |
 | `NOT_VERIFIED` | The exact public dependency set is unavailable, the suite could not load, the published host could not be assembled by the test fixture, or execution evidence is missing or unattributable. This is not an incompatibility result. |
 
-Dependency/network failures that prevent an otherwise testable run are `INFRA_ERROR`. `INCOMPATIBLE` and `INFRA_ERROR` make the final watch gate red. `NOT_VERIFIED` produces an Actions warning and requires manual analysis, but is never rewritten as a green compatibility claim.
+Dependency/network failures that prevent an otherwise testable run are `INFRA_ERROR`, and so is a test fixture that leaked its HTTP listeners. `INCOMPATIBLE` and `INFRA_ERROR` make the final watch gate red. `NOT_VERIFIED` produces an Actions warning and requires manual analysis, but is never rewritten as a green compatibility claim.
 
 The report records the first failure, output tail, resolved package versions, lock digest, Harness tag/commit, plugin SHA, and workflow URL. Artifacts are retained for 30 days.
 
@@ -57,13 +57,19 @@ DSH_HOST_ASSEMBLY_FAILED <stage>: <error name> [<code>]: <first line of the mess
 
 On a failing run the classifier attributes in this order:
 
-1. An `AssertionError` anywhere in the output stays `INCOMPATIBLE`. Unit, batch and authorization tests exercise the plugin without composing a host, so their assertion failures remain product evidence even when other tests report a host fault.
-2. Otherwise a `DSH_HOST_ASSEMBLY_FAILED` line gives `NOT_VERIFIED` with the reason `upstream host failed to assemble before the plugin loaded`. The same line becomes the report's first failure.
-3. Otherwise a module resolution or syntax error gives `NOT_VERIFIED`, `test entry failed to load`. Any other failure stays `NOT_VERIFIED` with an unattributed origin.
+1. A `DSH_FIXTURE_LISTENER_LEAK` line gives `INFRA_ERROR` with the reason `test fixture leaked its HTTP listeners`. It outranks every other reading of the same output: a run with a broken fixture is evidence of nothing. `INFRA_ERROR` is never cached, so the next run re-tests the combination once the leak is fixed.
+2. Otherwise an `AssertionError` that is this plugin's own gives `INCOMPATIBLE`. The fixture's announcement lines (a leading `DSH_…`) and the stack frames beneath them are set aside first. A host row that fails with an assertion is announced as `DSH_HOST_ASSEMBLY_FAILED <stage>: AssertionError [ERR_ASSERTION]: …` and thrown to the test as `HostAssemblyError`, so it is not this plugin's evidence. Unit, batch and authorization tests exercise the plugin without composing a host, so their assertion failures remain product evidence even when other tests report a host fault.
+3. Otherwise a `DSH_HOST_ASSEMBLY_FAILED` line gives `NOT_VERIFIED` with the reason `upstream host failed to assemble before the plugin loaded`. The same line becomes the report's first failure.
+4. Otherwise a module resolution or syntax error gives `NOT_VERIFIED`, `test entry failed to load`.
+5. Otherwise the failure stays `NOT_VERIFIED` with an unattributed origin.
 
-The two phase checks that need a working host (the fixture tests whose name ends in "is not announced") skip with `stock host does not assemble on this runtime` instead of failing. A run on such a host therefore reports two skipped tests beside the host failures.
+The report's first failure is the earliest line that matches. A run that both announces a host fault and leaks a listener is therefore classified `INFRA_ERROR` while its first failure names the host marker.
 
-Fixtures release what they start even when a composition throws. Every composition registers its listener and scratch-directory cleanup before it boots, and a root `after` hook closes any fixture HTTP listener that outlived its test and fails the suite with `N fixture HTTP listener(s) outlived their test`. That message is an `AssertionError` and therefore `INCOMPATIBLE` on purpose: a leak is a defect in this repository's fixtures and must stay visible instead of becoming a timeout.
+The two phase checks that need a working host (the fixture tests whose name ends in "is not announced") skip with `stock host does not assemble on this runtime (<stage>: <host error>)` instead of failing. They skip only when their precondition threw the fixture's `HostAssemblyError`; any other error is rethrown and fails the test. A run on such a host therefore reports two skipped tests beside the host failures.
+
+Fixtures release what they start even when a composition throws. Every composition registers its listener and scratch-directory cleanup before it boots, and a root `after` hook closes any fixture HTTP listener that outlived its test, prints `DSH_FIXTURE_LISTENER_LEAK N fixture HTTP listener(s) outlived their test` and throws `FixtureListenerLeakError`. The watcher reports that as `INFRA_ERROR`, never as a verdict about the Harness version: the fixture is this repository's, and a leak must stay visible instead of becoming a timeout or a filed incompatibility.
+
+When a composition throws before the plugin is mounted, the fixture disposes what it assembled and announces the failure before anything else can raise: the `DSH_HOST_ASSEMBLY_FAILED` line, the host's first six stack frames, and, if the disposal itself threw, a `DSH_FIXTURE_CLEANUP_FAILED <stage>` line. The test then receives a `HostAssemblyError` that keeps the host's own error. The reporter prints neither that error in full nor a cleanup error in its place.
 
 Before this rule a host that could not be assembled kept its listeners open, `node --test` printed no failure details, and the run ended as `INFRA_ERROR` (`runtime regression timed out`) at the deadline. Such a run now ends as `NOT_VERIFIED` in well under the CLI's default six-minute deadline. `NOT_VERIFIED` is cached like `COMPATIBLE`, so later hourly runs reuse it until the plugin SHA, dependency lock or runner digest changes; the anomaly issue stays open as a request for analysis. The first such host is `0.2.3-alpha.1`: its `dsh-typert-protocol` reads `ctx[Context.root]`, a static that the Cordis 4.1.0 resolved by its own lock does not define, so mounting `dsh-llm` throws `cannot get property "undefined" without inject`. `0.2.2-rc.5` resolves the same Cordis 4.1.0 and assembles. alpha.1 is not a supported target: no fixture or product code is adapted to it.
 
@@ -79,7 +85,7 @@ An issue is a request for analysis. Even `COMPATIBLE` does not authorize install
 
 `.github/workflows/ci.yml` remains the release-candidate gate for its explicit, pinned Harness matrix. The upstream watcher only discovers and classifies newer combinations. It does not edit the product implementation, the fixed CI matrix, or the installed-runtime runner's supported versions.
 
-If a new upstream version is `NOT_VERIFIED`, inspect the unavailable package, load failure, `DSH_HOST_ASSEMBLY_FAILED` stage or missing evidence before changing the fixture. A host that cannot assemble is an upstream fault to report, not a plugin defect to patch around. If it is `INCOMPATIBLE`, diagnose the first failing stock test before changing product code; a fix requires a new SHA and normal review. Candidate results do not automatically change the fixed matrix, plugin dependencies, installation or published tags.
+If a new upstream version is `INFRA_ERROR` with `test fixture leaked its HTTP listeners`, the fault is in this repository's fixture and says nothing about that version: fix the leak, and the next run re-tests the combination. If it is `NOT_VERIFIED`, inspect the unavailable package, load failure, `DSH_HOST_ASSEMBLY_FAILED` stage or missing evidence before changing the fixture. A host that cannot assemble is an upstream fault to report, not a plugin defect to patch around. If it is `INCOMPATIBLE`, diagnose the first failing stock test before changing product code; a fix requires a new SHA and normal review. Candidate results do not automatically change the fixed matrix, plugin dependencies, installation or published tags.
 
 ## Local verification
 

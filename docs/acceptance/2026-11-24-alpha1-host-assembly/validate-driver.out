@@ -1,15 +1,25 @@
-watcher 0 {'tests': 41, 'pass': 41, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.9
-rc1 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.8
-rc2 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.8
-rc3 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
-rc4 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
-rc5 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.0
-alpha2 0 {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.1
-alpha2 patrol COMPATIBLE {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 47.6
-alpha1 patrol NOT_VERIFIED {'tests': 125, 'pass': 102, 'fail': 21, 'cancelled': 0, 'skipped': 2, 'todo': 0} 49.9
-rc5 patrol COMPATIBLE {'tests': 125, 'pass': 125, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 48.1
-mutant-stage-never-cleared-rc1 1 {'tests': 125, 'pass': 123, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
-mutant-capacity-cleanup-after-boot-alpha1 1 {'tests': 126, 'pass': 102, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.9
-mutant-callsite-boots-outside-try-alpha1 1 {'tests': 126, 'pass': 102, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.8
-mutant-classifier-ignores-marker-watcher 1 {'tests': 41, 'pass': 39, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.2
+watcher 0 {'tests': 45, 'pass': 45, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 23.3
+rc1 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc2 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc3 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc4 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+rc5 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.1
+alpha2 0 {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 5.0
+alpha2 patrol COMPATIBLE {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 46.2
+alpha1 patrol NOT_VERIFIED {'tests': 131, 'pass': 108, 'fail': 21, 'cancelled': 0, 'skipped': 2, 'todo': 0} 41.2
+rc5 patrol COMPATIBLE {'tests': 131, 'pass': 131, 'fail': 0, 'cancelled': 0, 'skipped': 0, 'todo': 0} 53.6
+superseded-classifier-and-cli-watcher 1 {'tests': 45, 'pass': 40, 'fail': 5, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.7
+mutant-stage-never-cleared-rc1 1 {'tests': 131, 'pass': 129, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+mutant-capacity-cleanup-after-boot-alpha1 1 {'tests': 132, 'pass': 108, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.8
+mutant-callsite-boots-outside-try-alpha1 1 {'tests': 132, 'pass': 108, 'fail': 22, 'cancelled': 0, 'skipped': 2, 'todo': 0} 0.8
+mutant-classifier-ignores-marker-watcher 1 {'tests': 45, 'pass': 41, 'fail': 4, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.0
+mutant-classifier-ignores-leak-watcher 1 {'tests': 45, 'pass': 42, 'fail': 3, 'cancelled': 0, 'skipped': 0, 'todo': 0} 22.2
+mutant-classifier-reads-fixture-lines-watcher 1 {'tests': 45, 'pass': 42, 'fail': 3, 'cancelled': 0, 'skipped': 0, 'todo': 0} 21.8
+mutant-leak-hook-asserts-rc1 1 {'tests': 131, 'pass': 130, 'fail': 1, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.7
+mutant-leak-hook-silent-rc1 1 {'tests': 131, 'pass': 130, 'fail': 1, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.6
+mutant-skip-swallows-unexpected-errors-rc1 1 {'tests': 131, 'pass': 130, 'fail': 1, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.5
+mutant-host-error-also-cause-rc1 1 {'tests': 131, 'pass': 129, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.6
+mutant-cleanup-failure-unannounced-rc1 1 {'tests': 131, 'pass': 129, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.6
+mutant-cleanup-unguarded-rc1 1 {'tests': 131, 'pass': 129, 'fail': 2, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.6
+mutant-host-error-rethrown-rc1 1 {'tests': 131, 'pass': 125, 'fail': 6, 'cancelled': 0, 'skipped': 0, 'todo': 0} 4.5
 validate exit=0
